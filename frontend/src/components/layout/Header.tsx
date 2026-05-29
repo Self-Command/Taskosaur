@@ -373,24 +373,30 @@ export default function Header() {
                   {toggleChat && isAIEnabled && (
                     <div className="relative">
                       <Button
-                        onClick={toggleChat}
+                        onClick={() => {
+                          if (typeof window !== "undefined" && window.innerWidth < 768) {
+                            router.push("/chat");
+                          } else {
+                            toggleChat();
+                          }
+                        }}
                         variant="ghost"
                         size="icon"
                         aria-label={t("toggleAIChat")}
                         className={`header-mode-toggle transition-all duration-200 ${
                           isChatOpen
-                            ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50 ring-2 ring-blue-500/20"
+                            ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/50 ring-2 ring-emerald-500/20"
                             : ""
                         }`}
                       >
                         <HiChatBubbleLeftRight
                           className={`header-mode-toggle-icon transition-colors duration-200 ${
-                            isChatOpen ? "text-blue-600 dark:text-blue-400 scale-110" : ""
+                            isChatOpen ? "text-emerald-600 dark:text-emerald-400 scale-110" : ""
                           }`}
                         />
                       </Button>
                       {isChatOpen && (
-                        <span className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-blue-600 dark:bg-blue-400 rounded-full animate-pulse" />
+                        <span className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-emerald-600 dark:bg-emerald-400 rounded-full animate-pulse" />
                       )}
                     </div>
                   )}
@@ -411,9 +417,6 @@ export default function Header() {
                   currentUser={currentUser}
                   currentOrganizationId={currentOrganizationId}
                   hasOrganizationAccess={hasOrganizationAccess}
-                  toggleChat={toggleChat}
-                  isChatOpen={isChatOpen}
-                  isAIEnabled={isAIEnabled}
                 />
               )}
             </div>

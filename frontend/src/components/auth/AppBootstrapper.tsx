@@ -218,7 +218,7 @@ export default function AppBootstrapper({ children }: AppBootstrapperProps) {
   const isPublicProjectRoute = isProjectRoute && !isSettingsOrMembersRoute;
   const is404 = router.pathname === "/404";
 
-  if (is404 || isPublicRoute) {
+  if (is404 || isPublicRoute || router.pathname === "/chat") {
     return <LayoutProvider>{children}</LayoutProvider>;
   }
 

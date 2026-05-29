@@ -653,15 +653,29 @@ export default function Sidebar() {
 
   return (
     <>
+      {/* Floating hamburger for collapsed state */}
       {isSidebarCollapsed && (
-        <Tooltip content={t("showNavigation")} position="right">
-          <button
-            onClick={() => toggleSidebar(!isSidebarCollapsed)}
-            className="layout-sidebar-toggle-button"
-          >
-            <HiMenu size={16} />
-          </button>
-        </Tooltip>
+        <button
+          onClick={() => toggleSidebar(false)}
+          className="fixed top-3 left-3 z-50 p-2.5 rounded-xl bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-700 shadow-lg hover:shadow-xl transition-all hover:scale-105 active:scale-95 lg:hidden"
+          aria-label="Open navigation"
+        >
+          <HiMenu size={18} className="text-gray-600 dark:text-gray-400" />
+        </button>
+      )}
+
+      {/* Desktop: permanent toggle for mini sidebar */}
+      {isSidebarCollapsed && (
+        <div className="hidden lg:block">
+          <Tooltip content={t("showNavigation")} position="right">
+            <button
+              onClick={() => toggleSidebar(false)}
+              className="layout-sidebar-toggle-button"
+            >
+              <HiMenu size={16} />
+            </button>
+          </Tooltip>
+        </div>
       )}
 
       <div className="layout-sidebar-container">
@@ -672,6 +686,17 @@ export default function Sidebar() {
               : "layout-sidebar-wrapper-expanded"
           }`}
         >
+          {/* Close button inside expanded sidebar (mobile) */}
+          {!isSidebarCollapsed && (
+            <button
+              onClick={() => toggleSidebar(true)}
+              className="absolute top-3 right-3 z-50 p-2 rounded-xl bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-700 shadow-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-all lg:hidden"
+              aria-label="Close navigation"
+            >
+              <HiMenu size={16} className="text-gray-600 dark:text-gray-400" />
+            </button>
+          )}
+
           <div className="layout-sidebar-mini">
             {/* Mini sidebar content */}
             {renderMiniSidebar()}
@@ -689,10 +714,11 @@ export default function Sidebar() {
         </div>
       </div>
 
+      {/* Mobile overlay when sidebar expanded */}
       {!isSidebarCollapsed && (
         <div
-          className="layout-sidebar-overlay"
-          onClick={() => toggleSidebar(!isSidebarCollapsed)}
+          className="layout-sidebar-overlay lg:hidden"
+          onClick={() => toggleSidebar(true)}
           aria-hidden="true"
         />
       )}

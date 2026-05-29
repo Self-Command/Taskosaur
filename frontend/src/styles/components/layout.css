@@ -3,15 +3,6 @@
 /* Header Styles */
 .header-container {
   @apply sticky top-0 z-40 shadow-sm bg-[var(--background)]/95 backdrop-blur supports-[backdrop-filter]:bg-[var(--background)]/80;
-  transition: margin-right 300ms ease-in-out;
-  margin-right: 0;
-}
-
-@media (min-width: 1280px) {
-  body.chat-open .header-container {
-    margin-right: 400px !important;
-    transition: margin-right 300ms ease-in-out;
-  }
 }
 
 .header-content {
@@ -369,66 +360,26 @@
   @apply bg-[var(--sidebar-ring)];
 }
 .layout-sidebar-overlay {
-  @apply fixed inset-0 bg-black opacity-50 z-30 md:hidden;
-  /* Add smooth transition for overlay */
-  /* transition: opacity 0.2s ease-in-out; */
+  @apply fixed inset-0 bg-black/50 backdrop-blur-sm z-30;
+  animation: sidebarOverlayIn 0.2s ease-out;
 }
-
-.layout-sidebar-overlay.entering {
-  opacity: 0;
-}
-
-.layout-sidebar-overlay.entered {
-  opacity: 0.5;
-}
-
-.layout-sidebar-overlay.exiting {
-  opacity: 0;
-}
+@keyframes sidebarOverlayIn { from { opacity: 0; } to { opacity: 1; } }
 
 .layout-sidebar-toggle-button {
-  @apply fixed top-3 left-4 z-50 w-10 h-10 flex items-center justify-center rounded-lg bg-[var(--sidebar)] border border-[var(--sidebar-border)] text-[var(--sidebar-foreground)] shadow-lg md:hidden hover:bg-[var(--hover-bg)] transition-colors;
-  /* Add smooth slide-in animation */
-  /* transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); */
-}
-
-.layout-sidebar-toggle-button.entering {
-  opacity: 0;
-  transform: translateX(-10px);
-}
-
-.layout-sidebar-toggle-button.entered {
-  opacity: 1;
-  transform: translateX(0);
+  @apply fixed top-3 left-4 z-50 w-9 h-9 flex items-center justify-center rounded-xl bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all;
 }
 
 .layout-sidebar-wrapper {
   @apply z-40 h-full flex;
-  /* On mobile: fixed positioning, on desktop: static */
   position: fixed;
   top: 0;
   left: 0;
-  /* Add smooth transition for the entire wrapper */
-  /* transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1); */
-}
-
-.layout-sidebar-wrapper.entering {
-  transform: translateX(0); /* fully visible */
-}
-
-.layout-sidebar-wrapper.entered {
-  transform: translateX(0); /* stays visible */
-}
-
-.layout-sidebar-wrapper.exiting {
-  transform: translateX(-100%); /* slide out to left */
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 @media (min-width: 768px) {
   .layout-sidebar-wrapper {
     position: static;
-    /* Different transition for desktop - smoother width changes */
-    /* transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); */
   }
 }
 

@@ -22,8 +22,9 @@ function useExposeRouter() {
 }
 
 export default function MyApp({ Component, pageProps }: AppProps) {
-  // Expose router globally for automation to use
   useExposeRouter();
+  const router = useRouter();
+  const isChatPage = router.pathname === "/chat";
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
       <SEO />
@@ -31,7 +32,7 @@ export default function MyApp({ Component, pageProps }: AppProps) {
         <ChatProvider>
           <AppBootstrapper>
             <Component {...pageProps} />
-            <ChatPanel />
+            {!isChatPage && <ChatPanel />}
           </AppBootstrapper>
         </ChatProvider>
       </AuthProvider>

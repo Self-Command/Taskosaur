@@ -71,5 +71,7 @@
         "shx": "^0.3.4",
         "to-ico": "^1.1.5"
     },
-    "dependencies": {}
+    "dependencies": {
+        "@opentelemetry/api": "^1.9.1"
+    }
 }

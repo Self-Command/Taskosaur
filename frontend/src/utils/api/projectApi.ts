@@ -161,7 +161,7 @@ export const projectApi = {
         return { success: true, message: "Project deleted successfully" };
       }
 
-      if (contentType.includes("application/json") && response.data) {
+      if (typeof contentType === 'string' && contentType.includes("application/json") && response.data) {
         return response.data;
       }
 
@@ -318,7 +318,7 @@ export const projectApi = {
         };
       }
 
-      if (contentType.includes("application/json") && response.data) {
+      if (typeof contentType === 'string' && contentType.includes("application/json") && response.data) {
         return response.data;
       }
 
@@ -421,7 +421,7 @@ export const projectApi = {
         return { success: true, message: "Project archived successfully" };
       }
 
-      if (contentType.includes("application/json") && response.data) {
+      if (typeof contentType === 'string' && contentType.includes("application/json") && response.data) {
         return response.data;
       }
 

@@ -1,11 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
-  HiXMark, HiPaperAirplane, HiSparkles, HiPlus, HiTrash,
-  HiPencil, HiBars3, HiChatBubbleLeft, HiStop, HiArrowPath,
-  HiUserCircle,
+  HiArrowLeft, HiPaperAirplane, HiSparkles, HiPlus, HiTrash,
+  HiPencil, HiChatBubbleLeft, HiStop, HiXMark,
 } from "react-icons/hi2";
-import { useChatContext } from "@/contexts/chat-context";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/router";
 import { useAuth } from "@/contexts/auth-context";
 import ChatMarkdown from "@/components/chat/ChatMarkdown";
 import api from "@/lib/api";
@@ -102,26 +100,13 @@ function ToolCard({ t }: { t: ToolExec }) {
   );
 }
 
-/* ── Shimmer loading for messages ── */
-function ShimmerMessage() {
-  return (
-    <div className="flex gap-3 animate-pulse">
-      <div className="w-7 h-7 rounded-full bg-gray-200 dark:bg-gray-700 shrink-0 mt-0.5" />
-      <div className="flex-1 space-y-2 py-1">
-        <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
-        <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/2" />
-        <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-5/6" />
-      </div>
-    </div>
-  );
-}
-
 /* ═════════════════════════════════════════════════════════════ */
-/*  MAIN COMPONENT                                               */
+/*  STANDALONE CHAT PAGE                                          */
 /* ═════════════════════════════════════════════════════════════ */
 
-export default function ChatPanel() {
-  const { isChatOpen, toggleChat } = useChatContext();
+export default function ChatPage() {
+  const router = useRouter();
+  const { getCurrentUser, isAuthenticated } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -132,34 +117,14 @@ export default function ChatPanel() {
   const [sessionId, setSessionId] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
-  const [width, setWidth] = useState(440);
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const aborter = useRef<AbortController | null>(null);
-  const resizing = useRef(false);
-  const pathname = usePathname();
-  const router = useRouter();
-  const { getCurrentUser } = useAuth();
-
-  /* ── Resize ── */
-  useEffect(() => {
-    const mm = (e: MouseEvent) => { if (resizing.current) setWidth(Math.min(680, Math.max(360, window.innerWidth - e.clientX))); };
-    const mu = () => { resizing.current = false; };
-    window.addEventListener("mousemove", mm); window.addEventListener("mouseup", mu);
-    return () => { window.removeEventListener("mousemove", mm); window.removeEventListener("mouseup", mu); };
-  }, []);
 
   /* ── Init ── */
   useEffect(() => { const u = getCurrentUser(); if (u) { setUser(u); loadConvs(); } }, [getCurrentUser]);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
-
-  /* ── Mobile redirect ── */
-  useEffect(() => {
-    if (typeof window !== "undefined" && window.innerWidth < 768 && isChatOpen) {
-      toggleChat();
-      router.push("/chat");
-    }
-  }, [isChatOpen]);
+  useEffect(() => { if (!isAuthenticated()) router.replace("/login"); }, []);
 
   const loadConvs = async () => { try { const r = await api.get("/ai-chat/conversations"); setConvs(r.data || []); } catch {} };
 
@@ -185,10 +150,9 @@ export default function ChatPanel() {
     const ctrl = new AbortController(); aborter.current = ctrl;
     try {
       const tok = localStorage.getItem("access_token");
-      const parts = pathname.split("/").filter(Boolean);
       const sid = sessionId || "s" + Date.now();
       if (!sessionId) setSessionId(sid);
-      const body: any = { message: text, workspaceId: parts[0] || null, projectId: parts[1] || null, sessionId: sid, currentOrganizationId: localStorage.getItem("currentOrganizationId") };
+      const body: any = { message: text, sessionId: sid, currentOrganizationId: localStorage.getItem("currentOrganizationId") };
       const resp = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/ai-chat/chat/stream`, {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tok}` },
         body: JSON.stringify(body), signal: ctrl.signal,
@@ -219,18 +183,14 @@ export default function ChatPanel() {
   /* ── Stop ── */
   const stop = () => { aborter.current?.abort(); setLoading(false); setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.streaming) c[c.length - 1] = { ...last, streaming: false }; return c; }); };
 
-  if (!isChatOpen) return null;
-
   return (
-    <div className="fixed top-0 right-0 bottom-0 bg-white dark:bg-[#0f0f0f] border-l border-gray-200 dark:border-gray-800 z-50 flex flex-col overflow-hidden shadow-2xl shadow-black/10" style={{ width: `${width}px` }}>
-      {/* resize handle */}
-      <div onMouseDown={(e) => { e.preventDefault(); resizing.current = true; }} className="absolute left-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-500/30 z-50 transition-colors" />
+    <div className="fixed inset-0 z-50 bg-white dark:bg-[#0f0f0f] flex flex-col overflow-hidden">
 
       {/* ═══ History sidebar ═══ */}
       {histOpen && (
         <>
-          <div className="absolute inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={() => setHistOpen(false)} />
-          <div className="absolute left-0 top-0 bottom-0 w-72 bg-white dark:bg-[#0f0f0f] border-r border-gray-200 dark:border-gray-800 z-50 flex flex-col shadow-xl">
+          <div className="fixed inset-0 bg-black/40 z-[60] backdrop-blur-sm" onClick={() => setHistOpen(false)} />
+          <div className="fixed left-0 top-0 bottom-0 w-72 bg-white dark:bg-[#0f0f0f] border-r border-gray-200 dark:border-gray-800 z-[70] flex flex-col shadow-xl">
             {/* header */}
             <div className="flex items-center justify-between px-4 py-3.5 border-b border-gray-100 dark:border-gray-800 shrink-0">
               <span className="font-semibold text-sm text-gray-800 dark:text-gray-200">对话记录</span>
@@ -310,8 +270,8 @@ export default function ChatPanel() {
       {/* ═══ Header ═══ */}
       <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-[#0f0f0f]">
         <div className="flex items-center gap-2.5">
-          <button onClick={async () => { setHistOpen(true); await loadConvs(); }} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 transition-colors">
-            <HiBars3 className="w-4.5 h-4.5" />
+          <button onClick={() => router.push("/dashboard")} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 transition-colors">
+            <HiArrowLeft className="w-5 h-5" />
           </button>
           <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-sm">
             <HiSparkles className="w-3.5 h-3.5 text-white" />
@@ -324,8 +284,8 @@ export default function ChatPanel() {
               <HiPlus className="w-4 h-4" />
             </button>
           )}
-          <button onClick={toggleChat} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 transition-colors">
-            <HiXMark className="w-4 h-4" />
+          <button onClick={async () => { setHistOpen(true); await loadConvs(); }} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 transition-colors" title="历史记录">
+            <HiChatBubbleLeft className="w-4 h-4" />
           </button>
         </div>
       </div>
@@ -333,7 +293,6 @@ export default function ChatPanel() {
       {/* ═══ Messages ═══ */}
       <div className="flex-1 overflow-y-auto px-4 py-5 space-y-6 scroll-smooth">
         {messages.length === 0 ? (
-          /* Empty state */
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
             <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center mb-6 shadow-lg shadow-emerald-500/20">
               <HiSparkles className="w-8 h-8 text-white" />
@@ -355,7 +314,6 @@ export default function ChatPanel() {
             </div>
           </div>
         ) : (
-          /* Message list */
           messages.map((m) =>
             m.role === "user" ? (
               <div key={m.id} className="flex justify-end">
@@ -369,15 +327,13 @@ export default function ChatPanel() {
                   <HiSparkles className="w-3.5 h-3.5 text-white" />
                 </div>
                 <div className="flex-1 min-w-0 space-y-3">
-                  {/* Tool execution cards */}
                   {m.toolExecs && m.toolExecs.length > 0 && (
                     <div className="space-y-1.5 mb-3">
                       {m.toolExecs.map((t, i) => <ToolCard key={i} t={t} />)}
                     </div>
                   )}
-                  {/* Text content */}
                   {m.content ? (
-                    <div className="text-sm leading-relaxed text-gray-800 dark:text-gray-200 prose prose-sm dark:prose-invert max-w-none">
+                    <div className="text-sm leading-relaxed text-gray-800 dark:text-gray-200 prose prose-sm dark:prose-invert max-w-none break-words">
                       <ChatMarkdown content={m.content} />
                     </div>
                   ) : m.streaming ? (
@@ -387,7 +343,6 @@ export default function ChatPanel() {
                       <span className="w-2 h-2 bg-emerald-500 rounded-full animate-bounce [animation-delay:0.3s]" />
                     </div>
                   ) : null}
-                  {/* Retry indicator */}
                   {!m.streaming && !m.content && m.toolExecs.length === 0 && (
                     <div className="text-sm text-gray-400 dark:text-gray-500 italic">无响应内容</div>
                   )}

@@ -67,6 +67,23 @@ export class ChatRequestDto {
   currentOrganizationId?: string;
 }
 
+export class ToolExecutionDto {
+  @ApiProperty({
+    description: 'Tool name that was executed',
+  })
+  tool: string;
+
+  @ApiProperty({
+    description: 'Parameters passed to the tool',
+  })
+  params: any;
+
+  @ApiProperty({
+    description: 'Result returned by the tool',
+  })
+  result: any;
+}
+
 export class ChatResponseDto {
   @ApiProperty({
     description: 'AI response message',
@@ -82,6 +99,12 @@ export class ChatResponseDto {
     description: 'Error message if any',
   })
   error?: string;
+
+  @ApiPropertyOptional({
+    description: 'Tool executions that occurred during this chat',
+    type: [ToolExecutionDto],
+  })
+  toolExecutions?: ToolExecutionDto[];
 }
 
 export class TestConnectionDto {

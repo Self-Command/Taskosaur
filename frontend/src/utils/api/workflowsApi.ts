@@ -106,7 +106,7 @@ export const workflowsApi = {
         return { success: true, message: "Workflow deleted successfully" };
       }
 
-      if (contentType.includes("application/json") && response.data) {
+      if (typeof contentType === 'string' && contentType.includes("application/json") && response.data) {
         return response.data;
       }
 

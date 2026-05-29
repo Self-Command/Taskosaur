@@ -1,5 +1,5 @@
 // Trigger watch reload
-import { Controller, Post, Body, UseGuards, Delete, Param, Get, Patch, Put } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Delete, Param, Get, Patch, Put, Res } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AiChatService } from './ai-chat.service';
@@ -16,6 +16,7 @@ import {
 } from './dto/chat.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '@prisma/client';
+import { Response } from 'express';
 
 @ApiTags('AI Chat')
 @Controller('ai-chat')
@@ -28,6 +29,13 @@ export class AiChatController {
   @ApiResponse({ status: 200 })
   async getConversations(@CurrentUser() user: User) {
     return this.aiChatService.getConversations(user.id);
+  }
+
+  @Get('conversations/:id')
+  @ApiOperation({ summary: 'Get a single AI conversation by ID' })
+  @ApiResponse({ status: 200 })
+  async getConversation(@CurrentUser() user: User, @Param('id') id: string) {
+    return this.aiChatService.getConversation(user.id, id);
   }
 
   @Post('conversations')
@@ -74,6 +82,53 @@ export class AiChatController {
     @Body() chatRequest: ChatRequestDto,
   ): Promise<ChatResponseDto> {
     return this.aiChatService.chat(chatRequest, user.id);
+  }
+
+  @Post('chat/stream')
+  @ApiOperation({ summary: 'Send chat message with streaming response' })
+  @ApiResponse({ status: 200 })
+  async chatStreamPost(
+    @CurrentUser() user: User,
+    @Body() chatRequest: ChatRequestDto,
+    @Res() res: Response,
+  ) {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    try {
+      for await (const event of this.aiChatService.chatStreamPost(chatRequest, user.id)) {
+        res.write(`data: ${JSON.stringify(event)}\n\n`);
+      }
+      res.end();
+    } catch (error) {
+      res.write(`data: ${JSON.stringify({ type: 'error', error: error.message })}\n\n`);
+      res.end();
+    }
+  }
+
+  @Post('chat/stream-ai-sdk')
+  @ApiOperation({ summary: 'Send chat message with AI SDK compatible streaming response' })
+  @ApiResponse({ status: 200 })
+  async chatStreamAISDK(
+    @CurrentUser() user: User,
+    @Body() chatRequest: ChatRequestDto,
+    @Res() res: Response,
+  ) {
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Vercel-AI-Data-Stream', 'v1');
+
+    try {
+      for await (const chunk of this.aiChatService.chatStreamAISDK(chatRequest, user.id)) {
+        res.write(chunk);
+      }
+      res.end();
+    } catch (error) {
+      res.write(`0:${JSON.stringify({ type: 'error', error: error.message })}\n`);
+      res.end();
+    }
   }
 
   @Post('test-connection')

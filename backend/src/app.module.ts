@@ -38,6 +38,7 @@ import { InvitationsModule } from './modules/invitations/invitations.module';
 import { TaskLabelsModule } from './modules/task-label/task-labels.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { AiChatModule } from './modules/ai-chat/ai-chat.module';
+import { McpToolsModule } from './modules/mcp-tools/mcp-tools.module';
 import { InboxModule } from './modules/inbox/inbox.module';
 import { EmailModule } from './modules/email/email.module';
 import { QueueModule } from './modules/queue/queue.module';
@@ -92,6 +93,7 @@ import { JiraSyncModule } from './modules/jira-sync/jira-sync.module';
           TaskLabelsModule,
           SettingsModule,
           AiChatModule,
+          McpToolsModule,
           InboxModule,
           PublicModule,
           HealthModule,
@@ -133,6 +135,7 @@ import { JiraSyncModule } from './modules/jira-sync/jira-sync.module';
     TaskLabelsModule,
     SettingsModule,
     AiChatModule,
+    McpToolsModule,
     InboxModule,
     PublicModule,
     HealthModule,

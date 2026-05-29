@@ -1,4 +1,6 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
+import { Observable, Subject } from 'rxjs';
+import { MessageEvent } from '@nestjs/common';
 import {
   ChatRequestDto,
   ChatResponseDto,
@@ -12,16 +14,19 @@ import {
   UpdateMessagesDto,
 } from './dto/chat.dto';
 import { SettingsService } from '../settings/settings.service';
-import { enhancePromptWithContext } from './app-guide';
-import { getAutomationPrompt } from './automation-prompts';
+import { McpToolsService } from '../mcp-tools/mcp-tools.service';
+import { getMCPSystemPrompt } from '../mcp-tools/prompts';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Conversation } from '@prisma/client';
+
+const MAX_TOOL_ITERATIONS = 10;
 
 @Injectable()
 export class AiChatService {
   constructor(
     private settingsService: SettingsService,
     private prisma: PrismaService,
+    private mcpToolsService: McpToolsService,
   ) {}
 
   private detectProvider(apiUrl: string): string {
@@ -29,8 +34,6 @@ export class AiChatService {
       const parsedUrl = new URL(apiUrl);
       const hostname = parsedUrl.hostname;
 
-      // Check for Ollama (localhost/private network)
-      // Treats all localhost and private network addresses as Ollama (OpenAI-compatible)
       if (this.isLocalhost(hostname) || this.isPrivateNetwork(hostname)) {
         return 'ollama';
       }
@@ -46,337 +49,427 @@ export class AiChatService {
         return 'google';
     } catch (e) {
       console.log(e);
-      // Invalid URL, fall back to previous logic or return custom (could alternatively throw error)
     }
-    return 'custom'; // fallback for unknown providers
+    return 'custom';
   }
 
-  private async callLlm(
-    messages: ChatMessageDto[],
-    userId: string,
-    maxTokens = 500,
-  ): Promise<string> {
-    const [apiKey, model, rawApiUrl] = await Promise.all([
-      this.settingsService.get('ai_api_key', userId),
-      this.settingsService.get('ai_model', userId),
-      this.settingsService.get('ai_api_url', userId),
-    ]);
-
-    if (!model) {
-      throw new BadRequestException('AI model not configured. Please select a model in settings.');
-    }
-    if (!rawApiUrl) {
-      throw new BadRequestException(
-        'AI API URL not configured. Please set the API URL in settings.',
-      );
-    }
-
-    const apiUrl = this.validateApiUrl(rawApiUrl);
-    const provider = this.detectProvider(apiUrl);
-
-    if (!apiKey && provider !== 'ollama') {
-      throw new BadRequestException('AI API key not configured. Please set it in settings.');
-    }
-
-    const requestHeaders: any = {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    };
-    let requestBody: any = {
-      model,
-      messages,
-      temperature: 0.1,
-      max_tokens: maxTokens,
-      stream: false,
-    };
-
-    const isGpt5Model = typeof model === 'string' && model.startsWith('gpt-5');
-    let requestUrl = apiUrl;
-
-    switch (provider) {
-      case 'openrouter':
-        requestUrl = `${apiUrl}/chat/completions`;
-        requestHeaders['HTTP-Referer'] = process.env.APP_URL || 'http://localhost:3000';
-        requestHeaders['X-Title'] = 'Taskosaur AI Assistant';
-        requestBody.top_p = 0.9;
-        requestBody.frequency_penalty = 0;
-        requestBody.presence_penalty = 0;
-        break;
-
-      case 'openai':
-        requestUrl = `${apiUrl}/chat/completions`;
-        delete requestBody.max_tokens;
-        requestBody.max_completion_tokens = maxTokens;
-        if (isGpt5Model) {
-          delete requestBody.temperature;
-        } else {
-          requestBody.top_p = 0.9;
-          requestBody.frequency_penalty = 0;
-          requestBody.presence_penalty = 0;
-        }
-        break;
-
-      case 'ollama':
-        if (apiUrl.includes('/v1')) {
-          requestUrl = apiUrl.endsWith('/chat/completions') ? apiUrl : `${apiUrl}/chat/completions`;
-        } else if (apiUrl.includes('/api')) {
-          requestUrl = apiUrl.endsWith('/chat') ? apiUrl : `${apiUrl}/chat`;
-        } else {
-          requestUrl = `${apiUrl}/v1/chat/completions`;
-        }
-        delete requestHeaders['Authorization'];
-        requestBody.top_p = 0.9;
-        break;
-
-      case 'anthropic':
-        requestUrl = `${apiUrl}/messages`;
-        requestHeaders['x-api-key'] = apiKey;
-        requestHeaders['anthropic-version'] = '2023-06-01';
-        delete requestHeaders['Authorization'];
-        requestBody = {
-          model,
-          messages: messages.filter((m) => m.role !== 'system'),
-          system: messages.find((m) => m.role === 'system')?.content,
-          max_tokens: maxTokens,
-          temperature: 0.1,
-        };
-        break;
-
-      case 'google':
-        this.validateModelName(model);
-        requestUrl = `${apiUrl}/models/${encodeURIComponent(String(model))}:generateContent?key=${encodeURIComponent(apiKey || '')}`;
-        delete requestHeaders['Authorization'];
-        requestBody = {
-          contents: messages.map((m) => ({
-            role: m.role === 'assistant' ? 'model' : m.role == 'system' ? 'model' : m.role,
-            parts: [{ text: m.content }],
-          })),
-          generationConfig: {
-            temperature: 0.1,
-            maxOutputTokens: maxTokens,
-          },
-        };
-        break;
-
-      default:
-        requestUrl = `${apiUrl}/chat/completions`;
-        break;
-    }
-
-    const response = await fetch(requestUrl, {
-      method: 'POST',
-      headers: requestHeaders,
-      body: JSON.stringify(requestBody),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-
-      if (response.status === 401) {
-        throw new BadRequestException(
-          'Invalid API key. Please check your OpenRouter API key in settings.',
-        );
-      } else if (response.status === 429) {
-        throw new BadRequestException(
-          'Rate limit exceeded by API provider. Please try again in a moment.',
-        );
-      } else if (response.status === 402) {
-        throw new BadRequestException(
-          'Insufficient credits. Please check your OpenRouter account.',
-        );
+  /**
+   * Streaming chat method compatible with Vercel AI SDK protocol
+   */
+  async *chatStreamAISDK(chatRequest: ChatRequestDto, userId: string): AsyncGenerator<string> {
+    try {
+      const isEnabled = await this.settingsService.get('ai_enabled', userId);
+      if (isEnabled !== 'true') {
+        yield `0:${JSON.stringify({ type: 'error', error: 'AI chat is currently disabled' })}\n`;
+        return;
       }
 
-      throw new BadRequestException(
-        errorData?.error?.message || `LLM API returned status ${response.status}`,
-      );
+      const [apiKey, rawApiUrl] = await Promise.all([
+        this.settingsService.get('ai_api_key', userId),
+        this.settingsService.get('ai_api_url', userId),
+      ]);
+
+      if (!rawApiUrl) {
+        yield `0:${JSON.stringify({ type: 'error', error: 'AI API URL not configured' })}\n`;
+        return;
+      }
+
+      const apiUrl = this.validateApiUrl(rawApiUrl);
+      const provider = this.detectProvider(apiUrl);
+
+      if (!apiKey && provider !== 'ollama') {
+        yield `0:${JSON.stringify({ type: 'error', error: 'AI API key not configured' })}\n`;
+        return;
+      }
+
+      // Build messages
+      const messages: ChatMessageDto[] = [];
+      messages.push({ role: 'system', content: getMCPSystemPrompt() });
+
+      let userMessage = chatRequest.message;
+      if (chatRequest.workspaceId || chatRequest.projectId) {
+        const contextParts: string[] = [];
+        if (chatRequest.workspaceId) contextParts.push(`workspaceId: ${chatRequest.workspaceId}`);
+        if (chatRequest.projectId) contextParts.push(`projectId: ${chatRequest.projectId}`);
+        if (chatRequest.currentOrganizationId)
+          contextParts.push(`organizationId: ${chatRequest.currentOrganizationId}`);
+        userMessage = `[Context: ${contextParts.join(', ')}]\n\n${userMessage}`;
+      }
+
+      messages.push({ role: 'user', content: userMessage });
+
+      // Tool-calling loop with AI SDK protocol streaming
+      let streamIndex = 0;
+      let finalResponse = '';
+
+      for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
+        const llmResponse = await this.callLlmWithTools(messages, userId, provider, apiUrl, apiKey);
+
+        if (llmResponse.toolCalls && llmResponse.toolCalls.length > 0) {
+          const assistantMsg: any = {
+            role: 'assistant',
+            content: llmResponse.content || null,
+            tool_calls: llmResponse.toolCalls.map((tc) => ({
+              id: tc.id,
+              type: 'function',
+              function: { name: tc.name, arguments: JSON.stringify(tc.arguments) },
+            })),
+          };
+          messages.push(assistantMsg);
+
+          // Stream assistant text if any
+          if (llmResponse.content) {
+            yield `${streamIndex++}:${JSON.stringify({ type: 'text', text: llmResponse.content })}\n`;
+          }
+
+          for (const toolCall of llmResponse.toolCalls) {
+            const toolName = toolCall.name;
+            const toolParams = toolCall.arguments;
+            const toolCallId = toolCall.id;
+
+            // Emit tool call start (AI SDK format)
+            yield `${streamIndex++}:${JSON.stringify({
+              type: 'tool-call',
+              toolCallId: toolCallId,
+              toolName: toolName,
+              args: toolParams,
+            })}\n`;
+
+            const toolResult = await this.mcpToolsService.executeTool(toolName, toolParams, userId);
+
+            // Emit tool result (AI SDK format)
+            yield `${streamIndex++}:${JSON.stringify({
+              type: 'tool-result',
+              toolCallId: toolCallId,
+              toolName: toolName,
+              result: toolResult,
+            })}\n`;
+
+            messages.push({
+              role: 'tool',
+              content: JSON.stringify(toolResult),
+              tool_call_id: toolCallId,
+            } as any);
+          }
+        } else {
+          finalResponse = llmResponse.content || 'Done.';
+          if (llmResponse.content) {
+            // Stream final text response
+            yield `${streamIndex++}:${JSON.stringify({ type: 'text', text: llmResponse.content })}\n`;
+            messages.push({ role: 'assistant', content: llmResponse.content });
+          }
+          break;
+        }
+      }
+
+      if (!finalResponse) {
+        finalResponse = 'Task completed.';
+        yield `${streamIndex++}:${JSON.stringify({ type: 'text', text: finalResponse })}\n`;
+      }
+
+      // Emit finish event
+      yield `${streamIndex++}:${JSON.stringify({ type: 'finish', finishReason: 'stop' })}\n`;
+    } catch (error: any) {
+      console.error(error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      yield `0:${JSON.stringify({ type: 'error', error: errorMessage })}\n`;
     }
-
-    const responseData = await response.json();
-    let aiMessage = '';
-
-    if (provider === 'google') {
-      aiMessage = responseData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    } else if (provider === 'anthropic') {
-      aiMessage = responseData?.content?.[0]?.text || '';
-    } else {
-      // OpenAI-compat format (also used by Ollama /v1/chat/completions)
-      aiMessage = responseData?.choices?.[0]?.message?.content || '';
-      // Ollama native /api/chat format
-      if (!aiMessage) aiMessage = responseData?.message?.content || '';
-      // Ollama native /api/generate format
-      if (!aiMessage) aiMessage = responseData?.response || '';
-    }
-
-    return aiMessage.trim();
   }
 
-  private generateSystemPrompt(): string {
-    return `You are Taskosaur AI assistant for browser automation.Your job is to help users automate tasks on web pages.
+  /**
+   * Streaming chat method with real-time tool execution updates (async generator)
+   */
+  async *chatStreamPost(chatRequest: ChatRequestDto, userId: string): AsyncGenerator<any> {
+    try {
+      const isEnabled = await this.settingsService.get('ai_enabled', userId);
+      if (isEnabled !== 'true') {
+        yield { type: 'error', error: 'AI chat is currently disabled' };
+        return;
+      }
 
-You will receive:
-1. The current page URL
-2. A list of interactive elements on the page with their index numbers
-3. History of ALL previous actions with their results (marked with ✅ for success or ❌ for failure)
+      const [apiKey, rawApiUrl] = await Promise.all([
+        this.settingsService.get('ai_api_key', userId),
+        this.settingsService.get('ai_api_url', userId),
+      ]);
 
-Your task is to respond with the NEXT NEW action to take. Available actions:
-- click(index) - Click an element
-- type(index, "text") - Type text into an input field
-- scroll("up" or "down") - Scroll the page
-- select(index, "option text") - Select an option from dropdown
+      if (!rawApiUrl) {
+        yield { type: 'error', error: 'AI API URL not configured' };
+        return;
+      }
 
-Format your response EXACTLY like this:
-ACTION: click(5)
-OR
-DONE: [short clear message]
-OR
-ASK: [question] (only when required data missing)
+      const apiUrl = this.validateApiUrl(rawApiUrl);
+      const provider = this.detectProvider(apiUrl);
 
-RESPONSE RULES:
-- For greetings (hi, hello, hey): DONE: Hi! How can I help you with Taskosaur today?
-- For off-topic/non-app requests: DONE: I can only help with Taskosaur tasks like creating tasks, projects, filtering, etc.
-- For completed actions: DONE: [what was done, e.g. "Task created" or "Filter applied"]
-- For questions needing data: ASK: [specific question]
-- Keep responses short and clear - no explanations or thinking
-- CRITICAL: When the user requests ANY create/update/delete operation, FIRST verify you have ALL required context (workspace, project, task name, etc.). If ANY required info is missing from the user's message AND cannot be determined from the current URL, respond with ASK BEFORE performing any ACTION
+      if (!apiKey && provider !== 'ollama') {
+        yield { type: 'error', error: 'AI API key not configured' };
+        return;
+      }
 
-WHEN TO ASK OR CREATE (VERY IMPORTANT):
-- Workspaces DO NOT go under other workspaces! If the user says "create a workspace" or "create a workspace, project, and task", DO NOT ask "which workspace should I create the workspace under?". Just CREATE IT.
-- EXCEPTION (DO NOT ASK): If the user explicitly asks to CREATE the workspace AND the project AND the task in one message (e.g., "Create a workspace called X, a project called Y, and a task called Z"), DO NOT ask any clarifying questions. Just CREATE ALL THREE.
-- ALWAYS ask when the user's message does NOT specify: task name, target workspace, or target project (unless it can be inferred from the current URL)
-- If the user says "create a task" without specifying a project or workspace (and the URL doesn't provide it), ASK which workspace and project BEFORE taking any action
-- If the user says "create a project" without specifying a workspace (and the URL doesn't provide it), ASK which workspace BEFORE taking any action
-- If the user mentions a specific workspace or project to use, but that workspace or project DOES NOT EXIST, DO NOT guess. Instead, ASK: "Workspace/Project [Name] does not exist. Should I create it?".
-  -> ONLY create the missing workspace/project if the user replies yes or agrees.
-- If the user says "create a task" without a task name, ASK for the task name BEFORE taking any action
-- NEVER guess or assume which workspace, project, or entity to use — ALWAYS ask when ambiguous
-- Do NOT ask for optional fields (description, priority, due date, etc. — those can be skipped)
-- Ask ONE question at a time, starting with the most important missing info
+      // Build messages
+      const messages: ChatMessageDto[] = [];
+      messages.push({ role: 'system', content: getMCPSystemPrompt() });
 
-CRITICAL RULES:
-1. LOOK at the conversation history - you will see messages like "✅ Action completed: click(5)"
-2. NEVER repeat an action that already has "✅ Action completed" in the history
-3. If you see "✅ Action completed: click(5)", DO NOT do "ACTION: click(5)" again
-4. After 2-3 successful actions, the task is likely done - say DONE
-5. Think: "What haven't I done yet?" before choosing the next action
-6. Be precise and only perform ONE NEW action at a time
-7. Focus ONLY on performing the requested action - NOT on evaluating results
-8. If user says "filter by high priority" and you clicked the filter and selected "High" - you are DONE, even if 0 results show
-9. Empty results, zero items, or "no data" does NOT mean failure - the action was still completed correctly
-10. NEVER retry an action just because the result looks empty
-11. Do NOT judge whether the result "looks right" - just complete the requested steps
-12. Do NOT explain your thinking - just respond
-13. NEVER click outside a modal to close it - the app will auto-close modals when needed
+      let userMessage = chatRequest.message;
+      if (chatRequest.workspaceId || chatRequest.projectId) {
+        const contextParts: string[] = [];
+        if (chatRequest.workspaceId) contextParts.push(`workspaceId: ${chatRequest.workspaceId}`);
+        if (chatRequest.projectId) contextParts.push(`projectId: ${chatRequest.projectId}`);
+        if (chatRequest.currentOrganizationId)
+          contextParts.push(`organizationId: ${chatRequest.currentOrganizationId}`);
+        userMessage = `[Context: ${contextParts.join(', ')}]\n\n${userMessage}`;
+      }
 
-WORKSPACE CREATION RULES (VERY IMPORTANT):
-- Step 1: Click the "New Workspace" or "Create workspace" button to open the modal
-- Step 2: Type the workspace name in the name input field
-- Step 3: CRITICAL! The "Description" field is MANDATORY. You MUST type a description in the description textarea, or the create button will stay disabled. If the user didn't provide a description, invent a simple one like "Workspace for [name]".
-- Step 4: Click the "Create workspace" submit button.
-- Do NOT say DONE until you have actually clicked the final Create button and the action says successful.
+      messages.push({ role: 'user', content: userMessage });
 
-PROJECT CREATION RULES (VERY IMPORTANT):
-- Step 1: Click the "New Project" or "Create project" button to open the modal
-- Step 2: Type the project name in the name input field
-- Step 3: If a workspace is not automatically selected, click the Workspace dropdown, search for the workspace, and select it
-- Step 4: A description is optional but helpful. Type one if provided.
-- Step 5: Click the "Create project" submit button.
+      // Find or create conversation
+      let conversation = await this.prisma.conversation.findUnique({
+        where: { sessionId: chatRequest.sessionId! },
+      });
+      if (!conversation) {
+        conversation = await this.prisma.conversation.create({
+          data: { userId, sessionId: chatRequest.sessionId!, title: 'New Chat' },
+        });
+      }
 
-TASK CREATION RULES (VERY IMPORTANT):
-- If the user specifies which workspace and project (in the CURRENT message OR in any PREVIOUS message in the conversation), select EXACTLY that workspace and project — NEVER pick randomly
-- ONLY ask for workspace/project if the user has NEVER mentioned them in the entire conversation. If you already asked and the user replied with a name, THAT IS THE ANSWER — proceed immediately with it. Do NOT ask again.
-- Do NOT skip the project selection. Do NOT skip clicking Create Task. Do NOT select a random project
-- If the specified project or workspace is not found, DO NOT guess. ASK the user if they want you to create it first.
-- CRITICAL: Once the user has told you the workspace and project, TAKE ACTION immediately. Do NOT re-ask.
+      // Tool-calling loop with streaming
+      let finalResponse = '';
+      const toolExecutions: Array<{ tool: string; params: any; result: any }> = [];
 
-ON THE /tasks PAGE (global tasks — Create Task modal with searchable combobox dropdowns):
-- Step 1: Click the "Create Task" button to open the modal
-- Step 2: Type the task title in the title input
-- Step 3: Click the workspace dropdown (data-automation-id="select-workspace") to open it
-- Step 4: Type the EXACT workspace name in the search input (data-automation-id="search-workspace-input") to filter results
-- Step 5: Click the matching workspace from the filtered list
-- Step 6: Click the project dropdown (data-automation-id="select-project") to open it
-- Step 7: Type the EXACT project name in the search input (data-automation-id="search-project-input") to filter results
-- Step 8: Click the matching project from the filtered list
-- Step 9: Click "Create Task" button (data-automation-id="create-task-submit") to submit
-- CRITICAL: You MUST type in the search input to find the correct workspace/project. Do NOT just click the first item in the list.
+      for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
+        const llmResponse = await this.callLlmWithTools(messages, userId, provider, apiUrl, apiKey);
 
-ON THE /{ws}/tasks PAGE (workspace tasks — use Add Task inline row):
-- Do NOT open the Create Task modal. Use the "Add Task" row at the top of the task table instead.
-- Step 1: Click the "Add Task" button/row at the top of the table to expand the inline form
-- Step 2: Type the task title in the inline title input field
-- Step 3: Select the project from the Project dropdown in the inline row. If user specified a project, select EXACTLY that project. If not specified, ASK which project.
-- Step 4: WAIT a moment after selecting the project — the Status field will auto-fill with a default status. Verify the status dropdown shows a value (e.g. "Todo").
-- Step 5: Press Enter or click the check (✓) button to create the task
-- IMPORTANT: The status auto-fills AFTER project selection. If status is empty, the task creation will FAIL.
+        if (llmResponse.toolCalls && llmResponse.toolCalls.length > 0) {
+          const assistantMsg: any = {
+            role: 'assistant',
+            content: llmResponse.content || null,
+            tool_calls: llmResponse.toolCalls.map((tc) => ({
+              id: tc.id,
+              type: 'function',
+              function: { name: tc.name, arguments: JSON.stringify(tc.arguments) },
+            })),
+          };
+          messages.push(assistantMsg);
 
-ON THE /{ws}/{proj}/tasks PAGE (project tasks — use Add Task inline row):
-- Do NOT open the Create Task modal. Use the "Add Task" row at the top of the task table instead.
-- Step 1: Click the "Add Task" button/row at the top of the table to expand the inline form
-- Step 2: Type the task title in the inline title input field
-- Step 3: The project and status are already determined — do NOT change them.
-- Step 4: Press Enter or click the check (✓) button to create the task
+          for (const toolCall of llmResponse.toolCalls) {
+            const toolName = toolCall.name;
+            const toolParams = toolCall.arguments;
+            const toolCallId = toolCall.id;
 
-ON THE /{ws}/tasks/new PAGE:
-- Workspace is pre-filled (read-only). Use the project dropdown (data-automation-id="task-project-select") to select the correct project by name
-- After filling title and selecting project, click "Create Task" button (data-automation-id="create-task-submit")
+            // Emit tool start event
+            yield { type: 'tool_start', tool: toolName, params: toolParams };
 
-TASK UPDATE RULES (VERY IMPORTANT - for updating priority, status, sprint, assignee, etc.):
-- Step 1: Click on the task to open task detail modal
-- Step 2: Click on the field you want to change (e.g., priority badge shows "Medium")
-- Step 3: Click the new value in the dropdown (e.g., "Highest")
-- Step 4: IMMEDIATELY say "DONE: Task [field] updated to [value]"
-- STOP after Step 4 - do NOT do anything else
-- The modal will close automatically - do NOT try to close it yourself
-- Do NOT click outside the modal
-- Do NOT click any close button
-- Do NOT repeat any clicks
-- After you click the dropdown option, your job is FINISHED - say DONE
+            const toolResult = await this.mcpToolsService.executeTool(toolName, toolParams, userId);
+            toolExecutions.push({ tool: toolName, params: toolParams, result: toolResult });
 
-FILTER RULES (VERY IMPORTANT - for filtering tasks by priority, status, type, etc.):
-- Filters use checkboxes that TOGGLE on/off. Clicking a checked checkbox UNCHECKS it and vice versa.
-- When user says "filter by [value]", the DESIRED END STATE is: ONLY that value's checkbox is checked.
-- Step 1: Click the filter dropdown trigger button (id="filter-dropdown-trigger")
-- Step 2: Expand the relevant filter section (e.g., click "Priority" or "Status" header)
-- Step 3: LOOK at ALL checkboxes in that section. Check which ones are currently checked vs unchecked.
-- Step 4: FIRST, click every checkbox that is currently CHECKED but is NOT the requested value (to uncheck them)
-- Step 5: THEN, if the requested value's checkbox is NOT already checked, click it (to check it)
-- Step 6: If the requested value is already the ONLY checked item, say DONE immediately
-- IMPORTANT: Do ONE click per action. After each click, re-examine the checkboxes on the next iteration.
-- IMPORTANT: A checked checkbox has aria-checked="true" or data-state="checked". An unchecked one has aria-checked="false" or data-state="unchecked".
-- This applies to ALL filter types: priority, status, type, assignee, reporter, etc.
+            // Emit tool result event
+            yield { type: 'tool_result', tool: toolName, params: toolParams, result: toolResult };
 
-GANTT VIEW RULES:
-- The Gantt view shows tasks as horizontal bars on a timeline
-- To switch to Gantt view, find and click the "Gantt" tab/button in the view mode selector on the tasks page
-- Task bars can be dragged to change dates (left edge = start date, right edge = due date, whole bar = move both)
-- Click a task bar to navigate to its detail page
-- View modes (Days/Weeks/Months) change the timeline scale
-- Empty Gantt does NOT mean failure — it means no tasks have dates set yet
+            messages.push({
+              role: 'tool',
+              content: JSON.stringify(toolResult),
+              tool_call_id: toolCallId,
+            } as any);
+          }
+        } else {
+          finalResponse = llmResponse.content || 'Done.';
+          if (llmResponse.content) {
+            messages.push({ role: 'assistant', content: llmResponse.content });
+          }
+          break;
+        }
+      }
 
-TASK ASSIGNMENT RULES:
-- To assign a user to a task: open the task detail → find "Assignees" section → click the member selector → pick user(s) from the list
-- Assignees must be project members. If a user is not a member, ask if they should be invited first.
-- "assign to me" means assign the currently logged-in user
-- The assignment saves automatically after selection — say DONE right away
+      if (!finalResponse && toolExecutions.length > 0) {
+        const toolSummary = toolExecutions
+          .map((te) => te.result?.message || `${te.tool} executed`)
+          .join('; ');
+        finalResponse = toolSummary || 'Task completed.';
+      }
 
-SUB-WORKSPACE RULES:
-- Workspaces can be nested under other workspaces (sub-workspaces)
-- In the sidebar Workspace Tree, drag a workspace onto another to make it a child
-- Drag to the "Drop here to make top-level" drop zone to un-nest a sub-workspace
-- DO NOT confuse sub-workspaces with projects. Projects go inside workspaces; sub-workspaces are nested workspaces.
+      // Save conversation messages
+      if (conversation) {
+        await this.prisma.chatMessage.create({
+          data: { conversationId: conversation.id, role: 'user', content: chatRequest.message },
+        });
+        await this.prisma.chatMessage.create({
+          data: {
+            conversationId: conversation.id,
+            role: 'assistant',
+            content: finalResponse,
+            toolExecutions: toolExecutions.length > 0 ? toolExecutions : undefined,
+          },
+        });
 
-ADMIN PANEL RULES (SUPER_ADMIN ONLY):
-- Admin pages are at /admin, /admin/users, /admin/organizations, /admin/config
-- Only users with SUPER_ADMIN role can access admin pages
-- Dashboard: system stats overview
-- Users: manage user roles, status, password resets
-- Organizations: manage all orgs, suspend/unsuspend, transfer ownership
-- Config: system-wide settings (SMTP, AI defaults, security)`;
+        // Auto-generate title on first message
+        if (conversation.title === 'New Chat') {
+          let newTitle = '';
+          try {
+            const titlePrompt = `Generate a very short title (max 4 words) for: "${chatRequest.message.substring(0, 100)}"`;
+            const aiTitle = await this.callLlmSimple(
+              [{ role: 'user', content: titlePrompt }],
+              userId,
+            );
+            let cleanTitle = aiTitle.replace(/['""`.\n]/g, '').trim();
+            if (cleanTitle.length > 40) cleanTitle = cleanTitle.substring(0, 40) + '...';
+            if (cleanTitle.length >= 2) newTitle = cleanTitle;
+          } catch { /* fallback below */ }
+          if (!newTitle) {
+            newTitle = chatRequest.message.substring(0, 30) + (chatRequest.message.length > 30 ? '...' : '');
+          }
+          if (newTitle && newTitle !== 'New Chat') {
+            conversation = await this.prisma.conversation.update({
+              where: { id: conversation.id },
+              data: { title: newTitle },
+            });
+          }
+        }
+      }
+
+      // Emit final response with conversation info
+      yield {
+        type: 'message',
+        message: finalResponse,
+        toolExecutions,
+        conversationId: conversation!.id,
+        title: conversation!.title,
+      };
+    } catch (error: any) {
+      console.error(error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      yield { type: 'error', error: errorMessage };
+    }
   }
 
+  /**
+   * Streaming chat method with real-time tool execution updates
+   */
+  chatStream(chatRequest: ChatRequestDto, userId: string): Observable<MessageEvent> {
+    const subject = new Subject<MessageEvent>();
+
+    // Run the chat logic asynchronously and emit events
+    (async () => {
+      try {
+        const isEnabled = await this.settingsService.get('ai_enabled', userId);
+        if (isEnabled !== 'true') {
+          subject.next({ data: { type: 'error', error: 'AI chat is currently disabled' } } as MessageEvent);
+          subject.complete();
+          return;
+        }
+
+        const [apiKey, rawApiUrl] = await Promise.all([
+          this.settingsService.get('ai_api_key', userId),
+          this.settingsService.get('ai_api_url', userId),
+        ]);
+
+        if (!rawApiUrl) {
+          subject.next({ data: { type: 'error', error: 'AI API URL not configured' } } as MessageEvent);
+          subject.complete();
+          return;
+        }
+
+        const apiUrl = this.validateApiUrl(rawApiUrl);
+        const provider = this.detectProvider(apiUrl);
+
+        if (!apiKey && provider !== 'ollama') {
+          subject.next({ data: { type: 'error', error: 'AI API key not configured' } } as MessageEvent);
+          subject.complete();
+          return;
+        }
+
+        // Build messages
+        const messages: ChatMessageDto[] = [];
+        messages.push({ role: 'system', content: getMCPSystemPrompt() });
+
+        let userMessage = chatRequest.message;
+        if (chatRequest.workspaceId || chatRequest.projectId) {
+          const contextParts: string[] = [];
+          if (chatRequest.workspaceId) contextParts.push(`workspaceId: ${chatRequest.workspaceId}`);
+          if (chatRequest.projectId) contextParts.push(`projectId: ${chatRequest.projectId}`);
+          if (chatRequest.currentOrganizationId) contextParts.push(`organizationId: ${chatRequest.currentOrganizationId}`);
+          userMessage = `[Context: ${contextParts.join(', ')}]\n\n${userMessage}`;
+        }
+
+        messages.push({ role: 'user', content: userMessage });
+
+        // Tool-calling loop with streaming
+        let finalResponse = '';
+        const toolExecutions: Array<{ tool: string; params: any; result: any }> = [];
+
+        for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
+          const llmResponse = await this.callLlmWithTools(messages, userId, provider, apiUrl, apiKey);
+
+          if (llmResponse.toolCalls && llmResponse.toolCalls.length > 0) {
+            const assistantMsg: any = {
+              role: 'assistant',
+              content: llmResponse.content || null,
+              tool_calls: llmResponse.toolCalls.map(tc => ({
+                id: tc.id,
+                type: 'function',
+                function: { name: tc.name, arguments: JSON.stringify(tc.arguments) },
+              })),
+            };
+            messages.push(assistantMsg);
+
+            for (const toolCall of llmResponse.toolCalls) {
+              const toolName = toolCall.name;
+              const toolParams = toolCall.arguments;
+              const toolCallId = toolCall.id;
+
+              // Emit tool start event
+              subject.next({
+                data: { type: 'tool_start', tool: toolName, params: toolParams },
+              } as MessageEvent);
+
+              const toolResult = await this.mcpToolsService.executeTool(toolName, toolParams, userId);
+              toolExecutions.push({ tool: toolName, params: toolParams, result: toolResult });
+
+              // Emit tool result event
+              subject.next({
+                data: { type: 'tool_result', tool: toolName, params: toolParams, result: toolResult },
+              } as MessageEvent);
+
+              messages.push({
+                role: 'tool',
+                content: JSON.stringify(toolResult),
+                tool_call_id: toolCallId,
+              } as any);
+            }
+          } else {
+            finalResponse = llmResponse.content || 'Done.';
+            if (llmResponse.content) {
+              messages.push({ role: 'assistant', content: llmResponse.content });
+            }
+            break;
+          }
+        }
+
+        if (!finalResponse && toolExecutions.length > 0) {
+          const toolSummary = toolExecutions.map((te) => te.result?.message || `${te.tool} executed`).join('; ');
+          finalResponse = toolSummary || 'Task completed.';
+        }
+
+        // Emit final response
+        subject.next({
+          data: { type: 'message', message: finalResponse, toolExecutions },
+        } as MessageEvent);
+
+        subject.complete();
+      } catch (error: any) {
+        console.error(error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        subject.next({ data: { type: 'error', error: errorMessage } } as MessageEvent);
+        subject.complete();
+      }
+    })();
+
+    return subject.asObservable();
+  }
+
+  /**
+   * Main chat method with MCP tool-calling loop
+   */
   async chat(chatRequest: ChatRequestDto, userId: string): Promise<ChatResponseDto> {
     try {
-      // Check if AI is enabled
       const isEnabled = await this.settingsService.get('ai_enabled', userId);
       if (isEnabled !== 'true') {
         throw new BadRequestException(
@@ -384,7 +477,6 @@ ADMIN PANEL RULES (SUPER_ADMIN ONLY):
         );
       }
 
-      // Get API settings from database
       const [apiKey, rawApiUrl] = await Promise.all([
         this.settingsService.get('ai_api_key', userId),
         this.settingsService.get('ai_api_url', userId),
@@ -399,12 +491,11 @@ ADMIN PANEL RULES (SUPER_ADMIN ONLY):
       const apiUrl = this.validateApiUrl(rawApiUrl);
       const provider = this.detectProvider(apiUrl);
 
-      // API key is optional for Ollama (localhost/private network)
       if (!apiKey && provider !== 'ollama') {
         throw new BadRequestException('AI API key not configured. Please set it in settings.');
       }
 
-      // Find or create conversation if sessionId is provided
+      // Find or create conversation
       let conversation: Conversation | null = null;
       let dbHistory: ChatMessageDto[] = [];
 
@@ -422,7 +513,6 @@ ADMIN PANEL RULES (SUPER_ADMIN ONLY):
             },
           });
         } else {
-          // Fetch existing history from DB
           const historyMsgs = await this.prisma.chatMessage.findMany({
             where: { conversationId: conversation.id },
             orderBy: { createdAt: 'asc' },
@@ -435,121 +525,141 @@ ADMIN PANEL RULES (SUPER_ADMIN ONLY):
         }
       }
 
-      // Build messages array with system prompt and conversation history
+      // Build messages with system prompt
       const messages: ChatMessageDto[] = [];
-
-      // Generate system prompt
-      const systemPrompt = this.generateSystemPrompt();
       messages.push({
         role: 'system',
-        content: systemPrompt,
+        content: getMCPSystemPrompt(),
       });
 
-      // Add conversation history (prefer DB history, fall back to request history)
       if (dbHistory.length > 0) {
-        dbHistory.forEach((msg: ChatMessageDto) => {
-          messages.push(msg);
-        });
+        dbHistory.forEach((msg) => messages.push(msg));
       } else if (chatRequest.history && Array.isArray(chatRequest.history)) {
-        chatRequest.history.forEach((msg: ChatMessageDto) => {
-          messages.push({
-            role: msg.role,
-            content: msg.content,
-          });
-        });
+        chatRequest.history.forEach((msg) => messages.push(msg));
       }
 
+      // Add context info if workspace/project provided
       let userMessage = chatRequest.message;
-
-      const taskMatch = userMessage.match(/Task:\s*([^\n]+)/);
-      const urlMatch = userMessage.match(/Current URL:\s*([^\n]+)/);
-
-      if (taskMatch && urlMatch) {
-        const task = taskMatch[1].trim();
-        const url = urlMatch[1].trim();
-        const appContext = enhancePromptWithContext(task, url);
-        const automationPrompt = getAutomationPrompt(task);
-        userMessage = userMessage + `\n\n${appContext}`;
-        if (automationPrompt) {
-          userMessage = userMessage + `\n\n${automationPrompt}`;
-        }
+      if (chatRequest.workspaceId || chatRequest.projectId) {
+        const contextParts: string[] = [];
+        if (chatRequest.workspaceId) contextParts.push(`workspaceId: ${chatRequest.workspaceId}`);
+        if (chatRequest.projectId) contextParts.push(`projectId: ${chatRequest.projectId}`);
+        if (chatRequest.currentOrganizationId)
+          contextParts.push(`organizationId: ${chatRequest.currentOrganizationId}`);
+        userMessage = `[Context: ${contextParts.join(', ')}]\n\n${userMessage}`;
       }
 
-      // Save user message to database if we have a conversation
+      // Save user message
       if (conversation) {
-        const taskMatch = chatRequest.message.match(/Task:\s*([^\n]+)/);
-        const cleanUserMsg = taskMatch ? taskMatch[1].trim() : chatRequest.message;
-
         await this.prisma.chatMessage.create({
           data: {
             conversationId: conversation.id,
             role: 'user',
-            content: cleanUserMsg,
+            content: chatRequest.message,
           },
         });
 
-        // Auto-generate title by AI if it is still 'New Chat'
         if (conversation.title === 'New Chat') {
           try {
-            const titlePrompt = `Analyze the following first user message in a chat and generate a very short, concise topic title summarizing it (maximum 4 words, no quotes, no markdown, no ending period):
-
-"${cleanUserMsg}"`;
-
-            const aiGeneratedTitle = await this.callLlm(
+            const titlePrompt = `Generate a very short title (max 4 words) for: "${chatRequest.message.substring(0, 100)}"`;
+            const aiTitle = await this.callLlmSimple(
               [{ role: 'user', content: titlePrompt }],
               userId,
-              500,
             );
-
-            // Clean up the generated title
-            let cleanTitle = aiGeneratedTitle
-              .replace(/['"“”`.]/g, '')
-              .replace(/^title:\s*/i, '') // strip "Title: " prefix if generated
-              .trim();
-            if (cleanTitle.length > 40) {
-              cleanTitle = cleanTitle.substring(0, 40) + '...';
+            let cleanTitle = aiTitle.replace(/['""`.\n]/g, '').trim();
+            if (cleanTitle.length > 40) cleanTitle = cleanTitle.substring(0, 40) + '...';
+            if (cleanTitle.length >= 2) {
+              conversation = await this.prisma.conversation.update({
+                where: { id: conversation.id },
+                data: { title: cleanTitle },
+              });
             }
-
-            if (!cleanTitle || cleanTitle.length < 2) {
-              throw new Error('Generated title is empty or too short');
-            }
-
+          } catch {
+            const fallbackTitle =
+              chatRequest.message.substring(0, 30) + (chatRequest.message.length > 30 ? '...' : '');
             conversation = await this.prisma.conversation.update({
               where: { id: conversation.id },
-              data: { title: cleanTitle },
-            });
-          } catch (e) {
-            console.warn('Failed to generate AI title, using fallback', e);
-            const cleanTitle = cleanUserMsg.trim();
-            const newTitle =
-              cleanTitle.length > 30 ? cleanTitle.substring(0, 30) + '...' : cleanTitle;
-            conversation = await this.prisma.conversation.update({
-              where: { id: conversation.id },
-              data: { title: newTitle || 'New Chat' },
+              data: { title: fallbackTitle || 'New Chat' },
             });
           }
         }
       }
 
-      messages.push({
-        role: 'user',
-        content: userMessage,
-      });
+      messages.push({ role: 'user', content: userMessage });
 
-      // Call API helper to get response
-      const aiMessage = await this.callLlm(messages, userId, 500);
+      // ========== TOOL-CALLING LOOP ==========
+      let finalResponse = '';
+      const toolExecutions: Array<{ tool: string; params: any; result: any }> = [];
 
-      // Save assistant message to database if we have a conversation
-      if (conversation && aiMessage) {
+      for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
+        const llmResponse = await this.callLlmWithTools(messages, userId, provider, apiUrl, apiKey);
+
+        // Check if LLM wants to call tools
+        if (llmResponse.toolCalls && llmResponse.toolCalls.length > 0) {
+          // Add assistant message with tool calls to conversation
+          const assistantMsg: any = {
+            role: 'assistant',
+            content: llmResponse.content || null,
+            tool_calls: llmResponse.toolCalls.map(tc => ({
+              id: tc.id,
+              type: 'function',
+              function: {
+                name: tc.name,
+                arguments: JSON.stringify(tc.arguments),
+              },
+            })),
+          };
+          messages.push(assistantMsg);
+
+          // Execute each tool call
+          for (const toolCall of llmResponse.toolCalls) {
+            const toolName = toolCall.name;
+            const toolParams = toolCall.arguments;
+            const toolCallId = toolCall.id;
+
+            // Execute the tool
+            const toolResult = await this.mcpToolsService.executeTool(
+              toolName,
+              toolParams,
+              userId,
+            );
+
+            toolExecutions.push({ tool: toolName, params: toolParams, result: toolResult });
+
+            // Add tool result to messages
+            messages.push({
+              role: 'tool',
+              content: JSON.stringify(toolResult),
+              tool_call_id: toolCallId,
+            } as any);
+          }
+        } else {
+          // No tool calls — this is the final text response
+          finalResponse = llmResponse.content || 'Done.';
+          if (llmResponse.content) {
+            messages.push({ role: 'assistant', content: llmResponse.content });
+          }
+          break;
+        }
+      }
+
+      if (!finalResponse && toolExecutions.length > 0) {
+        // If loop exhausted but we executed tools, summarize
+        const toolSummary = toolExecutions
+          .map((te) => te.result?.message || `${te.tool} executed`)
+          .join('; ');
+        finalResponse = toolSummary || 'Task completed.';
+      }
+
+      // Save assistant response
+      if (conversation && finalResponse) {
         await this.prisma.chatMessage.create({
           data: {
             conversationId: conversation.id,
             role: 'assistant',
-            content: aiMessage,
+            content: finalResponse,
           },
         });
-
-        // Touch the conversation updatedAt timestamp
         await this.prisma.conversation.update({
           where: { id: conversation.id },
           data: { updatedAt: new Date() },
@@ -557,8 +667,9 @@ ADMIN PANEL RULES (SUPER_ADMIN ONLY):
       }
 
       return {
-        message: aiMessage,
+        message: finalResponse,
         success: true,
+        toolExecutions: toolExecutions.length > 0 ? toolExecutions : undefined,
       };
     } catch (error: any) {
       console.error(error);
@@ -570,7 +681,6 @@ ADMIN PANEL RULES (SUPER_ADMIN ONLY):
           error: 'Network error. Please check your internet connection.',
         };
       }
-
       return {
         message: errorMessage || 'Failed to process chat request',
         success: false,
@@ -579,178 +689,419 @@ ADMIN PANEL RULES (SUPER_ADMIN ONLY):
     }
   }
 
+  /**
+   * Call LLM with tool definitions and parse tool call responses
+   */
+  private async callLlmWithTools(
+    messages: ChatMessageDto[],
+    userId: string,
+    provider: string,
+    apiUrl: string,
+    apiKey: string | null,
+  ): Promise<{ content: string | null; toolCalls: Array<{ id: string; name: string; arguments: any }> | null }> {
+    const model = await this.settingsService.get('ai_model', userId);
+    if (!model) throw new BadRequestException('AI model not configured.');
+
+    const isGpt5Model = typeof model === 'string' && model.startsWith('gpt-5');
+    const toolDefs = this.mcpToolsService.getToolDefinitions();
+
+    let requestUrl = apiUrl;
+    const requestHeaders: any = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    };
+    let requestBody: any;
+
+    switch (provider) {
+      case 'openrouter':
+      case 'openai':
+      case 'custom': {
+        requestUrl = `${apiUrl}/chat/completions`;
+        requestBody = {
+          model,
+          messages: this.formatMessagesForOpenAI(messages),
+          tools: this.mcpToolsService.getOpenAITools(),
+          tool_choice: 'auto',
+          temperature: 0.1,
+          stream: false,
+        };
+        if (provider === 'openai') {
+          delete requestBody.max_tokens;
+          requestBody.max_completion_tokens = 2000;
+          if (isGpt5Model) delete requestBody.temperature;
+        } else if (provider === 'openrouter') {
+          requestHeaders['HTTP-Referer'] = process.env.APP_URL || 'http://localhost:3000';
+          requestHeaders['X-Title'] = 'Taskosaur AI Assistant';
+        }
+        break;
+      }
+
+      case 'anthropic': {
+        requestUrl = `${apiUrl}/messages`;
+        requestHeaders['x-api-key'] = apiKey;
+        requestHeaders['anthropic-version'] = '2023-06-01';
+        delete requestHeaders['Authorization'];
+
+        const systemMsg = messages.find((m) => m.role === 'system');
+        const nonSystemMsgs = messages.filter((m) => m.role !== 'system' && (m as any).role !== 'tool');
+
+        requestBody = {
+          model,
+          messages: this.formatMessagesForAnthropic(nonSystemMsgs),
+          system: systemMsg?.content || '',
+          tools: this.mcpToolsService.getAnthropicTools(),
+          max_tokens: 2000,
+          temperature: 0.1,
+        };
+        break;
+      }
+
+      case 'ollama': {
+        if (apiUrl.includes('/v1')) {
+          requestUrl = apiUrl.endsWith('/chat/completions') ? apiUrl : `${apiUrl}/chat/completions`;
+        } else if (apiUrl.includes('/api')) {
+          requestUrl = apiUrl.endsWith('/chat') ? apiUrl : `${apiUrl}/chat`;
+        } else {
+          requestUrl = `${apiUrl}/v1/chat/completions`;
+        }
+        delete requestHeaders['Authorization'];
+        requestBody = {
+          model,
+          messages: this.formatMessagesForOpenAI(messages),
+          tools: this.mcpToolsService.getOpenAITools(),
+          tool_choice: 'auto',
+          temperature: 0.1,
+          stream: false,
+        };
+        break;
+      }
+
+      case 'google': {
+        this.validateModelName(model);
+        requestUrl = `${apiUrl}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey || '')}`;
+        delete requestHeaders['Authorization'];
+        const cleanMessagesForGoogle = messages.filter((m) => (m as any).role !== 'tool');
+        requestBody = {
+          contents: this.formatMessagesForGoogle(cleanMessagesForGoogle),
+          tools: [{ functionDeclarations: this.mcpToolsService.getGoogleFunctionDeclarations() }],
+          generationConfig: {
+            temperature: 0.1,
+            maxOutputTokens: 2000,
+          },
+        };
+        break;
+      }
+
+      default: {
+        requestUrl = `${apiUrl}/chat/completions`;
+        requestBody = {
+          model,
+          messages: this.formatMessagesForOpenAI(messages),
+          tools: this.mcpToolsService.getOpenAITools(),
+          tool_choice: 'auto',
+          temperature: 0.1,
+          stream: false,
+        };
+      }
+    }
+
+    const response = await fetch(requestUrl, {
+      method: 'POST',
+      headers: requestHeaders,
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      if (response.status === 401) {
+        throw new BadRequestException('Invalid API key.');
+      } else if (response.status === 429) {
+        throw new BadRequestException('Rate limit exceeded.');
+      }
+      throw new BadRequestException(
+        errorData?.error?.message || `LLM API returned status ${response.status}`,
+      );
+    }
+
+    const responseData = await response.json();
+
+    // Parse response based on provider
+    return this.parseLLMResponse(responseData, provider);
+  }
+
+  /**
+   * Parse LLM response to extract content and tool calls
+   */
+  private parseLLMResponse(
+    data: any,
+    provider: string,
+  ): { content: string | null; toolCalls: Array<{ id: string; name: string; arguments: any }> | null } {
+    switch (provider) {
+      case 'anthropic': {
+        const contentBlocks = data?.content || [];
+        let textContent = '';
+        const toolCalls: Array<{ id: string; name: string; arguments: any }> = [];
+
+        for (const block of contentBlocks) {
+          if (block.type === 'text') {
+            textContent += block.text;
+          } else if (block.type === 'tool_use') {
+            toolCalls.push({
+              id: block.id,
+              name: block.name,
+              arguments: block.input,
+            });
+          }
+        }
+
+        return {
+          content: textContent || null,
+          toolCalls: toolCalls.length > 0 ? toolCalls : null,
+        };
+      }
+
+      case 'google': {
+        const candidate = data?.candidates?.[0];
+        const contentParts = candidate?.content?.parts || [];
+        let textContent = '';
+        const toolCalls: Array<{ id: string; name: string; arguments: any }> = [];
+
+        for (const part of contentParts) {
+          if (part.text) {
+            textContent += part.text;
+          } else if (part.functionCall) {
+            toolCalls.push({
+              id: `google_${Date.now()}_${Math.random().toString(36).substring(2)}`,
+              name: part.functionCall.name,
+              arguments: part.functionCall.args,
+            });
+          }
+        }
+
+        return {
+          content: textContent || null,
+          toolCalls: toolCalls.length > 0 ? toolCalls : null,
+        };
+      }
+
+      default: {
+        // OpenAI-compatible format (OpenAI, OpenRouter, Ollama, Custom)
+        const choice = data?.choices?.[0];
+        const message = choice?.message;
+        let content = message?.content || null;
+        const toolCallsRaw = message?.tool_calls;
+
+        // Ollama native format fallback
+        if (!content && !toolCallsRaw) {
+          content = data?.message?.content || data?.response || null;
+        }
+
+        if (toolCallsRaw && toolCallsRaw.length > 0) {
+          const toolCalls = toolCallsRaw.map((tc: any) => ({
+            id: tc.id || `call_${Date.now()}_${Math.random().toString(36).substring(2)}`,
+            name: tc.function?.name || tc.name,
+            arguments:
+              typeof tc.function?.arguments === 'string'
+                ? JSON.parse(tc.function.arguments)
+                : tc.function?.arguments || tc.arguments || {},
+          }));
+          return { content, toolCalls };
+        }
+
+        return { content, toolCalls: null };
+      }
+    }
+  }
+
+  /**
+   * Format messages for OpenAI-compatible API (includes tool role messages)
+   */
+  private formatMessagesForOpenAI(messages: ChatMessageDto[]): any[] {
+    return messages.map((m) => {
+      const msg: any = { role: m.role, content: m.content };
+      if ((m as any).tool_call_id) {
+        msg.tool_call_id = (m as any).tool_call_id;
+      }
+      if ((m as any).tool_calls) {
+        msg.tool_calls = (m as any).tool_calls;
+      }
+      return msg;
+    });
+  }
+
+  /**
+   * Format messages for Anthropic API
+   */
+  private formatMessagesForAnthropic(messages: ChatMessageDto[]): any[] {
+    return messages
+      .filter((m) => m.role === 'user' || m.role === 'assistant')
+      .map((m) => ({
+        role: m.role,
+        content: m.content || '',
+      }));
+  }
+
+  /**
+   * Format messages for Google Gemini API
+   */
+  private formatMessagesForGoogle(messages: ChatMessageDto[]): any[] {
+    return messages
+      .filter((m) => m.role !== 'system')
+      .map((m) => ({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: m.content || '' }],
+      }));
+  }
+
+  /**
+   * Simple LLM call without tools (for title generation etc.)
+   * If overrides are provided, they take precedence over saved settings.
+   */
+  private async callLlmSimple(
+    messages: ChatMessageDto[],
+    userId: string,
+    maxTokens = 100,
+    overrides?: { apiKey?: string; model?: string; apiUrl?: string },
+  ): Promise<string> {
+    const [savedApiKey, savedModel, savedApiUrl] = await Promise.all([
+      this.settingsService.get('ai_api_key', userId),
+      this.settingsService.get('ai_model', userId),
+      this.settingsService.get('ai_api_url', userId),
+    ]);
+
+    const apiKey = overrides?.apiKey ?? savedApiKey;
+    const model = overrides?.model ?? savedModel;
+    const rawApiUrl = overrides?.apiUrl ?? savedApiUrl;
+
+    if (!model || !rawApiUrl) throw new Error('AI not configured');
+
+    const apiUrl = this.validateApiUrl(rawApiUrl);
+    const provider = this.detectProvider(apiUrl);
+
+    if (!apiKey && provider !== 'ollama') throw new Error('API key required');
+
+    const isGpt5Model = typeof model === 'string' && model.startsWith('gpt-5');
+
+    let requestUrl = apiUrl;
+    const requestHeaders: any = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    };
+    let requestBody: any = {
+      model,
+      messages,
+      temperature: 0.1,
+      max_tokens: maxTokens,
+      stream: false,
+    };
+
+    switch (provider) {
+      case 'openrouter':
+        requestUrl = `${apiUrl}/chat/completions`;
+        requestHeaders['HTTP-Referer'] = process.env.APP_URL || 'http://localhost:3000';
+        requestHeaders['X-Title'] = 'Taskosaur AI Assistant';
+        break;
+      case 'openai':
+        requestUrl = `${apiUrl}/chat/completions`;
+        delete requestBody.max_tokens;
+        requestBody.max_completion_tokens = maxTokens;
+        if (isGpt5Model) delete requestBody.temperature;
+        break;
+      case 'ollama':
+        if (apiUrl.includes('/v1')) {
+          requestUrl = apiUrl.endsWith('/chat/completions') ? apiUrl : `${apiUrl}/chat/completions`;
+        } else if (apiUrl.includes('/api')) {
+          requestUrl = apiUrl.endsWith('/chat') ? apiUrl : `${apiUrl}/chat`;
+        } else {
+          requestUrl = `${apiUrl}/v1/chat/completions`;
+        }
+        delete requestHeaders['Authorization'];
+        break;
+      case 'anthropic':
+        requestUrl = `${apiUrl}/messages`;
+        requestHeaders['x-api-key'] = apiKey;
+        requestHeaders['anthropic-version'] = '2023-06-01';
+        delete requestHeaders['Authorization'];
+        requestBody = {
+          model,
+          messages: messages.filter((m) => m.role !== 'system'),
+          system: messages.find((m) => m.role === 'system')?.content,
+          max_tokens: maxTokens,
+          temperature: 0.1,
+        };
+        break;
+      case 'google':
+        this.validateModelName(model);
+        requestUrl = `${apiUrl}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey || '')}`;
+        delete requestHeaders['Authorization'];
+        requestBody = {
+          contents: messages.map((m) => ({
+            role: m.role === 'assistant' ? 'model' : m.role === 'system' ? 'model' : m.role,
+            parts: [{ text: m.content }],
+          })),
+          generationConfig: { temperature: 0.1, maxOutputTokens: maxTokens },
+        };
+        break;
+      default:
+        requestUrl = `${apiUrl}/chat/completions`;
+        break;
+    }
+
+    const response = await fetch(requestUrl, {
+      method: 'POST',
+      headers: requestHeaders,
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) throw new Error(`LLM API error: ${response.status}`);
+
+    const responseData = await response.json();
+    let aiMessage = '';
+
+    if (provider === 'google') {
+      aiMessage = responseData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    } else if (provider === 'anthropic') {
+      aiMessage = responseData?.content?.[0]?.text || '';
+    } else {
+      aiMessage = responseData?.choices?.[0]?.message?.content || '';
+      if (!aiMessage) aiMessage = responseData?.message?.content || '';
+      if (!aiMessage) aiMessage = responseData?.response || '';
+    }
+
+    return aiMessage.trim();
+  }
+
+  // ========== KEEP EXISTING METHODS ==========
+
   async generateDescription(
     dto: GenerateDescriptionDto,
     userId: string,
   ): Promise<GenerateDescriptionResponseDto> {
     try {
-      // Check if AI is enabled
       const isEnabled = await this.settingsService.get('ai_enabled', userId);
       if (isEnabled !== 'true') {
-        return {
-          description: '',
-          success: false,
-          error: 'AI is not enabled.',
-        };
+        return { description: '', success: false, error: 'AI is not enabled.' };
       }
-      const [apiKey, model, rawApiUrl] = await Promise.all([
-        this.settingsService.get('ai_api_key', userId),
-        this.settingsService.get('ai_model', userId),
-        this.settingsService.get('ai_api_url', userId),
-      ]);
-
-      if (!rawApiUrl || !model) {
-        throw new Error('AI not configured');
-      }
-
-      const apiUrl = this.validateApiUrl(rawApiUrl);
-      const provider = this.detectProvider(apiUrl);
-      if (!apiKey && provider !== 'ollama') {
-        return {
-          description: '',
-          success: false,
-          error: 'AI API key not configured.',
-        };
-      }
-
-      if (!apiKey && provider !== 'ollama') {
-        return {
-          description: '',
-          success: false,
-          error: 'AI API key not configured.',
-        };
-      }
-
-      const taskType = dto.taskType || 'TASK';
 
       const systemPrompt = `You are a helpful assistant that generates concise task descriptions for a project management tool.
 Given a task title and type, generate a clear, actionable description in Markdown format.
-Keep it brief (2-4 sentences). Include:
-- A summary of what needs to be done
-- Key acceptance criteria or steps if applicable
+Keep it brief (2-4 sentences). Include a summary of what needs to be done and key acceptance criteria.
 Do NOT include the title itself in the description.
 Do NOT wrap the response in code blocks.
 Respond ONLY with the description text, nothing else.`;
 
-      const userMessage = `Generate a description for this ${taskType.toLowerCase()}:\nTitle: "${dto.title}"`;
+      const userMessage = `Generate a description for this ${(dto.taskType || 'TASK').toLowerCase()}:\nTitle: "${dto.title}"`;
 
-      const messages: ChatMessageDto[] = [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userMessage },
-      ];
+      const description = await this.callLlmSimple(
+        [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userMessage },
+        ],
+        userId,
+        300,
+      );
 
-      const isGpt5Model = typeof model === 'string' && model.startsWith('gpt-5');
-
-      let requestUrl = apiUrl;
-      const requestHeaders: any = {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      };
-      let requestBody: any = {
-        model,
-        messages,
-        temperature: 0.7,
-        max_tokens: 300,
-        stream: false,
-      };
-
-      switch (provider) {
-        case 'openrouter':
-          requestUrl = `${apiUrl}/chat/completions`;
-          requestHeaders['HTTP-Referer'] = process.env.APP_URL || 'http://localhost:3000';
-          requestHeaders['X-Title'] = 'Taskosaur AI Assistant';
-          break;
-        case 'openai':
-          requestUrl = `${apiUrl}/chat/completions`;
-          delete requestBody.max_tokens;
-          requestBody.max_completion_tokens = 300;
-          if (isGpt5Model) {
-            delete requestBody.temperature;
-          }
-          break;
-        case 'ollama':
-          if (apiUrl.includes('/v1')) {
-            requestUrl = apiUrl.endsWith('/chat/completions')
-              ? apiUrl
-              : `${apiUrl}/chat/completions`;
-          } else if (apiUrl.includes('/api')) {
-            requestUrl = apiUrl.endsWith('/chat') ? apiUrl : `${apiUrl}/chat`;
-          } else {
-            requestUrl = `${apiUrl}/v1/chat/completions`;
-          }
-          delete requestHeaders['Authorization'];
-          break;
-        case 'anthropic':
-          requestUrl = `${apiUrl}/messages`;
-          requestHeaders['x-api-key'] = apiKey;
-          requestHeaders['anthropic-version'] = '2023-06-01';
-          delete requestHeaders['Authorization'];
-          requestBody = {
-            model,
-            messages: messages.filter((m) => m.role !== 'system'),
-            system: messages.find((m) => m.role === 'system')?.content,
-            max_tokens: 300,
-            temperature: 0.7,
-          };
-          break;
-        case 'google':
-          this.validateModelName(model);
-          requestUrl = `${apiUrl}/models/${encodeURIComponent(String(model))}:generateContent?key=${encodeURIComponent(apiKey || '')}`;
-          delete requestHeaders['Authorization'];
-          requestBody = {
-            contents: messages.map((m) => ({
-              role: m.role === 'assistant' ? 'model' : m.role === 'system' ? 'model' : m.role,
-              parts: [{ text: m.content }],
-            })),
-            generationConfig: {
-              temperature: 0.7,
-              maxOutputTokens: 300,
-            },
-          };
-          break;
-        default:
-          requestUrl = `${apiUrl}/chat/completions`;
-          break;
-      }
-
-      const response = await fetch(requestUrl, {
-        method: 'POST',
-        headers: requestHeaders,
-        body: JSON.stringify(requestBody),
-      });
-
-      if (!response.ok) {
-        return {
-          description: '',
-          success: false,
-          error: `AI request failed with status ${response.status}`,
-        };
-      }
-
-      const data = await response.json();
-      let aiMessage = '';
-
-      switch (provider) {
-        case 'anthropic':
-          aiMessage = data.content?.[0]?.text || '';
-          break;
-        case 'google':
-          aiMessage = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-          break;
-        default:
-          // OpenAI-compat format (also used by Ollama /v1/chat/completions)
-          aiMessage = data.choices?.[0]?.message?.content || '';
-          // Ollama native /api/chat format
-          if (!aiMessage) aiMessage = data.message?.content || '';
-          // Ollama native /api/generate format
-          if (!aiMessage) aiMessage = data.response || '';
-          break;
-      }
-
-      return {
-        description: aiMessage.trim(),
-        success: true,
-      };
+      return { description, success: true };
     } catch (error: any) {
       console.error('Generate description failed:', error);
       return {
@@ -761,7 +1112,6 @@ Respond ONLY with the description text, nothing else.`;
     }
   }
 
-  // Clear context/messages for a specific session
   async clearContext(sessionId: string): Promise<{ success: boolean }> {
     const conversation = await this.prisma.conversation.findUnique({
       where: { sessionId },
@@ -774,48 +1124,154 @@ Respond ONLY with the description text, nothing else.`;
     return { success: true };
   }
 
+  async testConnection(testConnectionDto: TestConnectionDto): Promise<TestConnectionResponseDto> {
+    const { apiKey, model, apiUrl } = testConnectionDto;
+
+    try {
+      const validatedUrl = this.validateApiUrl(apiUrl);
+      const provider = this.detectProvider(validatedUrl);
+
+      if (!apiKey && provider !== 'ollama') {
+        return { success: false, error: 'API key is required for this provider.' };
+      }
+
+      const messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = [
+        {
+          role: 'user',
+          content: 'Hello, this is a connection test. Please respond with "Connection successful."',
+        },
+      ];
+
+      const description = await this.callLlmSimple(
+        messages,
+        'test-connection',
+        50,
+        { apiKey, model, apiUrl },
+      );
+
+      if (description) {
+        return {
+          success: true,
+          message: 'Connection successful! Your AI configuration is working correctly.',
+        };
+      } else {
+        return {
+          success: false,
+          error: 'Received empty response from AI provider.',
+        };
+      }
+    } catch (error: unknown) {
+      console.error('Test connection failed:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const causeCode = error instanceof Error && (error as any).cause?.code;
+
+      if (errorMessage.includes('AbortError') || errorMessage.includes('aborted')) {
+        return {
+          success: false,
+          error: 'Request timed out. The model may still be loading.',
+        };
+      }
+      if (causeCode === 'ECONNREFUSED' || errorMessage.includes('ECONNREFUSED')) {
+        return {
+          success: false,
+          error: 'Connection refused. The AI service is not running.',
+        };
+      }
+      if (causeCode === 'ENOTFOUND' || errorMessage.includes('ENOTFOUND')) {
+        return { success: false, error: 'Host not found. Please check the API URL.' };
+      }
+      if (errorMessage.includes('fetch failed') || errorMessage.includes('NetworkError')) {
+        return {
+          success: false,
+          error: 'Network error. Please check your internet connection.',
+        };
+      }
+
+      return { success: false, error: 'Connection test failed. Please check your configuration.' };
+    }
+  }
+
+  // ========== CONVERSATION MANAGEMENT ==========
+
+  async getConversation(userId: string, id: string) {
+    return this.prisma.conversation.findFirst({
+      where: { id, userId },
+      include: {
+        messages: { orderBy: { createdAt: 'asc' } },
+      },
+    });
+  }
+
+  async getConversations(userId: string) {
+    return this.prisma.conversation.findMany({
+      where: { userId },
+      orderBy: { updatedAt: 'desc' },
+      take: 100,
+      include: {
+        messages: { orderBy: { createdAt: 'asc' }, take: 40 },
+      },
+    });
+  }
+
+  async createConversation(userId: string, dto: CreateConversationDto) {
+    const sessionId =
+      dto.sessionId || `session_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+    return this.prisma.conversation.create({
+      data: { userId, title: dto.title || 'New Chat', sessionId },
+      include: { messages: true },
+    });
+  }
+
+  async renameConversation(userId: string, id: string, dto: RenameConversationDto) {
+    return this.prisma.conversation.update({
+      where: { id, userId },
+      data: { title: dto.title },
+      include: { messages: true },
+    });
+  }
+
+  async deleteConversation(userId: string, id: string) {
+    await this.prisma.conversation.delete({ where: { id, userId } });
+    return { success: true };
+  }
+
+  async updateMessages(userId: string, id: string, dto: UpdateMessagesDto) {
+    const conversation = await this.prisma.conversation.findFirst({
+      where: { id, userId },
+    });
+    if (!conversation) throw new BadRequestException('Conversation not found');
+
+    await this.prisma.$transaction([
+      this.prisma.chatMessage.deleteMany({ where: { conversationId: id } }),
+      this.prisma.chatMessage.createMany({
+        data: dto.messages.map((msg) => ({
+          conversationId: id,
+          role: msg.role,
+          content: msg.content,
+        })),
+      }),
+      this.prisma.conversation.update({ where: { id }, data: { updatedAt: new Date() } }),
+    ]);
+
+    return { success: true };
+  }
+
+  // ========== VALIDATION HELPERS ==========
+
   private readonly allowedHosts: string[] = [
-    // OpenRouter
     'openrouter.ai',
     'api.openrouter.ai',
-
-    // OpenAI
     'api.openai.com',
-
-    // Anthropic
     'api.anthropic.com',
-
-    // Google - base domains
     'generativelanguage.googleapis.com',
     'aiplatform.googleapis.com',
   ];
 
-  // AWS Bedrock pattern
-  private readonly awsBedrockPattern =
-    /^(bedrock|bedrock-runtime|bedrock-agent|bedrock-agent-runtime|bedrock-data-automation|bedrock-data-automation-runtime)(-fips)?\.([a-z0-9-]+)\.amazonaws\.com$/;
-
-  // Azure OpenAI pattern
-  private readonly azurePattern = /^[a-z0-9-]+\.openai\.azure\.com$/;
-
-  // Google Cloud pattern (for regional Vertex AI and PSC endpoints)
-  private readonly googlePattern =
-    /^([a-z0-9-]+\.)?aiplatform\.googleapis\.com$|^[a-z0-9-]+\.p\.googleapis\.com$|^generativelanguage\.googleapis\.com$/;
-
-  /**
-   * Check if hostname is localhost or loopback
-   */
   private isLocalhost(hostname: string): boolean {
     return ['localhost', '127.0.0.1', '::1'].includes(hostname.toLowerCase());
   }
 
-  /**
-   * Check if hostname is a private network address (RFC 1918)
-   */
   private isPrivateNetwork(hostname: string): boolean {
-    // Check for private IPv4 ranges
-    // 10.0.0.0 - 10.255.255.255
-    // 172.16.0.0 - 172.31.255.255
-    // 192.168.0.0 - 192.168.255.255
     const privateIPv4Pattern =
       /^(10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2[0-9]|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})$/;
     return privateIPv4Pattern.test(hostname);
@@ -829,9 +1285,7 @@ Respond ONLY with the description text, nothing else.`;
       throw new BadRequestException('Invalid URL format');
     }
 
-    // Allow HTTP for localhost and private networks (e.g., self-hosted Ollama)
     const allowHttp = this.isLocalhost(url.hostname) || this.isPrivateNetwork(url.hostname);
-
     if (url.protocol !== 'https:' && !allowHttp) {
       throw new BadRequestException(
         'Only HTTPS URLs allowed (HTTP is permitted for localhost and private network addresses)',
@@ -839,259 +1293,6 @@ Respond ONLY with the description text, nothing else.`;
     }
 
     return url.toString().replace(/\/$/, '');
-  }
-
-  /**
-   * Test connection to AI provider without requiring AI to be enabled
-   * This allows users to verify their configuration before saving and enabling
-   */
-  async testConnection(testConnectionDto: TestConnectionDto): Promise<TestConnectionResponseDto> {
-    const { apiKey, model, apiUrl } = testConnectionDto;
-
-    try {
-      // Validate the URL (this also allows HTTP for localhost/private networks)
-      const validatedUrl = this.validateApiUrl(apiUrl);
-      const provider = this.detectProvider(validatedUrl);
-
-      // API key is required for non-Ollama providers
-      if (!apiKey && provider !== 'ollama') {
-        return {
-          success: false,
-          error: 'API key is required for this provider.',
-        };
-      }
-
-      // Prepare a simple test message
-      const messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = [
-        {
-          role: 'user',
-          content: 'Hello, this is a connection test. Please respond with "Connection successful."',
-        },
-      ];
-
-      const isGpt5Model = typeof model === 'string' && model.startsWith('gpt-5');
-
-      // Prepare request based on provider
-      let requestUrl = validatedUrl;
-      const requestHeaders: any = {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      };
-      let requestBody: any = {
-        model,
-        messages,
-        temperature: 0.1,
-        max_tokens: 50,
-        stream: false,
-      };
-
-      // Adjust for different providers
-      switch (provider) {
-        case 'openrouter':
-          requestUrl = `${validatedUrl}/chat/completions`;
-          requestHeaders['HTTP-Referer'] = process.env.APP_URL || 'http://localhost:3000';
-          requestHeaders['X-Title'] = 'Taskosaur AI Assistant';
-          break;
-
-        case 'openai':
-          requestUrl = `${validatedUrl}/chat/completions`;
-          delete requestBody.max_tokens;
-          requestBody.max_completion_tokens = 50;
-          if (isGpt5Model) {
-            delete requestBody.temperature;
-          }
-          break;
-
-        case 'ollama':
-          // Ollama uses OpenAI-compatible API at /v1/chat/completions or /api/chat
-          if (validatedUrl.includes('/v1')) {
-            requestUrl = validatedUrl.endsWith('/chat/completions')
-              ? validatedUrl
-              : `${validatedUrl}/chat/completions`;
-          } else if (validatedUrl.includes('/api')) {
-            requestUrl = validatedUrl.endsWith('/chat') ? validatedUrl : `${validatedUrl}/chat`;
-          } else {
-            requestUrl = `${validatedUrl}/v1/chat/completions`;
-          }
-          // Ollama doesn't require auth for local instances
-          delete requestHeaders['Authorization'];
-          break;
-
-        case 'anthropic':
-          requestUrl = `${validatedUrl}/messages`;
-          requestHeaders['x-api-key'] = apiKey;
-          requestHeaders['anthropic-version'] = '2023-06-01';
-          delete requestHeaders['Authorization'];
-          requestBody = {
-            model,
-            messages,
-            max_tokens: 50,
-            temperature: 0.1,
-          };
-          break;
-
-        case 'google':
-          this.validateModelName(model);
-          requestUrl = `${validatedUrl}/models/${encodeURIComponent(String(model))}:generateContent?key=${encodeURIComponent(apiKey)}`;
-          delete requestHeaders['Authorization'];
-          requestBody = {
-            contents: messages.map((m) => ({
-              role: m.role === 'assistant' ? 'model' : m.role == 'system' ? 'model' : m.role,
-              parts: [{ text: m.content }],
-            })),
-            generationConfig: {
-              temperature: 0.1,
-              maxOutputTokens: 50,
-            },
-          };
-          break;
-
-        default:
-          requestUrl = `${validatedUrl}/chat/completions`;
-          break;
-      }
-
-      // Make the test request — use a generous timeout for large/slow models (e.g. big GGUF files
-      // that need time to load into memory on first inference).
-      const abortController = new AbortController();
-      const timeoutId = setTimeout(() => abortController.abort(), 120_000); // 2-minute timeout
-
-      let response: Response;
-      try {
-        response = await fetch(requestUrl, {
-          method: 'POST',
-          headers: requestHeaders,
-          body: JSON.stringify(requestBody),
-          signal: abortController.signal,
-        });
-      } finally {
-        clearTimeout(timeoutId);
-      }
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-
-        if (response.status === 401) {
-          return {
-            success: false,
-            error: 'Invalid API key. Please check your API key and try again.',
-          };
-        } else if (response.status === 429) {
-          return {
-            success: false,
-            error: 'Rate limit exceeded. Please try again in a moment.',
-          };
-        } else if (response.status === 402) {
-          return {
-            success: false,
-            error: 'Insufficient credits. Please check your account balance.',
-          };
-        } else if (response.status === 404) {
-          return {
-            success: false,
-            error: 'Model not found. Please check the model name and try again.',
-          };
-        }
-
-        return {
-          success: false,
-          error: errorData.error?.message || `API request failed with status ${response.status}`,
-        };
-      }
-
-      // Parse response to verify we got a valid AI response
-      const data = await response.json();
-      let aiMessage = '';
-
-      switch (provider) {
-        case 'anthropic':
-          aiMessage = data.content?.[0]?.text || '';
-          break;
-        case 'google':
-          aiMessage = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-          break;
-        default:
-          // OpenAI-compat format (also used by Ollama /v1/chat/completions)
-          aiMessage = data.choices?.[0]?.message?.content || '';
-          // Ollama native /api/chat format
-          if (!aiMessage) aiMessage = data.message?.content || '';
-          // Ollama native /api/generate format
-          if (!aiMessage) aiMessage = data.response || '';
-          break;
-      }
-
-      if (aiMessage) {
-        return {
-          success: true,
-          message: 'Connection successful! Your AI configuration is working correctly.',
-        };
-      } else {
-        return {
-          success: false,
-          error: 'Received empty response from AI provider. Please check your configuration.',
-        };
-      }
-    } catch (error: unknown) {
-      console.error('Test connection failed:', error);
-
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      const causeCode = error instanceof Error && (error as any).cause?.code;
-
-      // AbortError is thrown when our AbortController timeout fires (large model loading)
-      const isAbortError =
-        (error instanceof Error && (error as any).name === 'AbortError') ||
-        errorMessage.includes('AbortError') ||
-        errorMessage.includes('This operation was aborted');
-      if (isAbortError) {
-        return {
-          success: false,
-          error:
-            'Request timed out (2 minutes). The model may still be loading into memory — please wait a moment and try again.',
-        };
-      }
-
-      if (causeCode === 'ECONNREFUSED' || errorMessage.includes('ECONNREFUSED')) {
-        return {
-          success: false,
-          error:
-            'Connection refused. The AI service is not running or not reachable at the specified URL.',
-        };
-      }
-
-      if (causeCode === 'ENOTFOUND' || errorMessage.includes('ENOTFOUND')) {
-        return {
-          success: false,
-          error: 'Host not found. Please check your API URL.',
-        };
-      }
-
-      if (
-        causeCode === 'ETIMEDOUT' ||
-        errorMessage.includes('ETIMEDOUT') ||
-        errorMessage.includes('timeout')
-      ) {
-        return {
-          success: false,
-          error: 'Connection timed out. The AI service is not responding.',
-        };
-      }
-
-      if (
-        errorMessage.includes('fetch failed') ||
-        errorMessage.includes('Failed to fetch') ||
-        errorMessage.includes('NetworkError')
-      ) {
-        return {
-          success: false,
-          error: 'Network error. Please check your internet connection and API URL.',
-        };
-      }
-
-      return {
-        success: false,
-        error: 'Connection test failed. Please check your configuration.',
-      };
-    }
   }
 
   validateModelName(
@@ -1104,7 +1305,7 @@ Respond ONLY with the description text, nothing else.`;
     } = {},
   ): void {
     const {
-      allowedPattern = /^[a-zA-Z0-9.-]+$/,
+      allowedPattern = /^[a-zA-Z0-9.\-]+$/,
       maxLength = 100,
       allowPathTraversal = false,
       customErrorMessage = 'Model name contains invalid characters',
@@ -1114,103 +1315,11 @@ Respond ONLY with the description text, nothing else.`;
       throw new BadRequestException('Model name is required and must be a string');
     }
 
-    const trimmedModel = model.trim();
-
-    if (trimmedModel.length === 0) {
-      throw new BadRequestException('Model name cannot be empty');
-    }
-
-    if (trimmedModel.length > maxLength) {
-      throw new BadRequestException(`Model name is too long (max ${maxLength} characters)`);
-    }
-
-    if (!allowPathTraversal && trimmedModel.includes('..')) {
-      throw new BadRequestException('Model name cannot contain path traversal sequences (..)');
-    }
-
-    if (trimmedModel.startsWith('/') || /^[a-zA-Z]:\\/.test(trimmedModel)) {
-      throw new BadRequestException('Model name cannot be an absolute path');
-    }
-
-    if (!allowedPattern.test(trimmedModel)) {
-      throw new BadRequestException(customErrorMessage);
-    }
-  }
-
-  async getConversations(userId: string) {
-    return this.prisma.conversation.findMany({
-      where: { userId },
-      orderBy: { updatedAt: 'desc' },
-      take: 100, // Limit list to most recent 100 conversations to prevent huge payloads
-      include: {
-        messages: {
-          orderBy: { createdAt: 'asc' },
-          take: 40, // Limit messages loaded per conversation to recent history
-        },
-      },
-    });
-  }
-
-  async createConversation(userId: string, dto: CreateConversationDto) {
-    const sessionId =
-      dto.sessionId || `session_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
-    return this.prisma.conversation.create({
-      data: {
-        userId,
-        title: dto.title || 'New Chat',
-        sessionId,
-      },
-      include: {
-        messages: true,
-      },
-    });
-  }
-
-  async renameConversation(userId: string, id: string, dto: RenameConversationDto) {
-    return this.prisma.conversation.update({
-      where: { id, userId },
-      data: {
-        title: dto.title,
-      },
-      include: {
-        messages: true,
-      },
-    });
-  }
-
-  async deleteConversation(userId: string, id: string) {
-    await this.prisma.conversation.delete({
-      where: { id, userId },
-    });
-    return { success: true };
-  }
-
-  async updateMessages(userId: string, id: string, dto: UpdateMessagesDto) {
-    const conversation = await this.prisma.conversation.findFirst({
-      where: { id, userId },
-    });
-    if (!conversation) {
-      throw new BadRequestException('Conversation not found');
-    }
-
-    // Use transaction to delete and recreate messages safely
-    await this.prisma.$transaction([
-      this.prisma.chatMessage.deleteMany({
-        where: { conversationId: id },
-      }),
-      this.prisma.chatMessage.createMany({
-        data: dto.messages.map((msg) => ({
-          conversationId: id,
-          role: msg.role,
-          content: msg.content,
-        })),
-      }),
-      this.prisma.conversation.update({
-        where: { id },
-        data: { updatedAt: new Date() },
-      }),
-    ]);
-
-    return { success: true };
+    const trimmed = model.trim();
+    if (trimmed.length === 0) throw new BadRequestException('Model name cannot be empty');
+    if (trimmed.length > maxLength) throw new BadRequestException(`Model name is too long (max ${maxLength} characters)`);
+    if (!allowPathTraversal && trimmed.includes('..')) throw new BadRequestException('Model name cannot contain path traversal sequences');
+    if (trimmed.startsWith('/') || /^[a-zA-Z]:\\/.test(trimmed)) throw new BadRequestException('Model name cannot be an absolute path');
+    if (!allowedPattern.test(trimmed)) throw new BadRequestException(customErrorMessage);
   }
 }

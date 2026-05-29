@@ -167,7 +167,7 @@ export const workspaceApi = {
         return { success: true, message: "Workspace deleted successfully" };
       }
 
-      if (contentType.includes("application/json") && response.data) {
+      if (typeof contentType === 'string' && contentType.includes("application/json") && response.data) {
         return response.data;
       }
 
@@ -260,7 +260,7 @@ export const workspaceApi = {
         };
       }
 
-      if (contentType.includes("application/json") && response.data) {
+      if (typeof contentType === 'string' && contentType.includes("application/json") && response.data) {
         return response.data;
       }
 
@@ -387,7 +387,7 @@ export const workspaceApi = {
         return { success: true, message: "Workspace archived successfully" };
       }
 
-      if (contentType.includes("application/json") && response.data) {
+      if (typeof contentType === 'string' && contentType.includes("application/json") && response.data) {
         return response.data;
       }
 
