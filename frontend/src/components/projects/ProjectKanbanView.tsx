@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { formatDateForDisplay } from "@/utils/date";
 import Link from "next/link";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -94,6 +95,7 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({
   projectSlug,
 }) => {
   const { getUserAccess } = useAuth();
+  const { t } = useTranslation("kanban");
   const [hasAccess, setHasAccess] = useState(false);
 
   useEffect(() => {
@@ -127,7 +129,7 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({
               projectSlug={projectSlug}
             />
           ))}
-          {tasks.length === 0 && <div className="projects-kanban-empty">No tasks</div>}
+          {tasks.length === 0 && <div className="projects-kanban-empty">{t("noTasks")}</div>}
 
           {hasAccess && (
             <Link

@@ -1,5 +1,6 @@
 import { toast } from "sonner";
 import api from "./api";
+import i18n from "./i18n";
 
 // Configuration
 const IMAGE_UPLOAD_CONFIG = {
@@ -133,7 +134,7 @@ export function getImageUrl(response: ImageUploadResponse): string {
  * Show upload success toast
  */
 export function showUploadSuccessToast(filename: string): void {
-  toast.success("Image uploaded successfully", {
+  toast.success(i18n.t("common:imageUploaded"), {
     description: filename,
     duration: 2000,
   });
@@ -143,7 +144,7 @@ export function showUploadSuccessToast(filename: string): void {
  * Show upload error toast
  */
 export function showUploadErrorToast(message: string): void {
-  toast.error("Upload failed", {
+  toast.error(i18n.t("common:uploadFailed"), {
     description: message,
     duration: 5000,
   });

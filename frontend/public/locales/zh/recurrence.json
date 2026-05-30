@@ -1,0 +1,23 @@
+{
+  "recurringTask": "重复任务",
+  "pattern": "重复模式",
+  "daily": "每天",
+  "weekly": "每周",
+  "monthly": "每月",
+  "quarterly": "每季度",
+  "yearly": "每年",
+  "custom": "自定义",
+  "every": "每",
+  "repeatOn": "重复日",
+  "dayOfMonth": "日期",
+  "dayPlaceholder": "例如 15",
+  "month": "月份",
+  "monthPlaceholder": "选择月份",
+  "ends": "结束",
+  "never": "永不",
+  "onDate": "指定日期",
+  "afterOccurrences": "指定次数后",
+  "endDate": "结束日期",
+  "occurrences": "次数",
+  "occurrencesPlaceholder": "例如 10"
+}

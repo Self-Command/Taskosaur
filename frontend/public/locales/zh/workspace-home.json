@@ -1,0 +1,160 @@
+{
+  "analytics_title": "工作区分析",
+  "analytics_description": "了解工作区绩效和指标",
+  "dashboard_settings": "仪表盘设置",
+  "customize_widgets": "自定义仪表盘组件",
+  "no_widgets_title": "没有可显示的组件",
+  "no_widgets_description": "所有组件当前已隐藏。使用自定义按钮来显示组件。",
+  "show_all_widgets": "显示全部组件",
+  "no_data": "此组织暂无可用分析数据。",
+  "load_data": "加载数据",
+  "error_loading": "加载组织分析时出错：",
+  "widgets": {
+    "kpi_metrics": "KPI 指标",
+    "project_status": "项目状态分布",
+    "task_priority": "任务优先级分布",
+    "task_type": "任务类型分布",
+    "sprint_status": "冲刺状态概览",
+    "monthly_completion": "月度任务完成",
+    "team_utilization": "团队角色分布",
+    "quality_metrics": "缺陷解决质量",
+    "workspace_projects": "每个工作区的项目",
+    "member_workload": "成员工作量分布",
+    "resource_allocation": "资源分配"
+  },
+  "roles": {
+    "admin": "管理员",
+    "manager": "管理者",
+    "member": "成员",
+    "viewer": "查看者",
+    "guest": "访客",
+    "contributor": "贡献者"
+  },
+  "project_status": {
+    "planning": "规划中",
+    "active": "活跃",
+    "on_hold": "暂停",
+    "completed": "已完成",
+    "cancelled": "已取消"
+  },
+  "task_types": {
+    "story": "故事",
+    "task": "任务",
+    "bug": "缺陷",
+    "epic": "史诗",
+    "feature": "功能"
+  },
+  "priority": {
+    "lowest": "最低",
+    "low": "低",
+    "medium": "中",
+    "high": "高",
+    "highest": "最高"
+  },
+  "workload": {
+    "label": "工作量",
+    "low": "低",
+    "medium": "中",
+    "high": "高",
+    "assigned": "已分配任务",
+    "reported": "已报告任务"
+  },
+  "quality": {
+    "resolved": "已解决",
+    "remaining": "剩余",
+    "low_performance": "低绩效",
+    "medium_performance": "中等绩效",
+    "high_performance": "高绩效",
+    "resolution_rate": "解决率"
+  },
+  "project_count": {
+    "low": "<=5 个项目",
+    "medium": "6-10 个项目",
+    "high": ">10 个项目"
+  },
+  "charts": {
+    "project_status_description": "所有项目当前状态分布",
+    "project_status_description_with_count": "整个组织共 {{count}} 个项目",
+    "task_priority_description": "所有项目中任务按优先级的分布概览",
+    "task_type_description": "任务按类型的分布",
+    "task_type_description_with_count": "整个组织共 {{count}} 个任务",
+    "sprint_status_description": "所有项目中冲刺的当前状态",
+    "kpi_metrics_description": "工作区的关键绩效指标",
+    "monthly_completion_description": "每月完成的任务数量",
+    "team_utilization_description_all": "组织成员角色分布",
+    "team_utilization_description_workspace": "所选工作区的角色分布",
+    "all_workspaces": "所有工作区",
+    "member_workload_description": "活跃任务与按成员报告的任务",
+    "workspace_projects_description": "项目在各工作区的分布",
+    "resource_allocation_description_all": "团队成员按角色分布",
+    "resource_allocation_description_project": "所选项目的角色分布",
+    "all_projects": "所有项目",
+    "count": "数量",
+    "quality_metrics_description_with_count": "{{resolved}}/{{total}} 缺陷已解决 ({{rate}}%)"
+  },
+  "kpi": {
+    "total_projects": "总项目数",
+    "active_projects": "活跃项目",
+    "completion_rate": "完成率",
+    "total_tasks": "总任务数",
+    "overdue_tasks": "逾期任务",
+    "task_health": "任务健康度",
+    "excellent": "优秀",
+    "good": "良好",
+    "needs_focus": "需要关注",
+    "perfect": "完美",
+    "critical": "危急",
+    "monitor": "监控"
+  },
+  "header": {
+    "ready_to_tackle": "准备好迎接目标了吗？",
+    "todays_agenda": "今日日程",
+    "new_task": "新建任务"
+  },
+  "analytics": {
+    "failed_to_fetch_today_task_data": "获取今日任务数据失败",
+    "error_loading_organization_analytics": "加载组织分析时出错：",
+    "today_agenda_tooltip": "今日日程",
+    "dashboard_settings_tooltip": "仪表盘设置",
+    "dashboard_title": "仪表盘",
+    "dashboard_description": "全面了解组织的绩效和健康状况",
+    "no_analytics_data": "此组织暂无可用分析数据。",
+    "load_data_button": "加载数据",
+    "no_widgets_title": "没有可显示的组件",
+    "no_widgets_description": "所有组件当前已隐藏。使用自定义按钮来显示组件。",
+    "show_all_widgets_button": "显示全部组件",
+    "failed_to_load_widget_data": "加载 {{widgetTitle}} 数据失败",
+    "retry_button": "重试",
+    "kpi_cards": {
+      "workspaces": "总工作区",
+      "projects": "总项目",
+      "members": "团队成员",
+      "task_completion": "任务完成率",
+      "bug_resolution": "缺陷解决率",
+      "overdue_tasks": "逾期任务",
+      "active_sprints": "活跃冲刺",
+      "productivity": "总体生产力",
+      "descriptions": {
+        "active_status": "{{count}} 活跃",
+        "organization_members": "组织成员",
+        "tasks_count": "{{completed}} / {{total}} 任务",
+        "resolved_count": "{{resolved}} / {{total}} 已解决",
+        "require_attention": "需要关注",
+        "currently_running": "运行中",
+        "task_completion_rate": "任务完成率"
+      }
+    }
+  },
+  "agenda": {
+    "overdue": "已逾期",
+    "today": "今天",
+    "tomorrow": "明天",
+    "due": "截止",
+    "no_due_date": "无截止日期",
+    "all_clear": "今天一切顺利！",
+    "no_tasks_scheduled": "没有安排的任务。你都处理完了！",
+    "great_job": "保持井井有条，做得很好！",
+    "open_task": "打开任务：{{title}}",
+    "click_to_view": "点击查看任务详情"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "placeholder": "Search anything...",
+  "searching": "Searching...",
+  "noResults": "No results found",
+  "tryDifferent": "Try a different search term",
+  "spotlightTitle": "Spotlight Search",
+  "spotlightHint": "Start typing to search across your workspace",
+  "openShortcut": "⌘K to open",
+  "closeShortcut": "ESC to close",
+  "tooltip": "Search",
+  "buttonLabel": "Search"
+}

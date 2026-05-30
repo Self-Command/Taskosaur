@@ -1,0 +1,23 @@
+{
+  "basicInformation": "基本信息",
+  "taskTitlePlaceholder": "需要做什么？",
+  "attachmentsTitle": "附件 ({{count}})",
+  "addAttachment": "添加附件",
+  "descriptionSection": "描述",
+  "workspaceProject": "工作区与项目",
+  "selectProject": "选择项目",
+  "taskConfiguration": "任务配置",
+  "selectStatus": "选择状态",
+  "selectPriority": "选择优先级",
+  "selectType": "选择类型",
+  "searchParent": "搜索父任务...",
+  "noParentFound": "未找到父任务。",
+  "storyPoints": "预估工作量",
+  "storyPointsPlaceholder": "例如 5",
+  "sprint": "冲刺",
+  "startDate": "开始日期",
+  "dueDate": "截止日期",
+  "assignment": "分配",
+  "noMembers": "未找到项目成员。",
+  "createTask": "创建任务"
+}

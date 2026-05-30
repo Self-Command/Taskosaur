@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { CardContent } from "@/components/ui/card";
 import { HiChatBubbleLeft, HiCalendarDays, HiPaperClip } from "react-icons/hi2";
 import { cn } from "@/lib/utils";
@@ -96,6 +97,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
   onDragEnd,
   onClick,
 }) => {
+  const { t } = useTranslation("kanban");
   const isOverdue = task.dueDate ? checkDateOverdue(task.dueDate, task.completedAt) : false;
   const category = getCategoryFromDescription(task.description);
   const priorityColor = getPriorityColor(task.priority);
@@ -230,7 +232,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
                     color: "var(--muted-foreground)",
                     zIndex: 0,
                   }}
-                  title={`${assignees.length - 3} more assignees`}
+                  title={t("moreAssignees")}
                 >
                   +{assignees.length - 3}
                 </div>

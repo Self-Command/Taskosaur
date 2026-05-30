@@ -6,8 +6,10 @@ import { HiExclamationTriangle } from "react-icons/hi2";
 import { useAuth } from "@/contexts/auth-context";
 import { useRouter } from "next/router";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 
 export default function DeleteAccountSection() {
+  const { t } = useTranslation("settings");
   const { getCurrentUser, deleteUser } = useAuth();
   const currentUser = getCurrentUser();
   const router = useRouter();
@@ -15,14 +17,14 @@ export default function DeleteAccountSection() {
 
   const handleDelete = async () => {
     if (!currentUser) return;
-    if (!confirm("Are you sure you want to delete your account? This cannot be undone.")) return;
+    if (!confirm(t("danger_zone_section.confirm_message"))) return;
     setLoading(true);
     try {
       await deleteUser(currentUser.id);
-      toast.success("Account deleted successfully!");
+      toast.success(t("danger_zone_section.delete_success"));
       router.push("/login");
     } catch {
-      toast.error("Error deleting account.");
+      toast.error(t("danger_zone_section.delete_failed"));
     } finally {
       setLoading(false);
     }
@@ -32,15 +34,15 @@ export default function DeleteAccountSection() {
     <Card className="rounded-md bg-red-50 shadow-sm border border-red-200">
       <CardHeader>
         <CardTitle className="flex items-center gap-3 text-lg font-semibold text-red-700">
-          <HiExclamationTriangle className="w-5 h-5" /> Delete Account
+          <HiExclamationTriangle className="w-5 h-5" /> {t("danger_zone_section.title")}
         </CardTitle>
         <CardDescription className="text-red-500">
-          Permanently delete your account and all associated data.
+          {t("danger_zone_section.description")}
         </CardDescription>
       </CardHeader>
       <CardContent>
         <Button variant="destructive" onClick={handleDelete} disabled={loading}>
-          {loading ? "Deleting..." : "Delete Account"}
+          {loading ? t("danger_zone_section.processing") : t("danger_zone_section.delete_button")}
         </Button>
       </CardContent>
     </Card>

@@ -11,11 +11,22 @@ import {
 } from "@/components/ui/breadcrumb";
 import { ChevronRight } from "lucide-react";
 import api from "@/lib/api";
+import { projectApi } from "@/utils/api/projectApi";
 import { useWorkspace } from "@/contexts/workspace-context";
+import { useAuth } from "@/contexts/auth-context";
 
-// Helper: Convert slug-like text into Title Case
+// Helper: Decode URI component and convert slug-like text into Title Case
 const formatSegment = (segment: string) => {
-  return segment.replace(/-/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+  try {
+    const decoded = decodeURIComponent(segment);
+    // If decoding changed the string significantly (contains non-ASCII), use decoded
+    if (/[^\x00-\x7F]/.test(decoded)) {
+      return decoded;
+    }
+    return decoded.replace(/-/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+  } catch {
+    return segment.replace(/-/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+  }
 };
 
 // Helper: Detect if a segment is a UUID
@@ -39,6 +50,7 @@ interface BreadcrumbItem {
 export default function Breadcrumb() {
   const pathname = usePathname();
   const { workspaceTree } = useWorkspace();
+  const { isAuthenticated } = useAuth();
   const [currentPath, setCurrentPath] = useState('');
   const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbItem[]>([]);
 
@@ -121,23 +133,36 @@ export default function Breadcrumb() {
 
           const items: BreadcrumbItem[] = [];
 
-          // Add workspace
-          if (segments[0]) {
-            items.push({
-              name: formatSegment(segments[0]),
-              href: `/${segments[0]}`,
-              current: false,
-            });
+          // Add workspace - try to get actual name from workspaceTree or API
+          let wsName = formatSegment(segments[0]);
+          const wsFromTree = workspaceTree?.find(w => w.slug === segments[0]);
+          if (wsFromTree) {
+            wsName = wsFromTree.name;
+          } else {
+            try {
+              const wsRes = await api.get(`/public/workspaces/${encodeURIComponent(segments[0])}`);
+              if (wsRes?.data?.name) wsName = wsRes.data.name;
+            } catch {}
           }
 
-          // Add project
-          if (segments[1]) {
-            items.push({
-              name: formatSegment(segments[1]),
-              href: `/${segments[0]}/${segments[1]}`,
-              current: false,
-            });
-          }
+          items.push({
+            name: wsName,
+            href: `/${segments[0]}`,
+            current: false,
+          });
+
+          // Add project - fetch actual name from API
+          let pgName = formatSegment(segments[1]);
+          try {
+            const project = await projectApi.getProjectBySlug(segments[1], isAuthenticated, segments[0]);
+            if (project?.name) pgName = project.name;
+          } catch {}
+
+          items.push({
+            name: pgName,
+            href: `/${segments[0]}/${segments[1]}`,
+            current: false,
+          });
 
           // Add sprint name (current)
           items.push({
@@ -201,9 +226,9 @@ export default function Breadcrumb() {
           }
 
           // Add task (current)
-          const taskSlug = task.slug || taskIdOrSlug;
+          const taskName = task.title || task.name || decodeURIComponent(task.slug || taskIdOrSlug).replace(/-/g, ' ');
           items.push({
-            name: decodeURIComponent(taskSlug).replace(/-/g, ' '),
+            name: taskName,
             current: true,
           });
 
@@ -221,7 +246,9 @@ export default function Breadcrumb() {
     buildBreadcrumbFromSegments(segments);
   }, [pathToUse]);
 
-  const buildBreadcrumbFromSegments = (segments: string[]) => {
+  const workspaceRoutes = ["projects", "members", "activities", "tasks", "analytics", "settings", "sprints", "calendar"];
+
+  const buildBreadcrumbFromSegments = async (segments: string[]) => {
     const baseItems: BreadcrumbItem[] = [];
     const workspaceSegment = segments[0];
 
@@ -246,13 +273,45 @@ export default function Breadcrumb() {
       }
     }
 
+    // Determine if there's a project segment to look up
+    const hasProject = segments.length >= 2 && !workspaceRoutes.includes(segments[1]);
+    let projectName: string | null = null;
+
+    if (hasProject) {
+      try {
+        const project = await projectApi.getProjectBySlug(segments[1], isAuthenticated, segments[0]);
+        projectName = project?.name || null;
+      } catch {
+        // Fall back to formatSegment if API call fails
+      }
+    }
+
+    // Also try to resolve workspace name via API if not in tree
+    let workspaceName: string | null = null;
+    if (workspaceSegment && workspaceTree?.length > 0) {
+      const ws = workspaceTree.find(w => w.slug === workspaceSegment);
+      if (ws) workspaceName = ws.name;
+    }
+    // Fallback: try public workspace API
+    if (!workspaceName && workspaceSegment) {
+      try {
+        const wsRes = await api.get(`/public/workspaces/${encodeURIComponent(workspaceSegment)}`);
+        if (wsRes?.data?.name) workspaceName = wsRes.data.name;
+      } catch {
+        // Fall through to formatSegment
+      }
+    }
+
     const items = segments.map((seg, idx) => {
       const href = "/" + segments.slice(0, idx + 1).join("/");
       let displayName = formatSegment(seg);
 
-      if (idx === 0 && workspaceTree && workspaceTree.length > 0) {
-        const ws = workspaceTree.find(w => w.slug === seg);
-        if (ws) displayName = ws.name;
+      if (idx === 0 && workspaceName) {
+        displayName = workspaceName;
+      }
+
+      if (idx === 1 && projectName) {
+        displayName = projectName;
       }
 
       return {

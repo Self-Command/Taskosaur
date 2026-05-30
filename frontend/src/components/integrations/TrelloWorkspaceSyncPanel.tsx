@@ -197,7 +197,7 @@ export default function TrelloWorkspaceSyncPanel({ workspaceId }: TrelloWorkspac
 
   const handleUpdateConfig = async () => {
     if (!apiKey.trim() || !token.trim()) {
-      toast.error("API Key and Token are required");
+      toast.error(t("trello.messages.credential_required"));
       return;
     }
     try {
@@ -207,7 +207,7 @@ export default function TrelloWorkspaceSyncPanel({ workspaceId }: TrelloWorkspac
       });
       setSyncStatus(status);
       setIsEditMode(false);
-      toast.success("Workspace Trello credentials updated successfully");
+      toast.success(t("trello.messages.config_updated", "Configuration updated successfully"));
     } catch (err: any) {
       toast.error(err.message);
     }
@@ -217,7 +217,7 @@ export default function TrelloWorkspaceSyncPanel({ workspaceId }: TrelloWorkspac
     setIsBulkSyncing(true);
     try {
       const result = await syncAllWorkspaceProjects(workspaceId);
-      toast.success(`Bulk sync complete: ${result.successCount}/${result.total} projects synced.`);
+      toast.success(t("trello.messages.sync_complete", { count: result.successCount, duration: result.total }));
       refreshStatus();
     } catch (err: any) {
       toast.error(err.message);
@@ -302,7 +302,7 @@ export default function TrelloWorkspaceSyncPanel({ workspaceId }: TrelloWorkspac
                           type={showApiKey ? "text" : "password"} 
                           value={apiKey} 
                           onChange={e => setApiKey(e.target.value)}
-                          placeholder="Leave blank to keep current"
+                          placeholder={t("trello.workspace.new_api_key", "Leave blank to keep current")}
                           className="pr-10 h-9"
                         />
                         <button type="button" onClick={() => setShowApiKey(!showApiKey)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)]">
@@ -317,7 +317,7 @@ export default function TrelloWorkspaceSyncPanel({ workspaceId }: TrelloWorkspac
                           type={showToken ? "text" : "password"} 
                           value={token} 
                           onChange={e => setToken(e.target.value)}
-                          placeholder="Leave blank to keep current"
+                          placeholder={t("trello.workspace.new_api_key", "Leave blank to keep current")}
                           className="pr-10 h-9"
                         />
                         <button type="button" onClick={() => setShowToken(!showToken)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)]">
@@ -371,22 +371,22 @@ export default function TrelloWorkspaceSyncPanel({ workspaceId }: TrelloWorkspac
                             </div>
                           </div>
                           <div className="text-[10px] text-center text-[var(--muted-foreground)]">
-                            {p.lastSyncAt ? new Date(p.lastSyncAt).toLocaleDateString() : "Never"}
+                            {p.lastSyncAt ? new Date(p.lastSyncAt).toLocaleDateString() : t("jira.never_synced", { ns: "integrations" })}
                           </div>
                           <div className="flex justify-center">
                             {p.lastSyncStatus === "SUCCESS" ? (
-                              <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 text-[9px] px-1.5 py-0">Success</Badge>
+                              <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 text-[9px] px-1.5 py-0">{t("trello.synced")}</Badge>
                             ) : p.lastSyncStatus === "FAILED" ? (
-                              <Badge variant="destructive" className="text-[9px] px-1.5 py-0">Failed</Badge>
+                              <Badge variant="destructive" className="text-[9px] px-1.5 py-0">{t("trello.failed")}</Badge>
                             ) : (
-                              <span className="text-[9px] text-[var(--muted-foreground)]">Pending</span>
+                              <span className="text-[9px] text-[var(--muted-foreground)]">{t("trello.never_synced")}</span>
                             )}
                           </div>
                           <div className="flex justify-end">
                             <a 
                               href={`/projects/${p.slug}/settings?tab=integrations`} 
                               className="p-1.5 rounded-lg hover:bg-[var(--muted)] text-[var(--muted-foreground)] hover:text-[var(--primary)] transition-all"
-                              title="Go to project settings"
+                              title={t("trello.sync_now")}
                             >
                               <ExternalLinkIcon size={14} />
                             </a>

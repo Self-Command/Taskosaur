@@ -2,6 +2,7 @@ import { TimelineHeaderProps, ViewMode } from "@/types";
 import { formatDateForDisplay } from "@/utils/date";
 import { getViewModeWidth, isWeekend } from "@/utils/gantt";
 import { useCallback, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 
 interface ExtendedTimelineHeaderProps extends TimelineHeaderProps {
   visibleRange?: { startIndex: number; endIndex: number };
@@ -14,6 +15,7 @@ export const TimelineHeader: React.FC<ExtendedTimelineHeaderProps> = ({
   isCompact,
   visibleRange,
 }) => {
+  const { t } = useTranslation("gantt");
   const formatDateForView = useCallback((date: Date, mode: ViewMode): string => {
     try {
       switch (mode) {
@@ -65,7 +67,7 @@ export const TimelineHeader: React.FC<ExtendedTimelineHeaderProps> = ({
         } bg-[var(--muted)] border-r border-[var(--border)] flex items-center px-4 py-3 shrink-0 sticky left-0 z-20`}
         role="columnheader"
       >
-        <span className="text-sm font-semibold text-[var(--foreground)]">Tasks</span>
+        <span className="text-sm font-semibold text-[var(--foreground)]">{t("tasksHeader")}</span>
       </div>
       <div className="flex flex-1" role="row">
         {spacerLeft > 0 && <div style={{ width: `${spacerLeft}px` }} className="shrink-0" />}

@@ -1,0 +1,12 @@
+{
+  "clearSelection": "清除选择",
+  "updateStatus": "更新状态",
+  "changeStatusTo": "将状态更改为",
+  "noStatuses": "无可用状态",
+  "delete": "删除",
+  "deleteTitle": "永久删除任务？",
+  "deleteMessage": "这将永久移除 {{count}} 个选中的任务。此操作无法撤销。",
+  "deleteConfirm": "是的，删除",
+  "updateStatusTitle": "更新任务状态",
+  "updateStatusMessage": "确认将 {{count}} 个任务切换为 \"{{status}}\"？"
+}

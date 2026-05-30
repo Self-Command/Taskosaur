@@ -18,7 +18,7 @@ export default function TabView({
   viewGantt = true,
   rightContent,
 }: TaskViewTabsProps) {
-  const { t } = useTranslation("tasks");
+  const { t } = useTranslation(["tasks", "common"]);
   const tabs = [
     { id: "list" as const, label: t("views.list"), icon: HiListBullet },
     ...(viewKanban ? [{ id: "kanban" as const, label: t("views.kanban"), icon: HiViewColumns }] : []),
@@ -27,7 +27,7 @@ export default function TabView({
 
   return (
     <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--background)]">
-      <nav className="flex space-x-6" aria-label="Tabs">
+      <nav className="flex space-x-6" aria-label={t("common:tabs")}>
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = currentView === tab.id;

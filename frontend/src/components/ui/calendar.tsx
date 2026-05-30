@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { Input } from "./input";
 
 export interface DateRange {
@@ -23,12 +24,13 @@ export function Calendar({
   className,
   ...props
 }: CalendarProps) {
+  const { t } = useTranslation("common");
   if (mode === "range") {
     const range = selected as DateRange;
     return (
       <div className={`p-4 space-y-4 ${className}`}>
         <div>
-          <label className="text-sm font-medium">From Date</label>
+          <label className="text-sm font-medium">{t("fromDate")}</label>
           <Input
             type="date"
             value={range?.from ? range.from.toISOString().split("T")[0] : ""}
@@ -43,7 +45,7 @@ export function Calendar({
           />
         </div>
         <div>
-          <label className="text-sm font-medium">To Date</label>
+          <label className="text-sm font-medium">{t("toDate")}</label>
           <Input
             type="date"
             value={range?.to ? range.to.toISOString().split("T")[0] : ""}

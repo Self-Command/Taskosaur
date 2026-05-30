@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
 import UserAvatar from "@/components/ui/avatars/UserAvatar";
@@ -37,6 +38,7 @@ function MemberSelect({
   type = "assignee",
   projectId,
 }: MemberSelectProps) {
+  const { t } = useTranslation("common");
   const { getProjectMembers } = useProject();
 
   const [isOpen, setIsOpen] = useState(false);
@@ -233,7 +235,7 @@ function MemberSelect({
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted-foreground)] pointer-events-none" />
                     <Input
-                      placeholder="Search members..."
+                      placeholder={t("memberSelect.searchMembers")}
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
                       className="mb-2 pl-9 h-9"
@@ -246,7 +248,7 @@ function MemberSelect({
                   {searchError ? (
                     <div className="p-2 text-sm text-red-500 text-center">{searchError}</div>
                   ) : members.length === 0 ? (
-                    <div className="p-2 text-sm text-muted-foreground">No members found.</div>
+                    <div className="p-2 text-sm text-muted-foreground">{t("memberSelect.noMembersFound")}</div>
                   ) : (
                     members.map((member) => {
                       const isSelected = selectedMembers.some((m) => m.id === member.id);
@@ -341,7 +343,7 @@ function MemberSelect({
             {searchError ? (
               <div className="p-2 text-sm text-red-500 text-center">{searchError}</div>
             ) : members.length === 0 ? (
-              <div className="p-2 text-sm text-muted-foreground">No members found.</div>
+              <div className="p-2 text-sm text-muted-foreground">{t("memberSelect.noMembersFound")}</div>
             ) : (
               members.map((member) => {
                 const isSelected = selectedMembers.some((m) => m.id === member.id);

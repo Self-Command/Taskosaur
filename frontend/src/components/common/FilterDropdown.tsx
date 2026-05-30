@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
@@ -97,6 +98,7 @@ export function FilterDropdown({
   showCounts = false,
   onOpen,
 }: FilterDropdownProps) {
+  const { t } = useTranslation("common");
   const [searchQueries, setSearchQueries] = useState<Record<string, string>>({});
 
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(() => {
@@ -394,7 +396,7 @@ export function FilterDropdown({
                       ) : (
                         <div className="text-center py-4 text-[var(--muted-foreground)]">
                           <Search className="h-6 w-6 mx-auto mb-2 opacity-50" />
-                          <p className="text-xs">No items found</p>
+                          <p className="text-xs">{t("filter.noItemsFound")}</p>
                         </div>
                       )}
                     </div>
@@ -407,8 +409,8 @@ export function FilterDropdown({
           {sections.length === 0 && (
             <div className="text-center py-12 px-4 text-[var(--muted-foreground)]">
               <Filter className="h-12 w-12 mx-auto mb-3 opacity-30" />
-              <p className="text-sm font-medium mb-1">No filters available</p>
-              <p className="text-xs">Add filter sections to get started</p>
+              <p className="text-sm font-medium mb-1">{t("filter.noFiltersAvailable")}</p>
+              <p className="text-xs">{t("filter.addSections")}</p>
             </div>
           )}
         </div>
@@ -439,7 +441,7 @@ export function FilterDropdown({
             size="sm"
             onClick={() => setOpen(false)}
             className="w-full h-7 text-xs"
-            aria-label="Close filter"
+            aria-label={t("close")}
           >
             Done
           </Button>

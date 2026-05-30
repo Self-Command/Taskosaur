@@ -1,0 +1,42 @@
+{
+  "title": "{{name}} 日历",
+  "description": "以日历格式查看和管理 {{name}} 项目的任务。",
+  "createTask": "创建任务",
+  "noTasks": {
+    "title": "未找到任务",
+    "description": "为 {{name}} 创建第一个任务以在日历上查看"
+  },
+  "errors": {
+    "invalidSlug": "无效的工作区或项目标识",
+    "workspaceNotFound": "未找到工作区",
+    "projectNotFound": "未找到项目",
+    "failedLoadData": "加载数据失败",
+    "projectOrWorkspaceNotFound": "未找到项目或工作区"
+  },
+  "view": {
+    "noTasksScheduled": "没有安排的任务",
+    "noTasksScheduledDescription": "带有截止日期的任务将显示在日历上。创建具有特定截止日期的任务以可视化你的日程。",
+    "days": {
+      "sun": "周日",
+      "mon": "周一",
+      "tue": "周二",
+      "wed": "周三",
+      "thu": "周四",
+      "fri": "周五",
+      "sat": "周六"
+    },
+    "untitledTask": "未命名任务",
+    "more": "更多",
+    "time": "时间",
+    "weekOf": "{{date}} 周",
+    "daysWithTasks": "本月有 {{count}} 天有任务",
+    "tasksThisWeek": "本周 {{count}} 个任务",
+    "month": "月",
+    "week": "周",
+    "today": "今天",
+    "noTasksThisDay": "当天没有安排的任务",
+    "noStatus": "无状态",
+    "overdue": "已逾期",
+    "assignee": "负责人"
+  }
+}

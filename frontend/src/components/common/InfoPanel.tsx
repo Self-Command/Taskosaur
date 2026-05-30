@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { HiChevronRight } from "react-icons/hi2";
 
 interface InfoPanelProps {
@@ -15,10 +16,11 @@ export function InfoPanel({
   title,
   subtitle,
   viewAllHref,
-  viewAllText = "View all",
+  viewAllText,
   children,
   className = "",
 }: InfoPanelProps) {
+  const { t } = useTranslation("common");
   return (
     <div className={`bg-[var(--card)] rounded-md shadow-sm ${className}`}>
       {/* Card Header */}
@@ -35,7 +37,7 @@ export function InfoPanel({
               href={viewAllHref}
               className="text-xs font-medium text-[var(--primary)] hover:text-[var(--primary)]/90 flex items-center gap-1"
             >
-              {viewAllText} <HiChevronRight className="w-3 h-3" />
+              {viewAllText || t("viewAll")} <HiChevronRight className="w-3 h-3" />
             </Link>
           )}
         </div>

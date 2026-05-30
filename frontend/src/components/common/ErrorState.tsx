@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { HiOutlineExclamationCircle, HiHome } from "react-icons/hi2";
 import { RotateCcw } from "lucide-react";
@@ -9,7 +10,9 @@ interface ErrorStateProps {
   retryText?: string;
 }
 
-const ErrorState: React.FC<ErrorStateProps> = ({ error, onRetry, retryText }) => (
+const ErrorState: React.FC<ErrorStateProps> = ({ error, onRetry, retryText }) => {
+  const { t } = useTranslation("common");
+  return (
   <div className="pt-[20%] bg-[var(--background)] flex flex-col items-center justify-center px-6 text-center">
     <div className="animate-fadeIn">
       {/* Icon */}
@@ -19,7 +22,7 @@ const ErrorState: React.FC<ErrorStateProps> = ({ error, onRetry, retryText }) =>
 
       {/* Title */}
       <h1 className="text-md font-bold text-[var(--foreground)] mb-3">
-        Error: {error || "An unexpected error occurred. Please try again"}
+        {t("error")}: {error || t("errorState.unexpected")}
       </h1>
 
       {/* Buttons */}
@@ -30,7 +33,7 @@ const ErrorState: React.FC<ErrorStateProps> = ({ error, onRetry, retryText }) =>
             className="sm:w-auto w-full flex items-center justify-center gap-2"
           >
             <RotateCcw />
-            {retryText || "Retry"}
+            {retryText || t("retry")}
           </Button>
         )}
         <Button
@@ -38,11 +41,12 @@ const ErrorState: React.FC<ErrorStateProps> = ({ error, onRetry, retryText }) =>
           onClick={() => (window.location.href = "/dashboard")}
           className="sm:w-auto w-full flex items-center justify-center gap-2 border-[var(--border)]"
         >
-          <HiHome size={18} /> Go To Dashboard
+          <HiHome size={18} /> {t("errorState.goToDashboard")}
         </Button>
       </div>
     </div>
   </div>
-);
+  );
+};
 
 export default ErrorState;

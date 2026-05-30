@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 
 export function LanguageToggle() {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   const changeLanguage = (lng: string) => {
     i18n.changeLanguage(lng);
@@ -22,6 +22,7 @@ export function LanguageToggle() {
     { code: "es", name: "Español" },
     { code: "fr", name: "Français" },
     { code: "pt", name: "Português" },
+    { code: "zh", name: "中文" },
   ];
 
   const currentLanguageName = languages.find((l) => l.code === i18n.language)?.name || "English";
@@ -31,7 +32,7 @@ export function LanguageToggle() {
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" className="header-mode-toggle" title={currentLanguageName}>
           <HiLanguage className="header-mode-toggle-icon" />
-          <span className="sr-only">Switch Language</span>
+          <span className="sr-only">{t("switchLanguage")}</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="bg-[var(--popover)] border-[var(--border)]">

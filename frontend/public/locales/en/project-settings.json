@@ -38,6 +38,9 @@
         "visibility_description": "Control who can access this project. Members always have full access based on their role.",
         "save_changes": "Save Changes",
         "saving": "Saving...",
+        "task_prefix_label": "Task Prefix",
+        "task_prefix_placeholder": "e.g. PROJ",
+        "task_prefix_description": "Short identifier used for tasks (e.g. PROJ-1). Up to 8 chars, letters and numbers only.",
         "save_success": "Project settings updated successfully!",
         "save_failed": "Failed to update project"
     },

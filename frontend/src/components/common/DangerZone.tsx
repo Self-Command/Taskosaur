@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { HiExclamationTriangle } from "react-icons/hi2";
+import { useTranslation } from "react-i18next";
 
 type DangerZoneProps = {
   title: string;
@@ -25,6 +26,7 @@ export function DangerZone({
   onAction,
   bulletPoints = [],
 }: DangerZoneProps) {
+  const { t } = useTranslation("common");
   const isCritical = severity === "critical";
 
   return (
@@ -50,7 +52,7 @@ export function DangerZone({
                 <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center shadow-sm">
                   <HiExclamationTriangle className="w-5 h-5 text-white" />
                 </div>
-                <CardTitle className="text-lg font-semibold text-red-700">Danger Zone</CardTitle>
+                <CardTitle className="text-lg font-semibold text-red-700">{t("dangerZone.title")}</CardTitle>
               </div>
               <CardDescription className="text-sm text-red-600/80 mt-2 pl-12 leading-relaxed">
                 Irreversible and destructive actions. Please proceed with extreme caution.
@@ -64,7 +66,7 @@ export function DangerZone({
             </Badge>
           </div>
         ) : (
-          <CardTitle className="text-lg font-semibold text-red-700">Danger Zone</CardTitle>
+          <CardTitle className="text-lg font-semibold text-red-700">{t("dangerZone.title")}</CardTitle>
         )}
       </CardHeader>
 

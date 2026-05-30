@@ -1,0 +1,204 @@
+{
+  "administration": "系统管理",
+  "navigation": {
+    "overview": "概览",
+    "users": "用户",
+    "organizations": "组织",
+    "configuration": "配置"
+  },
+  "dashboard": {
+    "welcome_back": "欢迎回来，{{name}}",
+    "platform_overview": "以下是平台概览。{{userCount}} 活跃用户，分布在 {{orgCount}} 个组织中。",
+    "stats": {
+      "total_users": "总用户数",
+      "active_users": "活跃用户",
+      "organizations": "组织",
+      "workspaces": "工作区",
+      "projects": "项目",
+      "tasks": "任务",
+      "new_this_week": "本周新增 +{{count}}"
+    },
+    "system_status": {
+      "title": "系统状态",
+      "manage": "管理",
+      "registration": "注册",
+      "email_smtp": "邮件 / SMTP",
+      "sso": "单点登录",
+      "enabled": "已启用",
+      "disabled": "已禁用",
+      "configured": "已配置",
+      "not_configured": "未配置"
+    }
+  },
+  "users": {
+    "title": "用户",
+    "description": "管理平台用户及其角色",
+    "search_placeholder": "按姓名、邮箱或用户名搜索...",
+    "table": {
+      "user": "用户",
+      "role": "角色",
+      "status": "状态",
+      "organizations": "组织",
+      "created": "创建时间",
+      "actions": "操作"
+    },
+    "roles": {
+      "super_admin": "超级管理员",
+      "user": "用户"
+    },
+    "status": {
+      "active": "活跃",
+      "inactive": "不活跃",
+      "suspended": "已暂停"
+    },
+    "actions": {
+      "edit": "编辑",
+      "suspend": "暂停",
+      "activate": "激活",
+      "delete": "删除",
+      "view_details": "查看详情",
+      "promote_super_admin": "提升为超级管理员",
+      "remove_super_admin": "取消超级管理员",
+      "deactivate": "停用",
+      "reset_password": "重置密码",
+      "reset_password_link_copied": "{{name}} 的密码重置链接已复制到剪贴板",
+      "delete_confirmation": "确定要删除用户 {{name}} 吗？此操作无法撤销。",
+      "user_removed": "用户 {{name}} 已被移除"
+    },
+    "total_count": "总计：{{count}} 用户",
+    "no_users": "系统中暂无用户",
+    "details": {
+      "profile_info": "个人资料",
+      "actions": "操作",
+      "danger_zone": "危险区域",
+      "memberships": "组织成员资格",
+      "last_login": "最后登录",
+      "never": "从未",
+      "email_verified": "邮箱已验证",
+      "source": "来源",
+      "timezone": "时区",
+      "language": "语言",
+      "yes": "是",
+      "no": "否",
+      "membership_count": "{{count}} 个成员资格",
+      "membership_count_plural": "{{count}} 个成员资格",
+      "no_memberships": "无组织成员资格"
+    }
+  },
+  "organizations": {
+    "title": "组织",
+    "description": "管理平台组织及其限制",
+    "create_new": "新建组织",
+    "search_placeholder": "按名称或标识搜索...",
+    "table": {
+      "organization": "组织",
+      "slug": "标识",
+      "owner": "所有者",
+      "users": "用户",
+      "workspaces": "工作区",
+      "created": "创建时间",
+      "actions": "操作"
+    },
+    "total_count": "总计：{{count}} 组织",
+    "no_orgs": "系统中暂无组织",
+    "details": {
+      "information": "组织信息",
+      "danger_zone": "危险区域",
+      "members": "成员",
+      "workspaces": "工作区",
+      "projects": "项目",
+      "tasks": "任务"
+    },
+    "actions": {
+      "transfer_ownership": "转移所有权",
+      "transfer_confirmation": "确定要转移此组织的所有权吗？此操作无法撤销。",
+      "select_new_owner": "选择新所有者",
+      "transfer": "转移"
+    }
+  },
+  "config": {
+    "title": "系统配置",
+    "description": "全局系统设置和配置",
+    "save_changes": "保存更改",
+    "saving": "正在保存...",
+    "sections": {
+      "general": "常规设置",
+      "registration": "注册",
+      "registration_desc": "控制谁可以在平台上创建账户和资源",
+      "security": "安全",
+      "smtp": "SMTP 设置"
+    },
+    "labels": {
+      "site_name": "站点名称",
+      "registration_enabled": "启用注册",
+      "registration_enabled_desc": "禁用后，只有管理员可以通过邀请创建新用户账户",
+      "default_org": "默认组织",
+      "default_org_desc": "新用户将自动加入此组织，而不是创建自己的组织。留空则要求注册时创建组织。",
+      "default_org_active_desc": "新用户将自动加入 {{name}}",
+      "default_org_none_desc": "新用户注册时需要创建自己的组织",
+      "allow_org_creation": "允许创建组织",
+      "allow_org_creation_desc": "禁用后，只有超级管理员可以创建新组织。用户将被分配到默认组织。",
+      "allow_workspace_creation": "允许创建工作区",
+      "allow_workspace_creation_desc": "禁用后，只有组织所有者和管理员可以创建工作区。",
+      "allow_project_creation": "允许创建项目",
+      "allow_project_creation_desc": "禁用后，只有工作区管理员及以上可以创建项目。",
+      "resource_creation_perms": "资源创建权限",
+      "sso_enabled": "启用 SSO",
+      "sso_enabled_desc": "允许用户使用外部身份提供者登录",
+      "sso_desc": "配置 OpenID Connect 进行外部认证",
+      "sso_provider_name": "提供者显示名称",
+      "sso_provider_name_desc": "显示在登录按钮上，例如\"通过 Authentik 登录\"",
+      "sso_issuer_url": "Issuer URL",
+      "sso_issuer_url_desc": "OIDC 发现 URL，例如 https://auth.example.com/application/o/taskosaur/",
+      "sso_client_id": "Client ID",
+      "sso_client_id_desc": "来自身份提供者的 OAuth2 client ID",
+      "sso_client_secret": "Client Secret",
+      "sso_client_secret_desc": "OAuth2 client secret",
+      "sso_auto_register": "通过 SSO 自动创建账户",
+      "sso_auto_register_desc": "启用后，即使公共注册被禁用，也可以通过 SSO 创建新用户",
+      "smtp_host": "SMTP 主机",
+      "smtp_host_desc": "例如 smtp.gmail.com、smtp.sendgrid.net",
+      "smtp_port": "SMTP 端口",
+      "smtp_port_desc": "常用端口：587 (TLS)、465 (SSL)、25 (未加密)",
+      "smtp_user": "SMTP 用户",
+      "smtp_user_desc": "通常为你的邮箱地址",
+      "smtp_pass": "SMTP 密码",
+      "smtp_pass_desc": "应用密码或 SMTP 凭证",
+      "smtp_from": "SMTP 发件地址",
+      "smtp_from_desc": "外发邮件的发件人邮箱地址",
+      "smtp_desc": "配置外发邮件设置用于通知和密码重置",
+      "redirect_uri": "重定向 URI",
+      "redirect_uri_desc": "将此 URL 添加为身份提供者设置中的重定向/回调 URI。",
+      "auto_generated": "自动生成",
+      "copy": "复制",
+      "copied_to_clipboard": "已复制到剪贴板",
+      "test_connection": "测试连接",
+      "test_connection_desc": "验证 SMTP 服务器可达且凭证有效",
+      "testing": "正在测试...",
+      "smtp_verified": "SMTP 连接已验证",
+      "smtp_test_failed": "SMTP 测试失败",
+      "set_via_env": "通过 .env 设置",
+      "readonly_env_desc": "此值通过环境变量设置，无法在此处更改。"
+    },
+    "warnings": {
+      "no_org_creation_or_default": "组织创建已禁用且未设置默认组织",
+      "no_org_creation_or_default_desc": "新用户注册后将无法继续。请在上方设置默认组织或启用下方的组织创建。"
+    },
+    "save_success": "{{section}} 配置保存成功",
+    "save_error": "保存配置失败"
+  },
+  "common": {
+    "loading": "加载中...",
+    "error_loading": "加载数据失败",
+    "no_results": "未找到结果",
+    "success": "成功",
+    "filters": "筛选",
+    "try_adjusting": "尝试调整搜索或筛选条件",
+    "none": "无",
+    "confirmation": {
+      "title": "确定吗？",
+      "confirm": "确认",
+      "cancel": "取消"
+    }
+  }
+}

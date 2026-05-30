@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Eye, EyeOff, Loader2, Mail, Lock, ArrowRight, Sparkle, Shield } from "lucide-react";
 import Image from "next/image";
 import { useTheme } from "next-themes";
+import { useTranslation } from "react-i18next";
 interface FormData {
   email: string;
   password: string;
@@ -22,6 +23,7 @@ export function LoginForm() {
   const { login, checkOrganizationAndRedirect } = useAuth();
   const router = useRouter();
   const { resolvedTheme } = useTheme();
+  const { t } = useTranslation("auth");
 
   const [formData, setFormData] = useState<FormData>({
     email: "",
@@ -135,9 +137,9 @@ export function LoginForm() {
             </div>
 
             {/* Block for md+ */}
-            <span className="hidden md:block">Welcome back</span>
+            <span className="hidden md:block">{t("login.welcomeBack")}</span>
           </h1>
-          <p className="login-form-subtitle">Login to continue your productive journey</p>
+          <p className="login-form-subtitle">{t("login.subtitle")}</p>
         </div>
       </div>
 
@@ -149,7 +151,7 @@ export function LoginForm() {
         >
           <Alert variant="destructive" className="login-error-alert">
             <AlertDescription className="font-medium">
-              <span className="login-error-title">Authentication Failed</span>
+              <span className="login-error-title">{t("login.authenticationFailed")}</span>
               <span className="login-error-message">{error}</span>
             </AlertDescription>
           </Alert>
@@ -167,7 +169,7 @@ export function LoginForm() {
         >
           <Label htmlFor="email" className="login-field-label">
             <Mail className="login-field-icon" />
-            <span>Email Address</span>
+            <span>{t("login.emailAddress")}</span>
           </Label>
           <Input
             id="email"
@@ -177,7 +179,7 @@ export function LoginForm() {
             required
             value={formData.email}
             onChange={handleChange}
-            placeholder="Enter your email address"
+            placeholder={t("login.emailPlaceholder")}
             className="login-input"
           />
         </motion.div>
@@ -191,7 +193,7 @@ export function LoginForm() {
         >
           <Label htmlFor="password" className="login-field-label">
             <Lock className="login-field-icon" />
-            <span>Password</span>
+            <span>{t("login.password")}</span>
           </Label>
           <div className="login-password-container">
             <Input
@@ -202,7 +204,7 @@ export function LoginForm() {
               required
               value={formData.password}
               onChange={handleChange}
-              placeholder="Enter your password"
+              placeholder={t("login.passwordPlaceholder")}
               className="login-password-input"
             />
             <Button
@@ -279,7 +281,7 @@ export function LoginForm() {
             className="login-divider-container"
           >
             <div className="login-divider-text-container">
-              <span className="login-divider-text">Or continue with</span>
+              <span className="login-divider-text">{t("login.orContinueWith")}</span>
             </div>
           </motion.div>
           <motion.div

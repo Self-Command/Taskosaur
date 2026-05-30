@@ -20,12 +20,15 @@ import {
 } from "lucide-react";
 import { LoginContent } from "@/components/login/LoginContent";
 import { ModeToggle } from "@/components/header/ModeToggle";
+import { useTranslation } from "react-i18next";
 import { ResetPasswordData } from "@/types";
 
 function ResetPasswordForm() {
   const router = useRouter();
   const { token } = router.query;
   const { resetPassword, validateResetToken } = useAuth();
+  const { t } = useTranslation("auth");
+  const { t: tc } = useTranslation("common");
   const [formData, setFormData] = useState({
     password: "",
     confirmPassword: "",
@@ -141,7 +144,7 @@ function ResetPasswordForm() {
         {/* Invalid Token Header */}
         <div className="login-form-header">
           <div className="login-form-header-content">
-            <h1 className="login-form-title">Invalid Reset Link</h1>
+            <h1 className="login-form-title">{t("resetPassword.invalidLink")}</h1>
             <p className="login-form-subtitle">
               This password reset link is invalid or has expired
             </p>
@@ -156,7 +159,7 @@ function ResetPasswordForm() {
           <Alert variant="destructive" className="login-error-alert">
             <AlertCircle className="login-field-icon" />
             <AlertDescription className="font-medium">
-              <span className="login-error-title">Reset Link Expired</span>
+              <span className="login-error-title">{t("resetPassword.linkExpired")}</span>
               <span className="login-error-message">
                 This link may have expired or been used already. Password reset links are only valid
                 for 24 hours.
@@ -205,8 +208,8 @@ function ResetPasswordForm() {
         {/* Success Header */}
         <div className="login-form-header">
           <div className="login-form-header-content">
-            <h1 className="login-form-title">Password Reset Successful</h1>
-            <p className="login-form-subtitle">Your password has been successfully updated</p>
+            <h1 className="login-form-title">{t("resetPassword.successTitle")}</h1>
+            <p className="login-form-subtitle">{t("resetPassword.successMessage")}</p>
           </div>
         </div>
 
@@ -269,8 +272,8 @@ function ResetPasswordForm() {
       {/* Header */}
       <div className="login-form-header">
         <div className="login-form-header-content">
-          <h1 className="login-form-title">Set New Password</h1>
-          <p className="login-form-subtitle">Create a strong password for your account</p>
+          <h1 className="login-form-title">{t("resetPassword.setNewPassword")}</h1>
+          <p className="login-form-subtitle">{t("resetPassword.subtitle")}</p>
         </div>
       </div>
 
@@ -283,7 +286,7 @@ function ResetPasswordForm() {
           <Alert variant="destructive" className="login-error-alert">
             <AlertCircle className="login-field-icon" />
             <AlertDescription className="font-medium">
-              <span className="login-error-title">Password Reset Failed</span>
+              <span className="login-error-title">{t("resetPassword.failedTitle")}</span>
               <span className="login-error-message">{error}</span>
             </AlertDescription>
           </Alert>
@@ -301,7 +304,7 @@ function ResetPasswordForm() {
         >
           <Label htmlFor="password" className="login-field-label">
             <Lock className="login-field-icon" />
-            <span>New Password</span>
+            <span>{t("resetPassword.newPassword")}</span>
           </Label>
           <div className="login-password-container">
             <Input
@@ -312,7 +315,7 @@ function ResetPasswordForm() {
               required
               value={formData.password}
               onChange={handleChange}
-              placeholder="Create a strong password"
+              placeholder={t("resetPassword.passwordPlaceholder")}
               className="login-password-input"
             />
             <Button
@@ -321,7 +324,7 @@ function ResetPasswordForm() {
               size="sm"
               onClick={() => setShowPassword(!showPassword)}
               className="login-password-toggle"
-              aria-label={showPassword ? "Hide password" : "Show password"}
+              aria-label={showPassword ? tc("common.hidePassword") : tc("common.showPassword")}
             >
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </Button>
@@ -365,7 +368,7 @@ function ResetPasswordForm() {
                         : "signup-requirement-icon-invalid"
                     }
                   />
-                  <span>Uppercase letter</span>
+                  <span>{t("resetPassword.passwordUppercase")}</span>
                 </div>
                 <div
                   className={`signup-requirement-item ${
@@ -379,7 +382,7 @@ function ResetPasswordForm() {
                         : "signup-requirement-icon-invalid"
                     }
                   />
-                  <span>Lowercase letter</span>
+                  <span>{t("resetPassword.passwordLowercase")}</span>
                 </div>
                 <div
                   className={`signup-requirement-item ${
@@ -393,7 +396,7 @@ function ResetPasswordForm() {
                         : "signup-requirement-icon-invalid"
                     }
                   />
-                  <span>Number</span>
+                  <span>{t("resetPassword.passwordNumber")}</span>
                 </div>
               </div>
             </motion.div>
@@ -409,7 +412,7 @@ function ResetPasswordForm() {
         >
           <Label htmlFor="confirmPassword" className="login-field-label">
             <Lock className="login-field-icon" />
-            <span>Confirm New Password</span>
+            <span>{t("resetPassword.confirmPassword")}</span>
           </Label>
           <div className="login-password-container">
             <Input
@@ -420,7 +423,7 @@ function ResetPasswordForm() {
               required
               value={formData.confirmPassword}
               onChange={handleChange}
-              placeholder="Confirm your new password"
+              placeholder={t("resetPassword.confirmPasswordPlaceholder")}
               className="login-password-input"
             />
             <Button
@@ -429,7 +432,7 @@ function ResetPasswordForm() {
               size="sm"
               onClick={() => setShowConfirmPassword(!showConfirmPassword)}
               className="login-password-toggle"
-              aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+              aria-label={showConfirmPassword ? tc("common.hidePassword") : tc("common.showPassword")}
             >
               {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </Button>

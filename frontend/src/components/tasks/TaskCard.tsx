@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Task, TaskType, TaskPriority } from "@/types/tasks";
 import UserAvatar from "@/components/ui/avatars/UserAvatar";
 import TaskDetailModal from "./TaskDetailModal";
@@ -21,6 +22,7 @@ export default function TaskCard({
   onDragEnd,
   isDragging,
 }: TaskCardProps) {
+  const { t } = useTranslation("tasks");
   const [showDetailModal, setShowDetailModal] = useState(false);
 
   const getTypeIcon = (type: TaskType) => {
@@ -162,7 +164,7 @@ export default function TaskCard({
             {getTypeIcon(task.type)}
             {/* Email indicator */}
             {task.inboxMessageId && (
-              <div className="flex items-center space-x-1" title="Created from email">
+              <div className="flex items-center space-x-1" title={t("taskCard.createdFromEmail")}>
                 <HiEnvelope className="w-3 h-3 text-blue-500" />
                 <span className="text-xs text-blue-600 bg-blue-100 dark:bg-blue-900/20 px-1.5 py-0.5 rounded">
                   Email
@@ -171,7 +173,7 @@ export default function TaskCard({
             )}
             {/* Email replies enabled indicator */}
             {task.allowEmailReplies && (
-              <div className="flex items-center" title="Email replies enabled">
+              <div className="flex items-center" title={t("taskCard.emailRepliesEnabled")}>
                 <HiEnvelope className="w-3 h-3 text-green-500" />
               </div>
             )}

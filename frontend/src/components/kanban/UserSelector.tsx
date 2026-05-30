@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -36,6 +37,7 @@ const UserSelector: React.FC<UserSelectorProps> = ({
   members,
   placeholder,
 }) => {
+  const { t } = useTranslation("kanban");
   const [search, setSearch] = useState("");
 
   const selected = members.find((m) => m.user?.id === selectedUserId)?.user;
@@ -68,7 +70,7 @@ const UserSelector: React.FC<UserSelectorProps> = ({
             autoFocus
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name or email"
+            placeholder={t("searchUserPlaceholder")}
             className="kanban-user-selector-search-input"
           />
         </div>
@@ -93,7 +95,7 @@ const UserSelector: React.FC<UserSelectorProps> = ({
 
           {/* no results */}
           {filtered.length === 0 && (
-            <div className="kanban-user-selector-empty">No users found</div>
+            <div className="kanban-user-selector-empty">{t("noUsers")}</div>
           )}
         </div>
       </DropdownMenuContent>

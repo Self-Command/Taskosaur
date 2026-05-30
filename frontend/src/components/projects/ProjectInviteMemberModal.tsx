@@ -12,6 +12,7 @@ import { invitationApi } from "@/utils/api/invitationsApi";
 import { HiMail } from "react-icons/hi";
 import { Input, Label, Select } from "../ui";
 import { SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { useTranslation } from "react-i18next";
 
 export const ProjectInviteMemberModal = ({
   isOpen,
@@ -24,6 +25,7 @@ export const ProjectInviteMemberModal = ({
   onInvite: (email: string, role: string) => void;
   availableRoles: Array<{ id: string; name: string; description: string }>;
 }) => {
+  const { t } = useTranslation(["projects", "common"]);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("");
   const [inviting, setInviting] = useState(false);
@@ -80,7 +82,7 @@ export const ProjectInviteMemberModal = ({
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter email address"
+                placeholder={t("modal.email_placeholder", "Enter email address")}
                 className="mt-1 border-none bg-background text-[var(--foreground)]"
                 required
               />
@@ -91,7 +93,7 @@ export const ProjectInviteMemberModal = ({
               )}
             </div>
             <div>
-              <Label className="text-sm font-medium text-[var(--foreground)]">Role</Label>
+              <Label className="text-sm font-medium text-[var(--foreground)]">{t("modal.role_label", "Role")}</Label>
               <Select value={role} onValueChange={setRole}>
                 <SelectTrigger
                   className="projects-workspace-button border-none mt-1"
@@ -102,7 +104,7 @@ export const ProjectInviteMemberModal = ({
                     e.currentTarget.style.boxShadow = "none";
                   }}
                 >
-                  <SelectValue placeholder="Select a role">
+                  <SelectValue placeholder={t("modal.role_placeholder", "Select a role")}>
                     {role && <span className="text-[var(--foreground)]">{role}</span>}
                   </SelectValue>
                 </SelectTrigger>

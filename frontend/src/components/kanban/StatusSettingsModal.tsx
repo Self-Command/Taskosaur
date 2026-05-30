@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { HiPlus, HiEllipsisVertical, HiCheck, HiPencil, HiTrash } from "react-icons/hi2";
 import { GripVertical, X } from "lucide-react";
@@ -44,6 +45,7 @@ const StatusSettingsModal: React.FC<StatusSettingsModalProps> = ({
     deleteTaskStatus,
   } = useProjectContext();
   const { updateTaskStatusPositions } = useOrganization();
+  const { t } = useTranslation(["kanban", "common"]);
 
   const [statusList, setStatusList] = useState<TaskStatus[]>([]);
   const [loading, setLoading] = useState(false);
@@ -73,7 +75,7 @@ const StatusSettingsModal: React.FC<StatusSettingsModalProps> = ({
       const data = await getTaskStatusByProject(projectId);
       setStatusList(data || []);
     } catch {
-      toast.error("Failed to fetch statuses");
+      toast.error(t("statusesFetchFailed"));
     } finally {
       setLoading(false);
     }
@@ -89,11 +91,11 @@ const StatusSettingsModal: React.FC<StatusSettingsModalProps> = ({
       });
       setStatusList([...statusList, created]);
       onStatusUpdated();
-      toast.success("Status created");
+      toast.success(t("statusCreated"));
       setIsAdding(false);
       setNewName("");
     } catch {
-      toast.error("Failed to create status");
+      toast.error(t("statusCreateFailed"));
     } finally {
       setCreating(false);
     }
@@ -114,10 +116,10 @@ const StatusSettingsModal: React.FC<StatusSettingsModalProps> = ({
       });
       setStatusList((prev) => prev.map((s) => (s.id === editingId ? updated : s)));
       onStatusUpdated();
-      toast.success("Status updated");
+      toast.success(t("statusUpdated"));
       cancelEdit();
     } catch {
-      toast.error("Failed to update status");
+      toast.error(t("statusUpdateFailed"));
     }
   };
 
@@ -133,10 +135,10 @@ const StatusSettingsModal: React.FC<StatusSettingsModalProps> = ({
       setStatusList((prev) => prev.filter((s) => s.id !== id));
       onStatusUpdated();
       setWorkFlowStatusToDelete(null);
-      toast.success("Status deleted successfully!");
+      toast.success(t("statusDeleted"));
     } catch (error) {
       setWorkFlowStatusToDelete(null);
-      toast.error(error.message || "Failed to delete status");
+      toast.error(error.message || t("statusDeleteFailed"));
     }
   };
 
@@ -163,9 +165,9 @@ const StatusSettingsModal: React.FC<StatusSettingsModalProps> = ({
     try {
       await updateTaskStatusPositions(reordered.map(({ id, position }) => ({ id, position })));
       onStatusUpdated();
-      toast.success("Order updated");
+      toast.success(t("orderUpdated"));
     } catch {
-      toast.error("Failed to save order");
+      toast.error(t("orderSaveFailed"));
       fetchStatuses(); // revert
     }
     setDraggedId(null);
@@ -189,7 +191,7 @@ const StatusSettingsModal: React.FC<StatusSettingsModalProps> = ({
           value={editName}
           onChange={(e) => setEditName(e.target.value)}
           className="kanban-status-row-edit-input"
-          placeholder="Status name"
+          placeholder={t("statusNamePlaceholder")}
           onKeyDown={(e) => {
             if (e.key === "Enter") saveEdit();
             if (e.key === "Escape") cancelEdit();
@@ -259,7 +261,7 @@ const StatusSettingsModal: React.FC<StatusSettingsModalProps> = ({
       <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className="kanban-status-modal-content">
           <DialogHeader>
-            <DialogTitle className="kanban-status-modal-title">Workflow Settings</DialogTitle>
+            <DialogTitle className="kanban-status-modal-title">{t("workflowSettings")}</DialogTitle>
             <DialogDescription className="kanban-status-modal-description">
               Drag rows to reorder. Use the menu to edit or delete.
             </DialogDescription>
@@ -280,7 +282,7 @@ const StatusSettingsModal: React.FC<StatusSettingsModalProps> = ({
                     <div className="kanban-add-status-color" />
                     <input
                       className="kanban-add-status-input"
-                      placeholder="New status…"
+                      placeholder={t("newStatusPlaceholder")}
                       value={newName}
                       onChange={(e) => setNewName(e.target.value)}
                       onKeyDown={(e) => {
@@ -331,10 +333,10 @@ const StatusSettingsModal: React.FC<StatusSettingsModalProps> = ({
         isOpen={!!workFlowStatusToDelete}
         onClose={() => setWorkFlowStatusToDelete(null)}
         onConfirm={() => removeStatus(workFlowStatusToDelete!)}
-        title="Delete Status"
+        title={t("deleteStatusTitle")}
         message="Delete the status? This action cannot be undone."
-        confirmText="Delete"
-        cancelText="Cancel"
+        confirmText={t("delete", { ns: "common" })}
+        cancelText={t("cancel", { ns: "common" })}
       />
     </>
   );

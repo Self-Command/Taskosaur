@@ -17,8 +17,10 @@ import { useAuth } from "@/contexts/auth-context";
 import { toast } from "sonner";
 import { useTimezone } from "@/hooks/useTimezone";
 import { detectBrowserTimezone } from "@/utils/date";
+import { useTranslation } from "react-i18next";
 
 export default function PreferencesSection() {
+  const { t } = useTranslation("settings");
   const { getCurrentUser, updateUser } = useAuth();
   const currentUser = getCurrentUser();
   const { handleTimezoneChange, detectFromBrowser, isBrowserTimezoneDifferent } = useTimezone();
@@ -94,7 +96,7 @@ export default function PreferencesSection() {
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <HiGlobeAlt className="w-4 h-4 text-[var(--primary)]" />
-              <Label className="text-sm font-medium text-[var(--foreground)]">Timezone</Label>
+              <Label className="text-sm font-medium text-[var(--foreground)]">{t("profile_section.timezone", "Timezone")}</Label>
             </div>
             <div className="max-w-md">
               <Select
@@ -110,7 +112,7 @@ export default function PreferencesSection() {
                 }}
               >
                 <SelectTrigger className="h-8 border-none bg-[var(--background)]">
-                  <SelectValue placeholder="Select your timezone" />
+                  <SelectValue placeholder={t("language_section.select_placeholder")} />
                 </SelectTrigger>
                 <SelectContent className="border-none bg-[var(--card)]">
                   <SelectItem value="(UTC-08:00) Pacific Time (US & Canada)">

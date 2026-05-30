@@ -1,0 +1,11 @@
+{
+  "trigger": "危险区域",
+  "selectAction": "选择要执行的操作",
+  "confirmMessage": "输入 **{{name}}** 以确认 {{action}}",
+  "typeExactly": "请精确输入 \"{{name}}\" 以确认",
+  "actionSuccess": "{{type}} 已成功{{action}}！",
+  "actionFailed": "{{action}} {{type}} 失败",
+  "modalTitle": "{{type}} 危险区域",
+  "modalDescription": "对 {{name}} 执行破坏性操作",
+  "processing": "...中..."
+}

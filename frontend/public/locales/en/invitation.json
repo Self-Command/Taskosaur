@@ -1,0 +1,12 @@
+{
+  "pendingTitle": "Pending Invitations",
+  "loading": "Loading invitations...",
+  "noPending": "No pending invitations found.",
+  "noPendingShort": "No pending invitations",
+  "roleLabel": "Role: {{role}}",
+  "decline": "Decline",
+  "accept": "Accept",
+  "acceptFailed": "Failed to accept the invitation",
+  "viewPending": "View pending invitations",
+  "title": "Invitations"
+}

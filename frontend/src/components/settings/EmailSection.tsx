@@ -8,8 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { HiEnvelope } from "react-icons/hi2";
 import { useAuth } from "@/contexts/auth-context";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 
 export default function EmailSection() {
+  const { t } = useTranslation("settings");
   const { getCurrentUser, updateUserEmail } = useAuth();
   const currentUser = getCurrentUser();
 
@@ -28,9 +30,9 @@ export default function EmailSection() {
     setLoading(true);
     try {
       await updateUserEmail(currentUser.id, { email });
-      toast.success("Email updated successfully!");
+      toast.success(t("profile_section.profile_updated"));
     } catch {
-      toast.error("Failed to update email. Please try again.");
+      toast.error(t("profile_section.profile_update_failed"));
     } finally {
       setLoading(false);
       fetchingRef.current = false;
@@ -44,10 +46,10 @@ export default function EmailSection() {
           <div className="flex-1">
             <CardTitle className="flex items-center gap-2 text-lg font-medium text-[var(--foreground)]">
               <HiEnvelope className="w-5 h-5 text-[var(--primary)]" />
-              Email Address
+              {t("profile_section.email")}
             </CardTitle>
             <CardDescription className="text-sm text-[var(--muted-foreground)] mt-1">
-              Update your email address. This will be used for login and notifications.
+              {t("profile_section.description")}
             </CardDescription>
           </div>
           <Badge
@@ -63,7 +65,7 @@ export default function EmailSection() {
         <div className="space-y-3">
           <div className="space-y-1">
             <Label className="text-sm font-medium text-[var(--foreground)]">
-              Email Address <span className="text-red-500">*</span>
+              {t("profile_section.email")} <span className="text-red-500">*</span>
             </Label>
             <div className="max-w-md">
               <Input
@@ -71,11 +73,11 @@ export default function EmailSection() {
                 value={email}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
                 className="h-8 border-none bg-[var(--background)]"
-                placeholder="Enter your email address"
+                placeholder={t("profile_section.email")}
                 required
               />
               <p className="text-xs text-[var(--muted-foreground)] mt-1">
-                We'll send a verification email if the address is changed.
+                {t("profile_section.email")}
               </p>
             </div>
           </div>
@@ -93,7 +95,7 @@ export default function EmailSection() {
                   Updating...
                 </div>
               ) : (
-                "Update Email"
+                {t("profile_section.edit_profile")}
               )}
             </ActionButton>
           </div>

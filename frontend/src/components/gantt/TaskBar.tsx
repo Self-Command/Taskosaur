@@ -9,6 +9,7 @@ import {
 } from "@/utils/gantt";
 import { useRouter } from "next/router";
 import { type KeyboardEvent, useState, useEffect, useRef, memo, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { StatusBadge } from "../ui";
 import { HiCheckCircle, HiClock } from "react-icons/hi";
 import { HiExclamationTriangle } from "react-icons/hi2";
@@ -45,7 +46,8 @@ export const TaskBar: React.FC<TaskBarProps> = memo(({
   onTaskUpdate,
 }) => {
   const router = useRouter();
-  
+  const { t } = useTranslation("gantt");
+
   // State for resizing/moving
   const [isResizing, setIsResizing] = useState(false);
   const [resizeDirection, setResizeDirection] = useState<'left' | 'right' | 'move' | null>(null);
@@ -213,7 +215,7 @@ export const TaskBar: React.FC<TaskBarProps> = memo(({
           transform: "translateY(-50%)",
           zIndex: isResizing || isHovered ? 10 : 1
         }}
-        title={`${task.title || "Untitled Task"}\nStatus: ${
+        title={`${task.title || t("untitledTask")}\nStatus: ${
           task.status.name
         }\nDuration: ${actualDuration} ${viewMode === "days" ? "days" : viewMode}`}
         tabIndex={0}
@@ -266,7 +268,7 @@ export const TaskBar: React.FC<TaskBarProps> = memo(({
         {/* Hover Tooltip - show temp dates if resizing */}
         {(isHovered || isFocused || isResizing) && (
           <div className="absolute -top-16 left-1/2 transform -translate-x-1/2 bg-[var(--popover)] text-[var(--popover-foreground)] px-3 py-2 rounded-lg shadow-lg z-40 whitespace-nowrap max-w-xs border border-[var(--border)] text-sm">
-            <div className="font-semibold truncate text-sm">{task.title || "Untitled Task"}</div>
+            <div className="font-semibold truncate text-sm">{task.title || t("untitledTask")}</div>
             <div className="text-[var(--muted-foreground)] mt-1 text-xs">
               {formatDateForDisplay(currentStart)} -{" "}
               {formatDateForDisplay(currentEnd)}

@@ -1,0 +1,7 @@
+{
+  "pageTitle": "Welcome to Taskosaur",
+  "preferenceUpdated": "Preference updated successfully!",
+  "updateFailed": "Failed to update profile. Please try again.",
+  "questionOf": "Question {{current}} of {{total}}",
+  "percentComplete": "{{percent}}% Complete"
+}

@@ -1,0 +1,23 @@
+{
+  "basicInformation": "Basic Information",
+  "taskTitlePlaceholder": "What needs to be done?",
+  "attachmentsTitle": "Attachment(s) ({{count}})",
+  "addAttachment": "Add Attachment",
+  "descriptionSection": "Description",
+  "workspaceProject": "Workspace & Project",
+  "selectProject": "Select a project",
+  "taskConfiguration": "Task Configuration",
+  "selectStatus": "Select a status",
+  "selectPriority": "Select priority",
+  "selectType": "Select type",
+  "searchParent": "Search parent task...",
+  "noParentFound": "No parent task found.",
+  "storyPoints": "Story Points",
+  "storyPointsPlaceholder": "e.g. 5",
+  "sprint": "Sprint",
+  "startDate": "Start Date",
+  "dueDate": "Due Date",
+  "assignment": "Assignment",
+  "noMembers": "No project members found.",
+  "createTask": "Create Task"
+}

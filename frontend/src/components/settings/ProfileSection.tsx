@@ -491,13 +491,13 @@ export default function ProfileSection() {
                     <PopoverContent className="p-0 bg-[var(--card)] border-[var(--border)] shadow-sm w-[340px]">
                       <Command>
                         <CommandInput
-                          placeholder="Search timezone..."
+                          placeholder={t("profile_section.search_timezone_placeholder", "Search timezone...")}
                           value={tzSearchTerm}
                           onValueChange={setTzSearchTerm}
                           className="border-b border-[var(--border)] focus:ring-0"
                         />
                         <CommandList>
-                          <CommandEmpty>No timezone found.</CommandEmpty>
+                          <CommandEmpty>{t("profile_section.no_timezone_found", "No timezone found.")}</CommandEmpty>
                           <CommandGroup className="max-h-[260px] overflow-y-auto">
                             {filteredTimezones.map((tz) => (
                               <CommandItem

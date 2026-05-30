@@ -82,6 +82,18 @@ export class AiChatService {
         return;
       }
 
+      // Find or create conversation
+      let conversation: any = chatRequest.sessionId
+        ? await this.prisma.conversation.findUnique({
+            where: { sessionId: chatRequest.sessionId },
+          })
+        : null;
+      if (!conversation && chatRequest.sessionId) {
+        conversation = await this.prisma.conversation.create({
+          data: { userId, sessionId: chatRequest.sessionId, title: 'New Chat' },
+        });
+      }
+
       // Build messages
       const messages: ChatMessageDto[] = [];
       messages.push({ role: 'system', content: getMCPSystemPrompt() });
@@ -165,6 +177,28 @@ export class AiChatService {
       if (!finalResponse) {
         finalResponse = 'Task completed.';
         yield `${streamIndex++}:${JSON.stringify({ type: 'text', text: finalResponse })}\n`;
+      }
+
+      // Save messages and set title (survives disconnect)
+      if (conversation) {
+        await this.prisma.chatMessage
+          .create({
+            data: { conversationId: conversation.id, role: 'user', content: userMessage },
+          })
+          .catch(() => {});
+        await this.prisma.chatMessage
+          .create({
+            data: { conversationId: conversation.id, role: 'assistant', content: finalResponse },
+          })
+          .catch(() => {});
+        if (conversation.title === 'New Chat') {
+          const convId = conversation.id;
+          const msg = userMessage;
+          const uid = userId;
+          setImmediate(() => {
+            this.generateConversationTitle(convId, msg, uid).catch(() => {});
+          });
+        }
       }
 
       // Emit finish event
@@ -300,31 +334,14 @@ export class AiChatService {
           },
         });
 
-        // Auto-generate title on first message
+        // Fire-and-forget AI title generation — completely detached from request lifecycle
         if (conversation.title === 'New Chat') {
-          let newTitle = '';
-          try {
-            const titlePrompt = `Generate a very short title (max 4 words) for: "${chatRequest.message.substring(0, 100)}"`;
-            const aiTitle = await this.callLlmSimple(
-              [{ role: 'user', content: titlePrompt }],
-              userId,
-            );
-            let cleanTitle = aiTitle.replace(/['""`.\n]/g, '').trim();
-            if (cleanTitle.length > 40) cleanTitle = cleanTitle.substring(0, 40) + '...';
-            if (cleanTitle.length >= 2) newTitle = cleanTitle;
-          } catch {
-            /* fallback below */
-          }
-          if (!newTitle) {
-            newTitle =
-              chatRequest.message.substring(0, 30) + (chatRequest.message.length > 30 ? '...' : '');
-          }
-          if (newTitle && newTitle !== 'New Chat') {
-            conversation = await this.prisma.conversation.update({
-              where: { id: conversation.id },
-              data: { title: newTitle },
-            });
-          }
+          const convId = conversation.id;
+          const msg = chatRequest.message;
+          const uid = userId;
+          setImmediate(() => {
+            this.generateConversationTitle(convId, msg, uid).catch(() => {});
+          });
         }
       }
 
@@ -334,7 +351,7 @@ export class AiChatService {
         message: finalResponse,
         toolExecutions,
         conversationId: conversation.id,
-        title: conversation.title,
+        title: conversation?.title || 'New Chat',
       };
     } catch (error: any) {
       console.error(error);
@@ -599,28 +616,13 @@ export class AiChatService {
         assistantMsgId = assistantMsg.id;
 
         if (conversation.title === 'New Chat') {
-          try {
-            const titlePrompt = `Generate a very short title (max 4 words) for: "${chatRequest.message.substring(0, 100)}"`;
-            const aiTitle = await this.callLlmSimple(
-              [{ role: 'user', content: titlePrompt }],
-              userId,
-            );
-            let cleanTitle = aiTitle.replace(/['""`.\n]/g, '').trim();
-            if (cleanTitle.length > 40) cleanTitle = cleanTitle.substring(0, 40) + '...';
-            if (cleanTitle.length >= 2) {
-              conversation = await this.prisma.conversation.update({
-                where: { id: conversation.id },
-                data: { title: cleanTitle },
-              });
-            }
-          } catch {
-            const fallbackTitle =
-              chatRequest.message.substring(0, 30) + (chatRequest.message.length > 30 ? '...' : '');
-            conversation = await this.prisma.conversation.update({
-              where: { id: conversation.id },
-              data: { title: fallbackTitle || 'New Chat' },
-            });
-          }
+          // Fire-and-forget AI title generation — completely detached from request lifecycle
+          const convId = conversation.id;
+          const msg = chatRequest.message;
+          const uid = userId;
+          setImmediate(() => {
+            this.generateConversationTitle(convId, msg, uid).catch(() => {});
+          });
         }
       }
 
@@ -629,8 +631,14 @@ export class AiChatService {
       // Start background AI processing — don't await
       const convId = conversation?.id || '';
       this.processChatInBackground(
-        chatRequest, userId, provider, apiUrl, apiKey,
-        convId, assistantMsgId, messages,
+        chatRequest,
+        userId,
+        provider,
+        apiUrl,
+        apiKey,
+        convId,
+        assistantMsgId,
+        messages,
       ).catch((err) => {
         console.error('Background AI chat failed:', err);
       });
@@ -736,9 +744,9 @@ export class AiChatService {
       }
 
       if (!finalResponse && toolExecutions.length > 0) {
-        finalResponse = toolExecutions
-          .map((te) => te.result?.message || `${te.tool} executed`)
-          .join('; ') || 'Task completed.';
+        finalResponse =
+          toolExecutions.map((te) => te.result?.message || `${te.tool} executed`).join('; ') ||
+          'Task completed.';
       }
 
       // Save complete response
@@ -757,13 +765,15 @@ export class AiChatService {
     } catch (error: any) {
       console.error('Background AI chat error:', error);
       if (messageId) {
-        await this.prisma.chatMessage.update({
-          where: { id: messageId },
-          data: {
-            status: 'error',
-            content: `Error: ${error instanceof Error ? error.message : String(error)}`,
-          },
-        }).catch(() => {});
+        await this.prisma.chatMessage
+          .update({
+            where: { id: messageId },
+            data: {
+              status: 'error',
+              content: `Error: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          })
+          .catch(() => {});
       }
     }
   }
@@ -1050,15 +1060,31 @@ export class AiChatService {
     maxTokens = 100,
     overrides?: { apiKey?: string; model?: string; apiUrl?: string },
   ): Promise<string> {
-    const [savedApiKey, savedModel, savedApiUrl] = await Promise.all([
-      this.settingsService.get('ai_api_key', userId),
-      this.settingsService.get('ai_model', userId),
-      this.settingsService.get('ai_api_url', userId),
-    ]);
+    // Skip DB lookup when all overrides provided (e.g. test-connection)
+    const hasAllOverrides = !!(
+      overrides?.apiKey !== undefined &&
+      overrides?.model &&
+      overrides?.apiUrl
+    );
 
-    const apiKey = overrides?.apiKey ?? savedApiKey;
-    const model = overrides?.model ?? savedModel;
-    const rawApiUrl = overrides?.apiUrl ?? savedApiUrl;
+    let apiKey: string | undefined;
+    let model: string | undefined;
+    let rawApiUrl: string | undefined;
+
+    if (hasAllOverrides) {
+      apiKey = overrides.apiKey;
+      model = overrides.model;
+      rawApiUrl = overrides.apiUrl;
+    } else {
+      const [savedApiKey, savedModel, savedApiUrl] = await Promise.all([
+        this.settingsService.get('ai_api_key', userId),
+        this.settingsService.get('ai_model', userId),
+        this.settingsService.get('ai_api_url', userId),
+      ]);
+      apiKey = (overrides?.apiKey ?? savedApiKey) as string | undefined;
+      model = (overrides?.model ?? savedModel) as string | undefined;
+      rawApiUrl = (overrides?.apiUrl ?? savedApiUrl) as string | undefined;
+    }
 
     if (!model || !rawApiUrl) throw new Error('AI not configured');
 
@@ -1216,64 +1242,92 @@ Respond ONLY with the description text, nothing else.`;
 
     try {
       const validatedUrl = this.validateApiUrl(apiUrl);
-      const provider = this.detectProvider(validatedUrl);
 
-      if (!apiKey && provider !== 'ollama') {
-        return { success: false, error: 'API key is required for this provider.' };
+      // Build a simple OpenAI-compatible /chat/completions request.
+      // This is the de facto standard — works with OpenAI, DeepSeek, OpenRouter,
+      // Ollama (when using /v1 prefix), Groq, Together, vLLM, and most proxies.
+      let requestUrl = validatedUrl;
+      if (!requestUrl.endsWith('/chat/completions')) {
+        requestUrl = requestUrl.replace(/\/$/, '') + '/chat/completions';
       }
 
-      const messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = [
-        {
-          role: 'user',
-          content: 'Hello, this is a connection test. Please respond with "Connection successful."',
-        },
-      ];
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (apiKey) {
+        headers['Authorization'] = `Bearer ${apiKey}`;
+      }
 
-      const description = await this.callLlmSimple(messages, 'test-connection', 50, {
-        apiKey,
+      const body = JSON.stringify({
         model,
-        apiUrl,
+        messages: [{ role: 'user', content: 'Hi' }],
+        max_tokens: 10,
+        temperature: 0,
       });
 
-      if (description) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30000);
+
+      const response = await fetch(requestUrl, {
+        method: 'POST',
+        headers,
+        body,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeout);
+
+      if (!response.ok) {
+        let errorDetail = `HTTP ${response.status}`;
+        try {
+          const errData = await response.json();
+          if (errData?.error?.message) errorDetail += `: ${errData.error.message}`;
+          else if (errData?.message) errorDetail += `: ${errData.message}`;
+        } catch {}
+        return { success: false, error: errorDetail };
+      }
+
+      const data = await response.json();
+
+      // Try all common response formats
+      const reply =
+        data?.choices?.[0]?.message?.content ||
+        data?.message?.content ||
+        data?.response ||
+        data?.content ||
+        '';
+
+      if (reply) {
         return {
           success: true,
           message: 'Connection successful! Your AI configuration is working correctly.',
         };
-      } else {
-        return {
-          success: false,
-          error: 'Received empty response from AI provider.',
-        };
       }
+
+      // Even if we got a 200 with no parseable content, the connection works
+      return {
+        success: true,
+        message: 'Connection successful! The API responded but with an unexpected format.',
+      };
     } catch (error: unknown) {
       console.error('Test connection failed:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
-      const causeCode = error instanceof Error && (error as any).cause?.code;
 
       if (errorMessage.includes('AbortError') || errorMessage.includes('aborted')) {
-        return {
-          success: false,
-          error: 'Request timed out. The model may still be loading.',
-        };
+        return { success: false, error: 'Request timed out (30s). Check the API URL or network.' };
       }
+      const causeCode = error instanceof Error ? (error as any).cause?.code : undefined;
       if (causeCode === 'ECONNREFUSED' || errorMessage.includes('ECONNREFUSED')) {
-        return {
-          success: false,
-          error: 'Connection refused. The AI service is not running.',
-        };
+        return { success: false, error: 'Connection refused. The AI service is not running.' };
       }
       if (causeCode === 'ENOTFOUND' || errorMessage.includes('ENOTFOUND')) {
         return { success: false, error: 'Host not found. Please check the API URL.' };
       }
       if (errorMessage.includes('fetch failed') || errorMessage.includes('NetworkError')) {
-        return {
-          success: false,
-          error: 'Network error. Please check your internet connection.',
-        };
+        return { success: false, error: 'Network error. Check your connection or the API URL.' };
       }
 
-      return { success: false, error: 'Connection test failed. Please check your configuration.' };
+      return { success: false, error: errorMessage };
     }
   }
 
@@ -1306,6 +1360,37 @@ Respond ONLY with the description text, nothing else.`;
       data: { userId, title: dto.title || 'New Chat', sessionId },
       include: { messages: true },
     });
+  }
+
+  /**
+   * Generate a conversation title in the background.
+   * Uses a separate Promise chain so it survives client disconnection.
+   */
+  private async generateConversationTitle(
+    conversationId: string,
+    userMessage: string,
+    userId: string,
+  ): Promise<void> {
+    try {
+      const titlePrompt = `Generate a very short title (max 4 words) for: "${userMessage.substring(0, 100)}"`;
+      const aiTitle = await this.callLlmSimple([{ role: 'user', content: titlePrompt }], userId);
+      let cleanTitle = aiTitle.replace(/['""`.\n]/g, '').trim();
+      if (cleanTitle.length > 40) cleanTitle = cleanTitle.substring(0, 40) + '...';
+      if (cleanTitle.length >= 2) {
+        await this.prisma.conversation.update({
+          where: { id: conversationId },
+          data: { title: cleanTitle },
+        });
+      }
+    } catch {
+      const fallback = userMessage.substring(0, 30) + (userMessage.length > 30 ? '...' : '');
+      try {
+        await this.prisma.conversation.update({
+          where: { id: conversationId },
+          data: { title: fallback || 'New Chat' },
+        });
+      } catch {}
+    }
   }
 
   async renameConversation(userId: string, id: string, dto: RenameConversationDto) {

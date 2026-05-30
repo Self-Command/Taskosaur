@@ -19,11 +19,13 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { useTheme } from "next-themes";
+import { useTranslation } from "react-i18next";
 import { SetupAdminData } from "@/types";
 
 export function SetupForm() {
   const router = useRouter();
   const { resolvedTheme } = useTheme();
+  const { t } = useTranslation("auth");
 
   const [formData, setFormData] = useState<SetupAdminData>({
     email: "",
@@ -171,7 +173,7 @@ export function SetupForm() {
             </div>
             <span className="hidden md:block">First-Time Setup</span>
           </h1>
-          <p className="setup-form-subtitle">Create your super admin account to get started</p>
+          <p className="setup-form-subtitle">{t("setup.subtitle")}</p>
         </div>
       </div>
 
@@ -183,7 +185,7 @@ export function SetupForm() {
         >
           <Alert variant="destructive" className="setup-error-alert">
             <AlertDescription className="font-medium">
-              <span className="setup-error-title">Setup Failed</span>
+              <span className="setup-error-title">{t("setup.setupFailed")}</span>
               <span className="setup-error-message">{error}</span>
             </AlertDescription>
           </Alert>
@@ -202,7 +204,7 @@ export function SetupForm() {
           <div className="setup-field-container">
             <Label htmlFor="firstName" className="setup-field-label">
               <User className="setup-field-icon" />
-              <span>First Name</span>
+              <span>{t("setup.firstName")}</span>
             </Label>
             <Input
               id="firstName"
@@ -211,7 +213,7 @@ export function SetupForm() {
               required
               value={formData.firstName}
               onChange={(e) => handleInputChange("firstName", e.target.value)}
-              placeholder="John"
+              placeholder={t("setup.firstNamePlaceholder")}
               className="setup-input"
               disabled={isLoading}
             />
@@ -220,7 +222,7 @@ export function SetupForm() {
           <div className="setup-field-container">
             <Label htmlFor="lastName" className="setup-field-label">
               <User className="setup-field-icon" />
-              <span>Last Name</span>
+              <span>{t("setup.lastName")}</span>
             </Label>
             <Input
               id="lastName"
@@ -229,7 +231,7 @@ export function SetupForm() {
               required
               value={formData.lastName}
               onChange={(e) => handleInputChange("lastName", e.target.value)}
-              placeholder="Doe"
+              placeholder={t("setup.lastNamePlaceholder")}
               className="setup-input"
               disabled={isLoading}
             />
@@ -245,7 +247,7 @@ export function SetupForm() {
         >
           <Label htmlFor="email" className="setup-field-label">
             <Mail className="setup-field-icon" />
-            <span>Email Address</span>
+            <span>{t("setup.email")}</span>
           </Label>
           <Input
             id="email"
@@ -255,7 +257,7 @@ export function SetupForm() {
             required
             value={formData.email}
             onChange={(e) => handleInputChange("email", e.target.value)}
-            placeholder="admin@company.com"
+            placeholder={t("setup.emailPlaceholder")}
             className="setup-input"
             disabled={isLoading}
           />
@@ -293,7 +295,7 @@ export function SetupForm() {
         >
           <Label htmlFor="password" className="setup-field-label">
             <Lock className="setup-field-icon" />
-            <span>Password</span>
+            <span>{t("setup.password")}</span>
           </Label>
           <div className="setup-password-container">
             <Input
@@ -304,7 +306,7 @@ export function SetupForm() {
               required
               value={formData.password}
               onChange={(e) => handleInputChange("password", e.target.value)}
-              placeholder="Enter a secure password"
+              placeholder={t("setup.passwordPlaceholder")}
               className="setup-password-input"
               disabled={isLoading}
             />
@@ -332,7 +334,7 @@ export function SetupForm() {
         >
           <Label htmlFor="confirmPassword" className="setup-field-label">
             <Lock className="setup-field-icon" />
-            <span>Confirm Password</span>
+            <span>{t("setup.confirmPassword")}</span>
           </Label>
           <div className="setup-password-container">
             <Input
@@ -343,7 +345,7 @@ export function SetupForm() {
               required
               value={confirmPassword}
               onChange={(e) => handleConfirmPasswordChange(e.target.value)}
-              placeholder="Re-enter your password"
+              placeholder={t("setup.confirmPasswordPlaceholder")}
               className="setup-password-input"
               disabled={isLoading}
             />

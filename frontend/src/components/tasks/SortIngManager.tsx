@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -40,6 +41,8 @@ const SortingManager: React.FC<SortingManagerProps> = ({
   onResetSort,
   availableFields = DEFAULT_SORT_FIELDS,
 }) => {
+  const { t } = useTranslation("tasks");
+
   const groupedFields = availableFields.reduce(
     (acc, field) => {
       const validCategories = ["date", "text", "number", "user"] as const;
@@ -90,7 +93,7 @@ const SortingManager: React.FC<SortingManagerProps> = ({
 
       <DropdownMenuContent align="end" className="w-64 bg-[var(--card)] border-[var(--border)]">
         <DropdownMenuLabel className="text-xs font-semibold flex justify-between items-center">
-          <span>Sort Options</span>
+          <span>{t("sorting.sortOptions")}</span>
           <Tooltip content="Reset" position="top" color="primary">
             <Button
               variant="ghost"
@@ -111,7 +114,7 @@ const SortingManager: React.FC<SortingManagerProps> = ({
         <DropdownMenuSeparator />
         {/* Sort Direction Controls */}
         <div className="px-2">
-          <div className="text-xs font-medium text-[var(--foreground)] mb-2">Direction</div>
+          <div className="text-xs font-medium text-[var(--foreground)] mb-2">{t("sorting.direction")}</div>
           <div className="flex gap-1">
             <Button
               variant={sortOrder === "asc" ? "default" : "outline"}

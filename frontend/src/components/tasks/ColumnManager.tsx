@@ -1,4 +1,5 @@
 "use client";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { RotateCcw } from "lucide-react";
 import type { ColumnConfig } from "@/types";
@@ -34,6 +35,7 @@ export function ColumnManager({
   onResetColumns,
 }: ColumnManagerProps) {
   const visibleColumnIds = availableColumns.map((col) => col.id);
+  const { t } = useTranslation("tasks");
 
   const handleButtonClick = () => {
     if (currentView === "kanban" && setKabBanSettingModal) {
@@ -70,7 +72,7 @@ export function ColumnManager({
       </Tooltip>
       <DropdownMenuContent align="end" className="w-64 bg-[var(--card)] border-[var(--border)]">
         <DropdownMenuLabel className="text-xs font-semibold  flex justify-between items-center">
-          <span>Manage View Columns</span>
+          <span>{t("columnManager.manageViewColumns")}</span>
           {onResetColumns && (
             <Button
               variant="ghost"
@@ -82,12 +84,12 @@ export function ColumnManager({
               }}
             >
               <RotateCcw size={12} />
-              Reset
+              {t("columnManager.reset")}
             </Button>
           )}
         </DropdownMenuLabel>
         <div className="px-2 py-1 text-xs text-muted-foreground">
-          Customize which columns are visible in your view
+          {t("columnManager.customizeDescription")}
         </div>
         <DropdownMenuSeparator />
 

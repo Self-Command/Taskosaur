@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { ShadowDomHtmlRenderer } from "@/components/common/ShadowDomHtmlRenderer";
 import { SafeMarkdownRenderer } from "@/components/common/SafeMarkdownRenderer";
 import DualModeEditor, { EditorMode } from "@/components/common/DualModeEditor";
@@ -23,6 +24,7 @@ const TaskDescription = React.forwardRef<any, TaskDescriptionProps>(({
   mentions = [],
 }, ref) => {
   const { resolvedTheme } = useTheme();
+  const { t } = useTranslation("tasks");
   const [colorMode, setColorMode] = useState<"light" | "dark">("light");
   const [editorMode, setEditorMode] = useState<EditorMode>("markdown");
   const editorRef = React.useRef<any>(null);
@@ -194,7 +196,7 @@ const TaskDescription = React.forwardRef<any, TaskDescriptionProps>(({
           ref={editorRef}
           value={value || ""}
           onChange={onChange}
-          placeholder="Describe the task in detail..."
+          placeholder={t("description.describeTask")}
           height={420}
           colorMode={colorMode}
           onModeChange={handleModeChange}
@@ -221,7 +223,7 @@ const TaskDescription = React.forwardRef<any, TaskDescriptionProps>(({
       {value ? (
         <MarkdownWithInteractiveTasks md={value} />
       ) : (
-        <div>No description provided</div>
+        <div>{t("description.noDescription")}</div>
       )}
     </div>
   );

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { HiOutlineBolt } from "react-icons/hi2";
 import { useTask } from "@/contexts/task-context";
 import { TaskActivityType } from "@/types/tasks";
@@ -11,6 +12,7 @@ interface TaskActivitiesProps {
 }
 
 const TaskActivities: React.FC<TaskActivitiesProps> = ({ taskId, setLoading }) => {
+  const { t } = useTranslation("tasks");
   const { getTaskActivity } = useTask();
   const { isAuthenticated } = useAuth();
   const [activities, setActivities] = useState<TaskActivityType[]>([]);
@@ -196,7 +198,7 @@ const TaskActivities: React.FC<TaskActivitiesProps> = ({ taskId, setLoading }) =
           <div className="flex items-center gap-2 text-[var(--muted-foreground)] text-sm">
             <HiOutlineBolt className="size-4" />
             <h4 className="font-medium text-[var(--muted-foreground)] text-sm tracking-wide">
-              No activities yet
+              {t("activities.noActivities")}
             </h4>
           </div>
         </div>

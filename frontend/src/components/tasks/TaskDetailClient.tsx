@@ -755,8 +755,8 @@ export default function TaskDetailClient({
 
       setConfirmModal({
         isOpen: true,
-        title: `Delete ${attachmentIds.length} Attachments`,
-        message: `Are you sure you want to delete ${attachmentIds.length} selected attachments? This action cannot be undone.`,
+        title: t("detail.deleteAttachmentsTitle", { count: attachmentIds.length }),
+        message: t("detail.deleteAttachmentsMessage", { count: attachmentIds.length }),
         type: "danger",
         onConfirm: async () => {
           try {
@@ -765,7 +765,7 @@ export default function TaskDetailClient({
             );
             const updatedAttachments = await getTaskAttachments(taskId, isAuth);
             setAttachments(updatedAttachments || []);
-            toast.success(`Successfully deleted ${attachmentIds.length} attachments`);
+            toast.success(t("detail.deleteAttachmentsSuccess", { count: attachmentIds.length }));
           } catch (error) {
             toast.error(t("detail.deleteAttachmentError"));
           }
@@ -1325,7 +1325,7 @@ export default function TaskDetailClient({
                       >
                         <DynamicBadge
                           label={
-                            TASK_TYPE_OPTIONS.find((type) => type.value === editTaskData.taskType)
+                            t("common:taskTypes." + (editTaskData.taskType?.toLowerCase() || "task")) || TASK_TYPE_OPTIONS.find((type) => type.value === editTaskData.taskType)
                               ?.label || t("detail.taskType")
                           }
                           bgColor={getTaskTypeHexColor(
@@ -1387,7 +1387,7 @@ export default function TaskDetailClient({
                               name:
                                 sprints.find((s) => s.id === editTaskData.sprintId)?.name ||
                                 task.sprint?.name ||
-                                "Selected Sprint",
+                                t("detail.selectedSprint"),
                               color: "#6366F1",
                             }
                             : {
@@ -1486,7 +1486,7 @@ export default function TaskDetailClient({
                             editTaskData.sprintId
                               ? sprints.find((s) => s.id === editTaskData.sprintId)?.name ||
                               task.sprint?.name ||
-                              "Current Sprint"
+                              t("detail.currentSprint")
                               : t("detail.backlog")
                           }
                           bgColor={editTaskData.sprintId ? "#6366F1" : "#6B7280"}
@@ -1536,7 +1536,7 @@ export default function TaskDetailClient({
                           id: editTaskData.priority || "MEDIUM",
                           name:
                             editTaskData.priority?.charAt(0).toUpperCase() +
-                            editTaskData.priority?.slice(1).toLowerCase() || "Medium",
+                            editTaskData.priority?.slice(1).toLowerCase() || t("detail.mediumPriority"),
                           color: task.priority?.color || "#F59E0B",
                         }}
                         availableItems={TaskPriorities}

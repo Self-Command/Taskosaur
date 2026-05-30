@@ -15,6 +15,7 @@ import {
 } from "../ui/DropdownMenu";
 import { ChevronDown } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
+import { useTranslation } from "react-i18next";
 import dayjs from "dayjs";
 
 interface TaskPagination {
@@ -109,6 +110,7 @@ const StatusColumn: React.FC<StatusColumnProps> = ({
   isLoadingMore = false,
 }) => {
   const { getProjectMembers } = useProjectContext();
+  const { t } = useTranslation("kanban");
 
   const [isCreating, setIsCreating] = useState(false);
   const [members, setMembers] = useState<ProjectMember[]>([]);
@@ -257,7 +259,7 @@ const StatusColumn: React.FC<StatusColumnProps> = ({
               <CardContent className="kanban-create-task-content">
                 {/* Form Header */}
                 <div className="kanban-create-task-header">
-                  <span className="kanban-create-task-title">Create new task</span>
+                  <span className="kanban-create-task-title">{t("createTask")}</span>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -272,7 +274,7 @@ const StatusColumn: React.FC<StatusColumnProps> = ({
                 <Input
                   value={taskForm.title}
                   onChange={(e) => setTaskForm((p) => ({ ...p, title: e.target.value }))}
-                  placeholder="What needs to be done?"
+                  placeholder={t("taskPlaceholder")}
                   className="kanban-create-task-title-input"
                   autoFocus
                 />
@@ -280,7 +282,7 @@ const StatusColumn: React.FC<StatusColumnProps> = ({
                 {/* Due date & priority */}
                 <div className="kanban-create-task-form-grid">
                   <div className="kanban-create-task-field">
-                    <label className="kanban-create-task-label">Due date</label>
+                    <label className="kanban-create-task-label">{t("dueDate")}</label>
                     <Input
                       type="date"
                       min={dayjs().format("YYYY-MM-DD")}
@@ -296,7 +298,7 @@ const StatusColumn: React.FC<StatusColumnProps> = ({
                   </div>
 
                   <div className="kanban-create-task-field">
-                    <label className="kanban-create-task-label">Priority</label>
+                    <label className="kanban-create-task-label">{t("priority")}</label>
 
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>

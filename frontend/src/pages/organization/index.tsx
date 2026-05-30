@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ChevronLeft, ChevronRight, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 
 import { OrganizationRole } from "@/types";
 import { LoginContent } from "@/components/login/LoginContent";
@@ -32,6 +33,7 @@ const extendedQuestions: QuestionType[] = [
 function IntroQuestions({ onComplete }: { onComplete: () => void }) {
   const { getCurrentUser, updateUser } = useAuth();
   const { createOrganization } = useOrganization();
+  const { t } = useTranslation("organization");
   const router = useRouter();
   const currentUser = getCurrentUser();
   const [currentQuestion, setCurrentQuestion] = useState(0);
@@ -75,12 +77,12 @@ function IntroQuestions({ onComplete }: { onComplete: () => void }) {
           createOrganizationAndHandleRedirect(),
         ]);
 
-        toast.success("Profile and organization created successfully!");
+        toast.success(t("setupSuccess"));
         router.reload();
         onComplete();
       } catch (error: any) {
         console.error("Error:", error);
-        toast.error(error?.message || "Failed to complete setup. Please try again.");
+        toast.error(error?.message || t("setupFailed"));
       } finally {
         setIsSubmitting(false);
       }
@@ -147,7 +149,7 @@ function IntroQuestions({ onComplete }: { onComplete: () => void }) {
 
   return (
     <div className="min-h-screen bg-[var(--background)]">
-      <SEO title="Setup Organization" />
+      <SEO title={t("pageTitle")} />
       <div className="login-container">
         <div className="login-content-panel hidden md:block">
           <LoginContent />
@@ -201,7 +203,7 @@ function IntroQuestions({ onComplete }: { onComplete: () => void }) {
                         type="text"
                         value={workspaceName}
                         onChange={(e) => setWorkspaceName(e.target.value)}
-                        placeholder="e.g., Main Workspace"
+                        placeholder={t("workspacePlaceholder")}
                         className="border-[var(--border)] bg-[var(--background)] p-4 text-lg"
                       />
                     </div>
@@ -214,7 +216,7 @@ function IntroQuestions({ onComplete }: { onComplete: () => void }) {
                         type="text"
                         value={projectName}
                         onChange={(e) => setProjectName(e.target.value)}
-                        placeholder="e.g., First Project"
+                        placeholder={t("projectPlaceholder")}
                         className="border-[var(--border)] bg-[var(--background)] p-4 text-lg"
                       />
                     </div>
@@ -276,7 +278,7 @@ function IntroQuestions({ onComplete }: { onComplete: () => void }) {
                     Setting up...
                   </>
                 ) : isLastQuestion ? (
-                  "Complete Setup"
+                  {t("completeSetup")}
                 ) : (
                   "Next"
                 )}

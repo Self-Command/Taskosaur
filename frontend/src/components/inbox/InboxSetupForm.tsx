@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -57,6 +58,7 @@ export default function InboxSetupForm({
   defaultValues,
   isLoading = false,
 }: InboxSetupFormProps) {
+  const { t } = useTranslation("inbox");
   const form = useForm<InboxSetupFormData>({
     resolver: zodResolver(inboxSetupSchema),
     defaultValues: {
@@ -80,9 +82,9 @@ export default function InboxSetupForm({
   const handleFormSubmit = async (data: InboxSetupFormData) => {
     try {
       await onSubmit(data);
-      toast.success("Inbox setup completed successfully");
+      toast.success(t("setupSuccess"));
     } catch (error) {
-      toast.error("Failed to setup inbox");
+      toast.error(t("setupFailed"));
       console.error("Inbox setup error:", error);
     }
   };
@@ -92,7 +94,7 @@ export default function InboxSetupForm({
       <CardHeader>
         <CardTitle className="flex items-center space-x-2">
           <HiEnvelope className="w-5 h-5" />
-          <span>Set Up Email Integration</span>
+          <span>{t("setupTitle")}</span>
         </CardTitle>
       </CardHeader>
 
@@ -101,18 +103,18 @@ export default function InboxSetupForm({
           <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
             {/* Basic Information Section */}
             <div className="space-y-4">
-              <h3 className="text-lg font-medium">Basic Information</h3>
+              <h3 className="text-lg font-medium">{t("basicInfo")}</h3>
 
               <FormField
                 control={form.control}
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Inbox Name *</FormLabel>
+                    <FormLabel>{t("nameLabel")}</FormLabel>
                     <FormControl>
-                      <Input placeholder="Support Inbox" {...field} disabled={isLoading} />
+                      <Input placeholder={t("namePlaceholder")} {...field} disabled={isLoading} />
                     </FormControl>
-                    <FormDescription>A descriptive name for your email inbox</FormDescription>
+                    <FormDescription>{t("nameDescription")}</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -123,10 +125,10 @@ export default function InboxSetupForm({
                 name="description"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Description</FormLabel>
+                    <FormLabel>{t("description")}</FormLabel>
                     <FormControl>
                       <Textarea
-                        placeholder="Customer support email integration"
+                        placeholder={t("descriptionPlaceholder")}
                         rows={2}
                         {...field}
                         disabled={isLoading}
@@ -143,11 +145,11 @@ export default function InboxSetupForm({
                 name="emailAddress"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Email Address</FormLabel>
+                    <FormLabel>{t("emailLabel")}</FormLabel>
                     <FormControl>
                       <Input
                         type="email"
-                        placeholder="support@company.com"
+                        placeholder={t("emailPlaceholder")}
                         {...field}
                         disabled={isLoading}
                       />
@@ -163,7 +165,7 @@ export default function InboxSetupForm({
 
             {/* Task Creation Settings */}
             <div className="space-y-4">
-              <h3 className="text-lg font-medium">Task Creation Settings</h3>
+              <h3 className="text-lg font-medium">{t("taskSettings")}</h3>
 
               <FormField
                 control={form.control}
@@ -193,7 +195,7 @@ export default function InboxSetupForm({
                   name="defaultTaskType"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Default Task Type</FormLabel>
+                      <FormLabel>{t("defaultTaskType")}</FormLabel>
                       <Select
                         onValueChange={field.onChange}
                         defaultValue={field.value}
@@ -201,7 +203,7 @@ export default function InboxSetupForm({
                       >
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select task type" />
+                            <SelectValue placeholder={t("taskTypePlaceholder")} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
@@ -222,7 +224,7 @@ export default function InboxSetupForm({
                   name="defaultPriority"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Default Priority</FormLabel>
+                      <FormLabel>{t("defaultPriority")}</FormLabel>
                       <Select
                         onValueChange={field.onChange}
                         defaultValue={field.value}
@@ -230,7 +232,7 @@ export default function InboxSetupForm({
                       >
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select priority" />
+                            <SelectValue placeholder={t("priorityPlaceholder")} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
@@ -259,7 +261,7 @@ export default function InboxSetupForm({
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select default status" />
+                          <SelectValue placeholder={t("defaultStatusPlaceholder")} />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
@@ -298,7 +300,7 @@ export default function InboxSetupForm({
                   <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
                     <div className="space-y-0.5">
                       <FormLabel className="text-base">Enable Auto-Reply</FormLabel>
-                      <FormDescription>Send automatic replies to incoming emails</FormDescription>
+                      <FormDescription>{t("autoReplyDescription")}</FormDescription>
                     </div>
                     <FormControl>
                       <Switch
@@ -320,13 +322,13 @@ export default function InboxSetupForm({
                       <FormLabel>Auto-Reply Message</FormLabel>
                       <FormControl>
                         <Textarea
-                          placeholder="Thank you for contacting us. We'll respond within 24 hours."
+                          placeholder={t("autoReplyPlaceholder")}
                           rows={4}
                           {...field}
                           disabled={isLoading}
                         />
                       </FormControl>
-                      <FormDescription>Message sent automatically to email senders</FormDescription>
+                      <FormDescription>{t("autoReplyHint")}</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -336,23 +338,23 @@ export default function InboxSetupForm({
 
             {/* Email Signature */}
             <div className="space-y-4">
-              <h3 className="text-lg font-medium">Email Signature</h3>
+              <h3 className="text-lg font-medium">{t("signature")}</h3>
 
               <FormField
                 control={form.control}
                 name="emailSignature"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Signature</FormLabel>
+                    <FormLabel>{t("signatureLabel")}</FormLabel>
                     <FormControl>
                       <Textarea
-                        placeholder="--&#10;Best regards,&#10;Support Team"
+                        placeholder={t("signaturePlaceholder")}
                         rows={3}
                         {...field}
                         disabled={isLoading}
                       />
                     </FormControl>
-                    <FormDescription>Signature added to all outgoing email replies</FormDescription>
+                    <FormDescription>{t("signatureDescription")}</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

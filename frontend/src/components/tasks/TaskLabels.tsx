@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,7 @@ export default function TaskLabels({
   hasAccess = false,
   setLoading,
 }: TaskLabelsProps) {
+  const { t } = useTranslation(["tasks", "common"]);
   const [isAddingLabel, setIsAddingLabel] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [newLabelName, setNewLabelName] = useState("");
@@ -49,7 +51,7 @@ export default function TaskLabels({
 
   const handleAddLabel = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!hasAccess) return toast.error("You don't have access to update the task label");
+    if (!hasAccess) return toast.error(t("labels.noAccess"));
 
     if (!newLabelName.trim()) return;
 
@@ -71,7 +73,7 @@ export default function TaskLabels({
   };
 
   const handleRemoveLabel = async (labelId: string) => {
-    if (!hasAccess) return toast.error("You don't have access to update the task label");
+    if (!hasAccess) return toast.error(t("labels.noAccess"));
 
     try {
       setLoadingLabels(true);
@@ -84,7 +86,7 @@ export default function TaskLabels({
   };
 
   const handleAssignLabel = async (label: TaskLabel) => {
-    if (!hasAccess) return toast.error("You don't have access to update the task label");
+    if (!hasAccess) return toast.error(t("labels.noAccess"));
 
     try {
       setLoadingLabels(true);
@@ -118,7 +120,7 @@ export default function TaskLabels({
       {labels.length > 0 ? (
         <div>
           <div className="flex items-center justify-between mb-1">
-            <div className="text-sm font-medium text-[var(--foreground)]">Current labels:</div>
+            <div className="text-sm font-medium text-[var(--foreground)]">{t("labels.currentLabels")}</div>
             {hasAccess && (
               <button
                 type="button"
@@ -129,7 +131,7 @@ export default function TaskLabels({
                 style={{ lineHeight: 0 }}
               >
                 <HiPencil className="w-3 h-3 text-[var(--muted-foreground)]" />
-                <span className="sr-only">Edit</span>
+                <span className="sr-only">{t("labels.edit")}</span>
               </button>
             )}
           </div>
@@ -158,7 +160,7 @@ export default function TaskLabels({
             {/* Left side: icon + text */}
             <div className="flex items-center gap-2 text-[var(--muted-foreground)] text-sm">
               <HiTag className="size-3 text-[var(--muted-foreground)]" />
-              <span>No current labels</span>
+              <span>{t("labels.noCurrentLabels")}</span>
             </div>
 
             {/* Right side: edit icon (only if access) */}
@@ -171,7 +173,7 @@ export default function TaskLabels({
                 aria-label="Edit"
                 style={{ lineHeight: 0 }}
               >
-                Edit
+                {t("edit")}
               </button>
             )}
           </div>
@@ -184,7 +186,7 @@ export default function TaskLabels({
           {/* Available labels */}
           {unassignedLabels.length > 0 && (
             <div className="">
-              <div className="text-sm font-medium text-[var(--foreground)]">Available labels:</div>
+              <div className="text-sm font-medium text-[var(--foreground)]">{t("labels.availableLabels")}</div>
               <div className="flex flex-wrap gap-2">
                 {unassignedLabels.map((label) => (
                   <ActionButton
@@ -214,7 +216,7 @@ export default function TaskLabels({
                     htmlFor="label-name"
                     className="text-sm font-medium text-[var(--foreground)]"
                   >
-                    Label name
+                    {t("labels.labelName")}
                   </Label>
                   <Input
                     id="label-name"
@@ -223,7 +225,7 @@ export default function TaskLabels({
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                       setNewLabelName(e.target.value)
                     }
-                    placeholder="Enter label name"
+                    placeholder={t("labels.enterLabelName")}
                     autoFocus
                     maxLength={50}
                     className="h-9 border-input bg-background text-[var(--foreground)]"
@@ -231,7 +233,7 @@ export default function TaskLabels({
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium text-[var(--foreground)]">Color</Label>
+                  <Label className="text-sm font-medium text-[var(--foreground)]">{t("labels.color")}</Label>
                   <div className="grid grid-cols-6 gap-2">
                     {labelColors.map((color) => (
                       <Button
@@ -252,9 +254,9 @@ export default function TaskLabels({
 
                   {/* Preview */}
                   <div className="flex items-center gap-2 pt-2">
-                    <span className="text-xs text-[var(--muted-foreground)]">Preview:</span>
+                    <span className="text-xs text-[var(--muted-foreground)]">{t("labels.preview")}</span>
                     <DynamicBadge
-                      label={newLabelName || "Label preview"}
+                      label={newLabelName || t("labels.labelPreview")}
                       bgColor={newLabelColor}
                       size="md"
                     />
@@ -268,7 +270,7 @@ export default function TaskLabels({
                     primary
                     className="flex-1 cursor-pointer"
                   >
-                    Add Label
+                    {t("labels.addLabel")}
                   </ActionButton>
                   <ActionButton
                     type="button"
@@ -277,7 +279,7 @@ export default function TaskLabels({
                     secondary
                     className="cursor-pointer"
                   >
-                    Cancel
+                    {t("cancel")}
                   </ActionButton>
                 </div>
               </form>
@@ -290,7 +292,7 @@ export default function TaskLabels({
               secondary
               className="w-full justify-center cursor-pointer mt-2"
             >
-              Add new label
+              {t("labels.addNewLabel")}
             </ActionButton>
           )}
         </>

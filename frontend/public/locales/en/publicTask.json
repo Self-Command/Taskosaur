@@ -1,0 +1,10 @@
+{
+  "downloadFailed": "Failed to download attachment",
+  "description": "Description",
+  "priority": "Priority",
+  "status": "Status",
+  "dueDate": "Due Date",
+  "createdBy": "Created By",
+  "assignees": "Assignees",
+  "sharedVia": "Shared securely via Taskosaur"
+}

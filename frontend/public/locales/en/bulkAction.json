@@ -1,0 +1,12 @@
+{
+  "clearSelection": "Clear Selection",
+  "updateStatus": "Update Status",
+  "changeStatusTo": "Change Status to",
+  "noStatuses": "No statuses available",
+  "delete": "Delete",
+  "deleteTitle": "Permanently Delete Tasks?",
+  "deleteMessage": "This will permanently remove {{count}} selected task(s). This action cannot be undone.",
+  "deleteConfirm": "Yes, Delete",
+  "updateStatusTitle": "Update Task Status",
+  "updateStatusMessage": "Confirm switching {{count}} task(s) to \"{{status}}\"?"
+}

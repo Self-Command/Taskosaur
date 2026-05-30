@@ -6,10 +6,12 @@ import Tooltip from "../common/ToolTip";
 import { useOrganization } from "@/contexts/organization-context";
 import { TokenManager } from "@/lib/api";
 import { useRouter } from "next/router";
+import { useTranslation } from "react-i18next";
 
 
 const SearchManager = () => {
   const router = useRouter();
+  const { t } = useTranslation("search");
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [results, setResults] = useState([]);
@@ -288,7 +290,7 @@ const SearchManager = () => {
           <input
             ref={inputRef}
             type="text"
-            placeholder="Search anything..."
+            placeholder={t("placeholder")}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="flex-1 bg-transparent text-sm text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none"
@@ -320,7 +322,7 @@ const SearchManager = () => {
           {loading && results.length === 0 && (
             <div className="flex flex-col items-center justify-center flex-1 px-4 py-8 text-center text-[var(--muted-foreground)]">
               <div className="text-4xl mb-2 opacity-50">⏳</div>
-              <div className="text-sm font-medium mb-1">Searching...</div>
+              <div className="text-sm font-medium mb-1">{t("searching")}</div>
             </div>
           )}
           {/* Error state */}
@@ -334,8 +336,8 @@ const SearchManager = () => {
           {searchTerm && !loading && !error && results.length === 0 && (
             <div className="flex flex-col items-center justify-center flex-1 px-4 py-8 text-center text-[var(--muted-foreground)]">
               <div className="text-4xl mb-2 opacity-50">🔍</div>
-              <div className="text-sm font-medium mb-1">No results found</div>
-              <div className="text-xs">Try a different search term</div>
+              <div className="text-sm font-medium mb-1">{t("noResults")}</div>
+              <div className="text-xs">{t("tryDifferent")}</div>
             </div>
           )}
           {/* Results list */}
@@ -377,16 +379,16 @@ const SearchManager = () => {
             <div className="flex flex-col items-center justify-center flex-1 px-4 py-8 text-center text-[var(--muted-foreground)]">
               <div className="text-5xl mb-2 opacity-60">✨</div>
               <div className="text-base font-medium mb-1 text-[var(--foreground)]">
-                Spotlight Search
+                {t("spotlightTitle")}
               </div>
-              <div className="text-xs mb-2">Start typing to search across your workspace</div>
+              <div className="text-xs mb-2">{t("spotlightHint")}</div>
               <div className="text-xs opacity-50 flex items-center gap-2 mt-2">
                 <span className="inline-flex items-center gap-1 bg-[var(--muted)]/30 px-1 py-0.5 rounded">
-                  <span>⌘K to open</span>
+                  <span>{t("openShortcut")}</span>
                 </span>
                 <span className="mx-1">•</span>
                 <span className="inline-flex items-center gap-1 bg-[var(--muted)]/30 px-1 py-0.5 rounded">
-                  <span>ESC to close</span>
+                  <span>{t("closeShortcut")}</span>
                 </span>
               </div>
             </div>
@@ -437,10 +439,10 @@ const SearchManager = () => {
 
   return (
     <>
-      <Tooltip content="Search" position="bottom" color="primary">
+      <Tooltip content={t("tooltip")} position="bottom" color="primary">
         <Button onClick={openSearch} className="header-mode-toggle shadow-none">
           <HiMagnifyingGlass className="header-mode-toggle-icon" />
-          <span className="hidden max-[530px]:inline-block text-sm font-medium">Search</span>
+          <span className="hidden max-[530px]:inline-block text-sm font-medium">{t("buttonLabel")}</span>
         </Button>
       </Tooltip>
       {isOpen && createPortal(searchOverlay, document.body)}

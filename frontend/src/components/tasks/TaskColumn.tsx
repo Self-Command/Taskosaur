@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Task, TaskStatus } from "@/types";
 import TaskCard from "./TaskCard";
 
@@ -22,6 +23,7 @@ export default function TaskColumn({
   onDrop,
   draggedTask,
 }: TaskColumnProps) {
+  const { t } = useTranslation("tasks");
   const [isDragOver, setIsDragOver] = useState(false);
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -66,7 +68,7 @@ export default function TaskColumn({
           <div className="flex items-center space-x-1">
             <button
               className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded"
-              title="Column settings"
+              title={t("column.columnSettings")}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path

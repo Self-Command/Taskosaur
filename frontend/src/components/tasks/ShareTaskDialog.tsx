@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Dialog,
   DialogContent,
@@ -31,6 +32,7 @@ interface ShareTaskDialogProps {
 }
 
 export default function ShareTaskDialog({ taskId, isOpen, onClose }: ShareTaskDialogProps) {
+  const { t } = useTranslation("tasks");
   const [expiryDays, setExpiryDays] = useState('7');
   const [shares, setShares] = useState<ShareResponse[]>([]);
   const [loading, setLoading] = useState(false);
@@ -49,7 +51,7 @@ export default function ShareTaskDialog({ taskId, isOpen, onClose }: ShareTaskDi
       const data = await shareApi.getSharesForTask(taskId);
       setShares(data);
     } catch (error) {
-      toast.error('Failed to load share links');
+      toast.error(t('shareTask.failedToLoad'));
     } finally {
       setLoading(false);
     }
@@ -63,12 +65,12 @@ export default function ShareTaskDialog({ taskId, isOpen, onClose }: ShareTaskDi
         expiresInDays: parseInt(expiryDays),
       });
       setShares([newShare, ...shares]);
-      toast.success('Public link created');
+      toast.success(t('shareTask.linkCreated'));
       
       // Auto copy
       copyToClipboard(newShare.shareUrl, newShare.id);
     } catch (error) {
-      toast.error('Failed to create share link');
+      toast.error(t('shareTask.failedToCreate'));
     } finally {
       setCreating(false);
     }
@@ -78,16 +80,16 @@ export default function ShareTaskDialog({ taskId, isOpen, onClose }: ShareTaskDi
     try {
       await shareApi.revokeShare(shareId);
       setShares(shares.filter(s => s.id !== shareId));
-      toast.success('Link revoked');
+      toast.success(t('shareTask.linkRevoked'));
     } catch (error) {
-      toast.error('Failed to revoke link');
+      toast.error(t('shareTask.failedToRevoke'));
     }
   };
 
   const copyToClipboard = (url: string, id: string) => {
     navigator.clipboard.writeText(url);
     setCopiedId(id);
-    toast.success('Link copied to clipboard');
+    toast.success(t('shareTask.linkCopied'));
     setTimeout(() => setCopiedId(null), 2000);
   };
 
@@ -109,20 +111,20 @@ export default function ShareTaskDialog({ taskId, isOpen, onClose }: ShareTaskDi
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="w-full sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Share to Web</DialogTitle>
+          <DialogTitle>{t("share.shareToWeb")}</DialogTitle>
           <DialogDescription>
-            Publish this task to the web. Anyone with the link can view it.
+            {t("share.shareDescription")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 py-4 min-w-0">
           <div className="space-y-4">
             <div className="grid gap-2">
-              <Label htmlFor="expiry">Link expires in</Label>
+              <Label htmlFor="expiry">{t("share.linkExpiresIn")}</Label>
               <div className="flex gap-2">
                 <Select value={expiryDays} onValueChange={setExpiryDays}>
                   <SelectTrigger id="expiry" className="w-[180px] h-9 border-none bg-[var(--primary)]/5 hover:bg-[var(--primary)]/10 text-[var(--foreground)] transition-all duration-200">
-                    <SelectValue placeholder="Select expiry" />
+                    <SelectValue placeholder={t("common:selectExpiry")} />
                   </SelectTrigger>
                   <SelectContent className='bg-[var(--card)]'>
                     <SelectItem value="1">1 day</SelectItem>
@@ -138,7 +140,7 @@ export default function ShareTaskDialog({ taskId, isOpen, onClose }: ShareTaskDi
                   className="flex-1"
                   secondary
                 >
-                  {creating ? 'Creating...' : 'Create Public Link'}
+                  {creating ? t("common:creating") : t("share.createPublicLink")}
                 </ActionButton>
               </div>
             </div>
@@ -146,7 +148,7 @@ export default function ShareTaskDialog({ taskId, isOpen, onClose }: ShareTaskDi
 
           {shares.length > 0 && (
             <div className="space-y-3">
-              <Label>Active Links ({shares.length})</Label>
+              <Label>{t("share.activeLinks")} ({shares.length})</Label>
               <ScrollArea className="h-[200px] w-full rounded-md border p-3" orientation='both'>
                 <div className="space-y-3">
                   {shares.map((share) => (
@@ -157,10 +159,10 @@ export default function ShareTaskDialog({ taskId, isOpen, onClose }: ShareTaskDi
                       <div className="flex items-center justify-between min-w-0">
                         <div className="flex items-center gap-2">
                           <Badge variant={isExpired(share.expiresAt) ? "destructive" : "secondary"}>
-                            {isExpired(share.expiresAt) ? 'Expired' : 'Active'}
+                            {isExpired(share.expiresAt) ? t('shareTask.expired') : t('shareTask.active')}
                           </Badge>
                           <span className="text-xs text-muted-foreground">
-                            Expires {formatDate(share.expiresAt)}
+                            {t('shareTask.expires')}{formatDate(share.expiresAt)}
                           </span>
                         </div>
                         <Button
@@ -168,7 +170,7 @@ export default function ShareTaskDialog({ taskId, isOpen, onClose }: ShareTaskDi
                           size="icon"
                           className="h-6 w-6 text-destructive hover:bg-destructive/10"
                           onClick={() => handleRevokeShare(share.id)}
-                          title="Revoke link"
+                          title={t("share.revokeLink")}
                         >
                           <HiTrash className="h-4 w-4" />
                         </Button>
@@ -204,7 +206,7 @@ export default function ShareTaskDialog({ taskId, isOpen, onClose }: ShareTaskDi
 
         <DialogFooter>
           <ActionButton secondary onClick={onClose}>
-            Done
+            {t("share.done")}
           </ActionButton>
         </DialogFooter>
       </DialogContent>

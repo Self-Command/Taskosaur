@@ -484,16 +484,16 @@ function ProjectSettingsContent() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="taskPrefix">Task Prefix</Label>
+                      <Label htmlFor="taskPrefix">{t("general.task_prefix_label")}</Label>
                       <Input
                         id="taskPrefix"
                         value={formData.taskPrefix}
                         onChange={(e) => handleInputChange("taskPrefix", e.target.value)}
-                        placeholder="e.g. PROJ"
+                        placeholder={t("general.task_prefix_placeholder")}
                         disabled={saving || !hasAccess}
                       />
                       <p className="text-xs text-[var(--muted-foreground)]">
-                        Short identifier used for tasks (e.g. PROJ-1). Up to 8 chars, letters and numbers only.
+                        {t("general.task_prefix_description")}
                       </p>
                     </div>
 

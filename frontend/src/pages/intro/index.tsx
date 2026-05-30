@@ -3,10 +3,12 @@ import { ChevronLeft, ChevronRight, CheckCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { SEO } from "@/components/common/SEO";
 
 const QuizPage = () => {
   const { getCurrentUser, updateUser } = useAuth();
+  const { t } = useTranslation("intro");
   const router = useRouter();
   const currentUser = getCurrentUser();
   const [currentQuestion, setCurrentQuestion] = useState(0);
@@ -109,10 +111,10 @@ const QuizPage = () => {
         await updateUser(currentUser.id, {
           onboardInfo: answers,
         });
-        toast.success("Preference updated successfully!");
+        toast.success(t("preferenceUpdated"));
         router.push("/organization");
       } catch {
-        toast.error("Failed to update profile. Please try again.");
+        toast.error(t("updateFailed"));
       }
     }
 
@@ -131,7 +133,7 @@ const QuizPage = () => {
 
   return (
     <div className="h-screen bg-[var(--background)] flex flex-col">
-      <SEO title="Welcome to Taskosaur" />
+      <SEO title={t("pageTitle")} />
       <div className="flex-1 flex">
         {/* Image section */}
         <div className="hidden lg:block w-1/2 bg-[var(--primary)] p-8">

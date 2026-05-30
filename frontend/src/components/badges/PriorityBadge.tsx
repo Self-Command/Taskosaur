@@ -1,6 +1,7 @@
 import type React from "react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 
 interface PriorityBadgeProps {
   priority: string;
@@ -10,6 +11,8 @@ interface PriorityBadgeProps {
 type Props = PriorityBadgeProps & React.ComponentProps<typeof Badge>;
 
 const PriorityBadge: React.FC<Props> = ({ priority, className, ...props }) => {
+  const { t } = useTranslation("common");
+
   const getPriorityConfig = (priority: string) => {
     const normalizedPriority = String(priority || "low").toLowerCase();
 
@@ -17,27 +20,32 @@ const PriorityBadge: React.FC<Props> = ({ priority, className, ...props }) => {
       case "highest":
         return {
           color: "#dc2626",
-          label: "Highest",
+          label: t("priorities.highest"),
         };
       case "high":
         return {
           color: "#ea580c",
-          label: "High",
+          label: t("priorities.high"),
         };
       case "medium":
         return {
           color: "#d97706",
-          label: "Medium",
+          label: t("priorities.medium"),
         };
       case "low":
         return {
           color: "#16a34a",
-          label: "Low",
+          label: t("priorities.low"),
+        };
+      case "lowest":
+        return {
+          color: "#6b7280",
+          label: t("priorities.lowest"),
         };
       default:
         return {
           color: "#6b7280",
-          label: "No Priority",
+          label: t("priorities.noPriority"),
         };
     }
   };

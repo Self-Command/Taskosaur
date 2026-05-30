@@ -1,0 +1,28 @@
+{
+  "modal": {
+    "createTitle": "创建新组织",
+    "createDescription": "提供新组织的信息",
+    "name": "组织名称",
+    "namePlaceholder": "输入组织名称",
+    "slug": "组织标识",
+    "slugPlaceholder": "organization-slug",
+    "slugHint": "将用于组织 URL。仅允许小写字母、数字和连字符。",
+    "description": "描述",
+    "descriptionPlaceholder": "描述你的组织...",
+    "website": "网站",
+    "websitePlaceholder": "https://example.com",
+    "cancel": "取消",
+    "create": "创建组织",
+    "update": "更新组织",
+    "creating": "正在创建...",
+    "saving": "正在保存...",
+    "success": "组织创建成功！",
+    "errorDefault": "创建组织失败",
+    "errorSave": "保存组织失败，请重试。",
+    "errorTitle": "创建组织出错",
+    "errorNameRequired": "组织名称为必填项",
+    "errorSlugRequired": "组织标识为必填项",
+    "errorSlugInvalid": "标识只能包含小写字母、数字和连字符",
+    "errorWebsiteInvalid": "请输入有效的 URL"
+  }
+}

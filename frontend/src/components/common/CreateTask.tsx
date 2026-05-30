@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -45,6 +46,7 @@ const TaskSectionHeader = ({ icon: Icon, title }: { icon: any; title: string }) 
 );
 
 export default function CreateTask({ projectSlug, workspace, projects }: CreateTaskProps) {
+  const { t } = useTranslation(["createTask", "common"]);
   const { createTaskWithAttachements } = useTask();
   const { getProjectMembers, getTaskStatusByProject } = useProject();
   const { getSprintsByProject, getActiveSprint } = useSprint();
@@ -441,7 +443,7 @@ export default function CreateTask({ projectSlug, workspace, projects }: CreateT
           <form id="create-task-form" onSubmit={handleSubmit} className="flex flex-col gap-6">
             <Card className="border-none bg-[var(--card)] gap-0 rounded-md">
               <CardHeader className="pb-0">
-                <TaskSectionHeader icon={HiDocumentText} title="Basic Information" />
+                <TaskSectionHeader icon={HiDocumentText} title={t("basicInformation")} />
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
@@ -453,7 +455,7 @@ export default function CreateTask({ projectSlug, workspace, projects }: CreateT
                     name="title"
                     value={formData.title}
                     onChange={(e) => handleFormDataChange("title", e.target.value)}
-                    placeholder="What needs to be done?"
+                    placeholder={t("taskTitlePlaceholder")}
                     className="border-[var(--border)] bg-[var(--background)]"
                   />
                 </div>
@@ -464,7 +466,7 @@ export default function CreateTask({ projectSlug, workspace, projects }: CreateT
               <CardHeader className="flex items-center justify-between pb-2">
                 <TaskSectionHeader
                   icon={HiPaperClip}
-                  title={`Attachment(s) ${attachments.length > 0 ? `(${attachments.length})` : ""}`}
+                  title={t("attachmentsTitle", { count: attachments.length })}
                 />
                 <div>
                   <Input
@@ -480,7 +482,7 @@ export default function CreateTask({ projectSlug, workspace, projects }: CreateT
                     className="py-2 relative h-9 px-4 bg-[var(--primary)] cursor-pointer rounded-md hover:bg-[var(--primary)]/90 text-[var(--primary-foreground)] shadow-sm hover:shadow-md transition-all duration-200 font-medium"
                   >
                     <Plus className="w-4 h-4" />
-                    <span>Add Attachment</span>
+                    <span>{t("addAttachment")}</span>
                   </Label>
                 </div>
               </CardHeader>
@@ -574,7 +576,7 @@ export default function CreateTask({ projectSlug, workspace, projects }: CreateT
                                   type="button"
                                   onClick={() => openFilePreview(file)}
                                   className="p-1.5 hover:bg-[var(--accent)] rounded transition-colors cursor-pointer"
-                                  title="Preview"
+                                  title={t("common:preview")}
                                 >
                                   <Eye className="w-4 h-4 text-[var(--muted-foreground)]" />
                                 </button>
@@ -583,7 +585,7 @@ export default function CreateTask({ projectSlug, workspace, projects }: CreateT
                                 type="button"
                                 onClick={() => removeAttachment(index)}
                                 className="p-1.5 hover:bg-red-100 dark:hover:bg-red-900/20 rounded transition-colors cursor-pointer"
-                                title="Remove"
+                                title={t("common:remove")}
                               >
                                 <HiTrash className="w-4 h-4 text-[var(--destructive)]" />
                               </button>
@@ -635,7 +637,7 @@ export default function CreateTask({ projectSlug, workspace, projects }: CreateT
 
             <Card className="border-none bg-[var(--card)] gap-0 rounded-md">
               <CardHeader className="pb-0 flex flex-row items-center justify-between">
-                <TaskSectionHeader icon={HiDocumentText} title="Description" />
+                <TaskSectionHeader icon={HiDocumentText} title={t("descriptionSection")} />
                 {isGeneratingDescription && (
                   <div className="flex items-center gap-1.5 text-xs text-[var(--primary)] animate-pulse">
                     <HiSparkles className="w-3.5 h-3.5" />
@@ -656,7 +658,7 @@ export default function CreateTask({ projectSlug, workspace, projects }: CreateT
         <div className="lg:col-span-1 space-y-6">
           <Card className="border-none bg-[var(--card)] gap-0 rounded-md">
             <CardHeader>
-              <TaskSectionHeader icon={HiCog} title="Workspace & Project" />
+              <TaskSectionHeader icon={HiCog} title={t("workspaceProject")} />
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
@@ -692,7 +694,7 @@ export default function CreateTask({ projectSlug, workspace, projects }: CreateT
                 ) : (
                   <Select value={selectedProject?.id || ""} onValueChange={handleProjectChange}>
                     <SelectTrigger data-automation-id="task-project-select" className="w-full border-[var(--border)] bg-[var(--background)]">
-                      <SelectValue placeholder="Select a project" />
+                      <SelectValue placeholder={t("selectProject")} />
                     </SelectTrigger>
                     <SelectContent className="border-[var(--border)] bg-[var(--popover)]">
                       {projects.map((project) => (
@@ -713,7 +715,7 @@ export default function CreateTask({ projectSlug, workspace, projects }: CreateT
 
           <Card className="border-none bg-[var(--card)] gap-0 rounded-md">
             <CardHeader>
-              <TaskSectionHeader icon={HiCog} title="Task Configuration" />
+              <TaskSectionHeader icon={HiCog} title={t("taskConfiguration")} />
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
@@ -727,7 +729,7 @@ export default function CreateTask({ projectSlug, workspace, projects }: CreateT
                   disabled={availableStatuses.length === 0}
                 >
                   <SelectTrigger className="w-full border-[var(--border)] bg-[var(--background)]">
-                    <SelectValue placeholder="Select a status" />
+                    <SelectValue placeholder={t("selectStatus")} />
                   </SelectTrigger>
                   <SelectContent className="border-[var(--border)] bg-[var(--popover)]">
                     {availableStatuses.length > 0 ? (
@@ -761,7 +763,7 @@ export default function CreateTask({ projectSlug, workspace, projects }: CreateT
                   onValueChange={(value) => handleFormDataChange("priority", value)}
                 >
                   <SelectTrigger className="w-full border-[var(--border)] bg-[var(--background)]">
-                    <SelectValue placeholder="Select priority" />
+                    <SelectValue placeholder={t("selectPriority")} />
                   </SelectTrigger>
                   <SelectContent className="border-[var(--border)] bg-[var(--popover)]">
                     {TaskPriorities.map((priority) => (
@@ -786,7 +788,7 @@ export default function CreateTask({ projectSlug, workspace, projects }: CreateT
                   onValueChange={(value) => handleFormDataChange("type", value)}
                 >
                   <SelectTrigger className="w-full border-[var(--border)] bg-[var(--background)]">
-                    <SelectValue placeholder="Select type" />
+                    <SelectValue placeholder={t("selectType")} />
                   </SelectTrigger>
                   <SelectContent className="border-[var(--border)] bg-[var(--popover)]">
                     {[
@@ -837,12 +839,12 @@ export default function CreateTask({ projectSlug, workspace, projects }: CreateT
                     <PopoverContent className="w-[400px] p-0 border-[var(--border)] bg-[var(--popover)]" align="start">
                       <Command shouldFilter={false}>
                         <CommandInput
-                          placeholder="Search parent task..."
+                          placeholder={t("searchParent")}
                           value={parentTaskSearch}
                           onValueChange={setParentTaskSearch}
                         />
                         <CommandList>
-                          <CommandEmpty>No parent task found.</CommandEmpty>
+                          <CommandEmpty>{t("noParentFound")}</CommandEmpty>
                           <CommandGroup>
                             {filteredParentTasks.map((task) => (
                               <CommandItem
@@ -873,7 +875,7 @@ export default function CreateTask({ projectSlug, workspace, projects }: CreateT
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="storyPoints">Story Points</Label>
+                <Label htmlFor="storyPoints">{t("storyPoints")}</Label>
                 <Input
                   id="storyPoints"
                   name="storyPoints"
@@ -881,13 +883,13 @@ export default function CreateTask({ projectSlug, workspace, projects }: CreateT
                   min="0"
                   value={formData.storyPoints}
                   onChange={(e) => handleFormDataChange("storyPoints", e.target.value)}
-                  placeholder="e.g. 5"
+                  placeholder={t("storyPointsPlaceholder")}
                   className="w-full border-[var(--border)] bg-[var(--background)]"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="sprint">Sprint</Label>
+                <Label htmlFor="sprint">{t("sprint")}</Label>
                 <Select
                   value={formData.sprintId}
                   onValueChange={(value) => handleFormDataChange("sprintId", value)}
@@ -921,7 +923,7 @@ export default function CreateTask({ projectSlug, workspace, projects }: CreateT
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="startDate">Start Date</Label>
+                <Label htmlFor="startDate">{t("startDate")}</Label>
                 <Input
                   id="startDate"
                   name="startDate"
@@ -947,7 +949,7 @@ export default function CreateTask({ projectSlug, workspace, projects }: CreateT
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="dueDate">Due Date</Label>
+                <Label htmlFor="dueDate">{t("dueDate")}</Label>
                 <Input
                   id="dueDate"
                   name="dueDate"
@@ -978,7 +980,7 @@ export default function CreateTask({ projectSlug, workspace, projects }: CreateT
 
           <Card className="border-none bg-[var(--card)] gap-0 rounded-md">
             <CardHeader className="flex">
-              <TaskSectionHeader icon={HiUsers} title="Assignment" />
+              <TaskSectionHeader icon={HiUsers} title={t("assignment")} />
               {/* <span className="projects-form-label-required">*</span> */}
             </CardHeader>
             <CardContent className="space-y-4">
@@ -990,7 +992,7 @@ export default function CreateTask({ projectSlug, workspace, projects }: CreateT
                   </p>
                 </div>
               ) : members.length === 0 ? (
-                <p className="text-sm text-red-500 text-center">No project members found.</p>
+                <p className="text-sm text-red-500 text-center">{t("noMembers")}</p>
               ) : (
                 <>
                   <MemberSelect
@@ -1036,7 +1038,7 @@ export default function CreateTask({ projectSlug, workspace, projects }: CreateT
           <ActionButton
             id="create-task-submit"
             data-automation-id="create-task-submit"
-            aria-label="Create Task"
+            aria-label={t("createTask")}
             onClick={handleSubmit}
             type="button"
             disabled={isSubmitting}
@@ -1048,7 +1050,7 @@ export default function CreateTask({ projectSlug, workspace, projects }: CreateT
                 Creating task...
               </div>
             ) : (
-              "Create Task"
+              {t("createTask")}
             )}
           </ActionButton>
         </div>

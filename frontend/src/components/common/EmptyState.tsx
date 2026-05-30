@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
 import { HiClipboardDocumentList } from "react-icons/hi2";
 
@@ -8,12 +9,13 @@ interface EmptyStateProps {
 }
 
 const EmptyState: React.FC<EmptyStateProps> = ({ searchQuery = "", priorityFilter = "all" }) => {
+  const { t } = useTranslation("common");
   const noTasksMessage =
-    searchQuery || priorityFilter !== "all" ? "No tasks found" : "No tasks yet";
+    searchQuery || priorityFilter !== "all" ? t("emptyState.noTasksFound") : t("emptyState.noTasksYet");
   const descriptionMessage =
     searchQuery || priorityFilter !== "all"
-      ? "Try adjusting your filters or search query."
-      : "Create your first task to get started with project management.";
+      ? t("emptyState.tryAdjustingFilters")
+      : t("emptyState.createFirstTask");
 
   return (
     <Card className="border-none bg-[var(--card)]">

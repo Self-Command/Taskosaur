@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 
 interface Organization {
   id: string;
@@ -17,6 +18,7 @@ export default function SettingsLayout({
   activeSection,
   onSectionChange,
 }: SettingsLayoutProps) {
+  const { t } = useTranslation("settings");
   const [currentOrganization, setCurrentOrganization] = useState<Organization | null>(null);
 
   useEffect(() => {
@@ -139,9 +141,9 @@ export default function SettingsLayout({
     <div className="settings-layout-container settings-layout-container-dark">
       <div className="settings-layout-wrapper">
         <div className="settings-layout-header">
-          <h1 className="settings-layout-title settings-layout-title-dark">Settings</h1>
+          <h1 className="settings-layout-title settings-layout-title-dark">{t("title")}</h1>
           <p className="settings-layout-subtitle settings-layout-subtitle-dark">
-            Manage your account, organization, and preferences
+            {t("profile_page.description")}
           </p>
         </div>
 
@@ -174,7 +176,7 @@ export default function SettingsLayout({
             {currentOrganization && (
               <div className="settings-org-context settings-org-context-dark">
                 <h3 className="settings-org-context-title settings-org-context-title-dark">
-                  Current Organization
+                  {t("organization_management.title")}
                 </h3>
                 <div className="settings-org-context-content">
                   <div className="settings-org-context-avatar settings-org-context-avatar-dark">
@@ -187,7 +189,7 @@ export default function SettingsLayout({
                       {currentOrganization.name}
                     </div>
                     <div className="settings-org-context-plan settings-org-context-plan-dark">
-                      {currentOrganization.plan} Plan
+                      {currentOrganization.plan}
                     </div>
                   </div>
                 </div>

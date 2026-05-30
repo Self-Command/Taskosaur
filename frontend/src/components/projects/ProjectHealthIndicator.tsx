@@ -1,5 +1,6 @@
 import React from 'react';
 import Tooltip from "@/components/common/ToolTip";
+import { useTranslation } from "react-i18next";
 
 export interface ProjectHealthStats {
   totalTasks: number;
@@ -15,10 +16,11 @@ interface ProjectHealthIndicatorProps {
 }
 
 export const ProjectHealthIndicator: React.FC<ProjectHealthIndicatorProps> = ({ stats }) => {
+  const { t } = useTranslation("projects");
   if (!stats || stats.totalTasks === 0) {
     return (
       <div className="flex items-center justify-between w-full mt-2 pt-2 border-t border-[var(--border)]">
-        <span className="text-xs text-[var(--muted-foreground)]">No tasks yet</span>
+        <span className="text-xs text-[var(--muted-foreground)]">{t("emptyState.noTasksYet", { ns: "common" })}</span>
       </div>
     );
   }
@@ -77,7 +79,7 @@ export const ProjectHealthIndicator: React.FC<ProjectHealthIndicatorProps> = ({ 
               <div
                 key={i}
                 className={`w-1.5 h-4 rounded-sm transition-colors ${bgClass}`}
-                title={count > 0 ? `${count} tasks due in ${i} days` : `No tasks due in ${i} days`}
+                title={count > 0 ? t("health.tasks_due_in_days", { count, days: i, defaultValue: `${count} tasks due in ${i} days` }) : t("health.no_tasks_due_in_days", { days: i, defaultValue: `No tasks due in ${i} days` })}
               />
             );
           })}

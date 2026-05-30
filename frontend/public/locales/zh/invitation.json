@@ -1,0 +1,12 @@
+{
+  "pendingTitle": "待处理邀请",
+  "loading": "加载邀请中...",
+  "noPending": "未找到待处理的邀请。",
+  "noPendingShort": "无待处理邀请",
+  "roleLabel": "角色：{{role}}",
+  "decline": "拒绝",
+  "accept": "接受",
+  "acceptFailed": "接受邀请失败",
+  "viewPending": "查看待处理邀请",
+  "title": "邀请"
+}

@@ -1,0 +1,12 @@
+{
+  "placeholder": "搜索任何内容...",
+  "searching": "搜索中...",
+  "noResults": "未找到结果",
+  "tryDifferent": "尝试不同的搜索词",
+  "spotlightTitle": "聚光灯搜索",
+  "spotlightHint": "开始输入以搜索整个工作区",
+  "openShortcut": "按 ⌘K 打开",
+  "closeShortcut": "按 ESC 关闭",
+  "tooltip": "搜索",
+  "buttonLabel": "搜索"
+}

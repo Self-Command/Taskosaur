@@ -1,0 +1,23 @@
+{
+  "workflowSettings": "Workflow Settings",
+  "createTask": "Create new task",
+  "taskPlaceholder": "What needs to be done?",
+  "dueDate": "Due date",
+  "priority": "Priority",
+  "statusCreated": "Status created",
+  "statusCreateFailed": "Failed to create status",
+  "statusUpdated": "Status updated",
+  "statusUpdateFailed": "Failed to update status",
+  "statusDeleted": "Status deleted successfully!",
+  "statusDeleteFailed": "Failed to delete status",
+  "statusesFetchFailed": "Failed to fetch statuses",
+  "orderUpdated": "Order updated",
+  "orderSaveFailed": "Failed to save order",
+  "statusNamePlaceholder": "Status name",
+  "newStatusPlaceholder": "New status...",
+  "deleteStatusTitle": "Delete Status",
+  "searchUserPlaceholder": "Search by name or email",
+  "noUsers": "No users found",
+  "moreAssignees": "more assignees",
+  "noTasks": "No tasks"
+}

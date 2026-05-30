@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Dialog,
   DialogContent,
@@ -82,7 +83,7 @@ export default function DangerZoneModal({
   children,
   open,
   onOpenChange,
-  triggerText = "Danger Zone",
+  triggerText,
   triggerVariant = "destructive",
   entity,
   actions,
@@ -90,6 +91,7 @@ export default function DangerZoneModal({
   description,
   onRetry,
 }: DangerZoneModalProps) {
+  const { t } = useTranslation(["dangerZone", "common"]);
   const [isOpen, setIsOpen] = useState(false);
   const [selectedAction, setSelectedAction] = useState<ActionConfig | null>(null);
   const [confirmationInput, setConfirmationInput] = useState("");
@@ -103,7 +105,7 @@ export default function DangerZoneModal({
   const entityDisplayName = entity.displayName || entity.name;
   const confirmationText =
     selectedAction?.confirmationMessage ||
-    `Type **${entity.name}** to confirm ${selectedAction?.name || "action"}`;
+    t("confirmMessage", { name: entity.name, action: selectedAction?.name || "action" });
 
   const resetForm = useCallback(() => {
     setSelectedAction(null);
@@ -164,7 +166,7 @@ export default function DangerZoneModal({
       e.preventDefault();
 
       if (!selectedAction || !isConfirmationValid()) {
-        setError(`Please type "${entity.name}" exactly to confirm`);
+        setError(t("typeExactly", { name: entity.name }));
         return;
       }
 
@@ -173,7 +175,7 @@ export default function DangerZoneModal({
 
       try {
         await selectedAction.handler();
-        toast.success(`${entity.type} ${selectedAction.name}d successfully!`);
+        toast.success(t("actionSuccess", { type: entity.type, action: selectedAction.name }));
         handleOpenChange(false);
 
         // After organization deletion, simply reload the page
@@ -185,7 +187,7 @@ export default function DangerZoneModal({
         const errMsg =
           error instanceof Error
             ? error.message
-            : `Failed to ${selectedAction.name} ${entity.type}`;
+            : t("actionFailed", { action: selectedAction.name, type: entity.type });
         setError(errMsg);
         toast.error(errMsg);
       } finally {
@@ -196,13 +198,13 @@ export default function DangerZoneModal({
   );
 
   const modalTitle =
-    title || `${entity.type.charAt(0).toUpperCase() + entity.type.slice(1)} Danger Zone`;
-  const modalDescription = description || `Perform destructive actions on ${entityDisplayName}`;
+    title || t("modalTitle", { type: entity.type.charAt(0).toUpperCase() + entity.type.slice(1) });
+  const modalDescription = description || t("modalDescription", { name: entityDisplayName });
 
   return (
     <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        {children || <Button className="bg-red-700">{triggerText}</Button>}
+        {children || <Button className="bg-red-700">{triggerText || t("trigger")}</Button>}
       </DialogTrigger>
 
       <DialogContent className="projects-modal-container border-none">
@@ -224,7 +226,7 @@ export default function DangerZoneModal({
           // Actions List View
           <div className="space-y-4">
             <div className="text-sm text-[var(--muted-foreground)] mb-4">
-              Select an action to perform on <strong>{entityDisplayName}</strong>:
+              {t("selectAction")} <strong>{entityDisplayName}</strong>:
             </div>
 
             <div className="space-y-3">
@@ -254,7 +256,7 @@ export default function DangerZoneModal({
 
             <div className="projects-form-actions flex gap-2 justify-end mt-6">
               <ActionButton secondary onClick={() => handleOpenChange(false)}>
-                Cancel
+                {t("common:cancel")}
               </ActionButton>
             </div>
           </div>
@@ -325,7 +327,7 @@ export default function DangerZoneModal({
                 onClick={handleBackToActions}
                 disabled={isSubmitting}
               >
-                Back
+                {t("common:back")}
               </ActionButton>
               <ActionButton
                 type="submit"
@@ -335,7 +337,7 @@ export default function DangerZoneModal({
                 {isSubmitting ? (
                   <div className="flex items-center gap-2">
                     <div className="animate-spin h-4 w-4 border-2 capitalize border-white border-t-transparent rounded-full" />
-                    <span>{selectedAction.name}ing...</span>
+                    <span>{t("processing")}</span>
                   </div>
                 ) : (
                   `${selectedAction.label}`

@@ -10,11 +10,13 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, CheckCircle2, Loader2, Mail, ArrowRight, ArrowLeft } from "lucide-react";
 import { LoginContent } from "@/components/login/LoginContent";
 import { ModeToggle } from "@/components/header/ModeToggle";
+import { useTranslation } from "react-i18next";
 import { ForgotPasswordData } from "@/types";
 import { SEO } from "@/components/common/SEO";
 
 function ForgotPasswordForm() {
   const { forgotPassword } = useAuth();
+  const { t } = useTranslation("auth");
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -63,7 +65,7 @@ function ForgotPasswordForm() {
         {/* Success Header */}
         <div className="login-form-header">
           <div className="login-form-header-content">
-            <h1 className="login-form-title">Check your email</h1>
+            <h1 className="login-form-title">{t("forgotPassword.checkEmail")}</h1>
             <p className="login-form-subtitle">We've sent a password reset link to {email}</p>
           </div>
         </div>
@@ -148,7 +150,7 @@ function ForgotPasswordForm() {
       {/* Header */}
       <div className="login-form-header">
         <div className="login-form-header-content">
-          <h1 className="login-form-title">Reset your password</h1>
+          <h1 className="login-form-title">{t("forgotPassword.resetPassword")}</h1>
           <p className="login-form-subtitle">
             Enter your email address and we'll send you a reset link
           </p>
@@ -164,7 +166,7 @@ function ForgotPasswordForm() {
           <Alert variant="destructive" className="login-error-alert">
             <AlertCircle className="login-field-icon" />
             <AlertDescription className="font-medium">
-              <span className="login-error-title">Reset Failed</span>
+              <span className="login-error-title">{t("forgotPassword.resetFailed")}</span>
               <span className="login-error-message">{error}</span>
             </AlertDescription>
           </Alert>
@@ -182,7 +184,7 @@ function ForgotPasswordForm() {
         >
           <Label htmlFor="email" className="login-field-label">
             <Mail className="login-field-icon" />
-            <span>Email Address</span>
+            <span>{t("forgotPassword.email")}</span>
           </Label>
           <Input
             id="email"
@@ -192,7 +194,7 @@ function ForgotPasswordForm() {
             required
             value={email}
             onChange={handleChange}
-            placeholder="Enter your email address"
+            placeholder={t("forgotPassword.emailPlaceholder")}
             className="login-input"
           />
         </motion.div>
@@ -272,6 +274,7 @@ function ForgotPasswordForm() {
 
 export default function ForgotPasswordPage() {
   const { checkOrganizationAndRedirect } = useAuth();
+  const { t } = useTranslation("auth");
 
   const redirectTo = async () => {
     return await checkOrganizationAndRedirect();
@@ -279,7 +282,7 @@ export default function ForgotPasswordPage() {
 
   return (
     <AuthRedirect redirectTo={redirectTo}>
-      <SEO title="Forgot Password" />
+      <SEO title={t("forgotPassword.pageTitle")} />
       <div className="min-h-screen bg-[var(--background)]">
         <div className="min-h-screen flex bg-[var(--background)]">
           <div className="lg:w-1/2 relative">

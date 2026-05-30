@@ -1,0 +1,9 @@
+{
+  "pageTitle": "设置组织",
+  "setupSuccess": "个人资料和组织创建成功！",
+  "setupFailed": "完成设置失败，请重试。",
+  "workspacePlaceholder": "例如 主要工作区",
+  "projectPlaceholder": "例如 第一个项目",
+  "completeSetup": "完成设置",
+  "websitePlaceholder": "https://example.com"
+}

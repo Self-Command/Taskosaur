@@ -1,0 +1,23 @@
+{
+  "recurringTask": "Recurring Task",
+  "pattern": "Recurrence Pattern",
+  "daily": "Daily",
+  "weekly": "Weekly",
+  "monthly": "Monthly",
+  "quarterly": "Quarterly",
+  "yearly": "Yearly",
+  "custom": "Custom",
+  "every": "Every",
+  "repeatOn": "Repeat On",
+  "dayOfMonth": "Day of Month",
+  "dayPlaceholder": "e.g., 15",
+  "month": "Month",
+  "monthPlaceholder": "Select month",
+  "ends": "Ends",
+  "never": "Never",
+  "onDate": "On Date",
+  "afterOccurrences": "After Occurrences",
+  "endDate": "End Date",
+  "occurrences": "Number of Occurrences",
+  "occurrencesPlaceholder": "e.g., 10"
+}

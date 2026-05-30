@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { invitationApi } from "@/utils/api/invitationsApi";
 import { Invitation } from "@/types";
@@ -12,6 +13,7 @@ interface InvitationModalProps {
 }
 
 export function InvitationModal({ userId, isOpen, onAccept }: InvitationModalProps) {
+  const { t } = useTranslation("invitation");
   const [pendingInvites, setPendingInvites] = useState<Invitation[]>([]);
   const [processingInvite, setProcessingInvite] = useState<{
     token: string;
@@ -54,7 +56,7 @@ export function InvitationModal({ userId, isOpen, onAccept }: InvitationModalPro
     if (invite.organization) return invite.organization.name;
     if (invite.workspace) return invite.workspace.name;
     if (invite.project) return invite.project.name;
-    return "Unknown";
+    return t("common:unknown");
   };
 
   const getEntityType = (invite: Invitation) => {
@@ -102,14 +104,14 @@ export function InvitationModal({ userId, isOpen, onAccept }: InvitationModalPro
     <Dialog open={isOpen} onOpenChange={() => {}}>
       <DialogContent className="max-w-md border-none" showCloseButton={false}>
         <DialogHeader>
-          <DialogTitle className="text-center">Pending Invitations</DialogTitle>
+          <DialogTitle className="text-center">{t("pendingTitle")}</DialogTitle>
         </DialogHeader>
 
         <div className="max-h-96 overflow-y-auto">
           {loading ? (
-            <div className="text-center py-4">Loading invitations...</div>
+            <div className="text-center py-4">{t("loading")}</div>
           ) : pendingInvites.length === 0 ? (
-            <div className="text-center py-4">No pending invitations found.</div>
+            <div className="text-center py-4">{t("noPending")}</div>
           ) : (
             <div className="space-y-4">
               {pendingInvites.map((invite) => (
@@ -134,7 +136,7 @@ export function InvitationModal({ userId, isOpen, onAccept }: InvitationModalPro
                               <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
                             </div>
                           ) : (
-                            "Decline"
+                            t("decline")
                           )}
                         </ActionButton>
                         <ActionButton
@@ -149,7 +151,7 @@ export function InvitationModal({ userId, isOpen, onAccept }: InvitationModalPro
                               <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
                             </div>
                           ) : (
-                            "Accept"
+                            t("accept")
                           )}
                         </ActionButton>
                       </div>

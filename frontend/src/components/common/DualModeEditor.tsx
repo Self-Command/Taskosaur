@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle,useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import dynamic from "next/dynamic";
 import DOMPurify from "dompurify";
 import {
@@ -255,7 +256,7 @@ function RichTextEditorInner({
   disabled,
   mentions = [],
 }: RichTextEditorInnerProps) {
-
+  const { t } = useTranslation("common");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastEmittedHtml = useRef<string>(value);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -449,7 +450,7 @@ function RichTextEditorInner({
         className="rounded-md border border-[var(--border)] bg-[var(--background)] flex items-center justify-center"
         style={{ height }}
       >
-        <span className="text-[var(--muted-foreground)] text-sm">Loading...</span>
+        <span className="text-[var(--muted-foreground)] text-sm">{t("loading")}</span>
       </div>
     );
   }
@@ -460,22 +461,22 @@ function RichTextEditorInner({
       <div className="flex flex-wrap items-center gap-0.5 p-2 border-b border-[var(--border)] bg-[var(--muted)]/30">
 
         {/* ── Inline styles ── */}
-        <button type="button" title="Bold (Ctrl+B)" disabled={disabled}
+        <button type="button" title={t("editor.bold")} disabled={disabled}
           onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleBold().run(); }}
           className={toolbarBtn(isActive("bold"), disabled)}>
           <HiBold className="size-4" />
         </button>
-        <button type="button" title="Italic (Ctrl+I)" disabled={disabled}
+        <button type="button" title={t("editor.italic")} disabled={disabled}
           onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleItalic().run(); }}
           className={toolbarBtn(isActive("italic"), disabled)}>
           <HiItalic className="size-4" />
         </button>
-        <button type="button" title="Underline (Ctrl+U)" disabled={disabled}
+        <button type="button" title={t("editor.underline")} disabled={disabled}
           onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleUnderline().run(); }}
           className={toolbarBtn(isActive("underline"), disabled)}>
           <HiUnderline className="size-4" />
         </button>
-        <button type="button" title="Strikethrough" disabled={disabled}
+        <button type="button" title={t("editor.strikethrough")} disabled={disabled}
           onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleStrike().run(); }}
           className={toolbarBtn(isActive("strike"), disabled)}>
           <HiStrikethrough className="size-4" />
@@ -484,37 +485,37 @@ function RichTextEditorInner({
         <span className="w-px h-5 bg-[var(--border)] mx-1" />
 
         {/* ── Block types ── */}
-        <button type="button" title="Heading 1" disabled={disabled}
+        <button type="button" title={t("editor.heading1")} disabled={disabled}
           onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleHeading({ level: 1 }).run(); }}
           className={toolbarBtn(isActive("heading", { level: 1 }), disabled)}>
           <span className="text-xs font-semibold">H1</span>
         </button>
-        <button type="button" title="Heading 2" disabled={disabled}
+        <button type="button" title={t("editor.heading2")} disabled={disabled}
           onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleHeading({ level: 2 }).run(); }}
           className={toolbarBtn(isActive("heading", { level: 2 }), disabled)}>
           <span className="text-xs font-semibold">H2</span>
         </button>
-        <button type="button" title="Heading 3" disabled={disabled}
+        <button type="button" title={t("editor.heading3")} disabled={disabled}
           onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleHeading({ level: 3 }).run(); }}
           className={toolbarBtn(isActive("heading", { level: 3 }), disabled)}>
           <span className="text-xs font-semibold">H3</span>
         </button>
-        <button type="button" title="Bullet List" disabled={disabled}
+        <button type="button" title={t("editor.bulletList")} disabled={disabled}
           onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleBulletList().run(); }}
           className={toolbarBtn(isActive("bulletList"), disabled)}>
           <HiOutlineListBullet className="size-4" />
         </button>
-        <button type="button" title="Numbered List" disabled={disabled}
+        <button type="button" title={t("editor.numberedList")} disabled={disabled}
           onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleOrderedList().run(); }}
           className={toolbarBtn(isActive("orderedList"), disabled)}>
           <List className="size-4" />
         </button>
-        <button type="button" title="Quote" disabled={disabled}
+        <button type="button" title={t("editor.quote")} disabled={disabled}
           onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleBlockquote().run(); }}
           className={toolbarBtn(isActive("blockquote"), disabled)}>
           <Quote className="size-4" />
         </button>
-        <button type="button" title="Code Block" disabled={disabled}
+        <button type="button" title={t("editor.codeBlock")} disabled={disabled}
           onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleCodeBlock().run(); }}
           className={toolbarBtn(isActive("codeBlock"), disabled)}>
           <HiCodeBracket className="size-4" />
@@ -523,7 +524,7 @@ function RichTextEditorInner({
         <span className="w-px h-5 bg-[var(--border)] mx-1" />
 
         {/* ── Image upload ── */}
-        <button type="button" title="Upload image" disabled={disabled}
+        <button type="button" title={t("editor.uploadImage")} disabled={disabled}
           onClick={handleRichTextImageButtonClick}
           className={toolbarBtn(false, disabled)}>
           <HiOutlinePhoto className="size-4" />
@@ -553,7 +554,7 @@ function RichTextEditorInner({
           <div className="absolute inset-0 bg-blue-500/10 border-2 border-dashed border-blue-500 rounded-md flex items-center justify-center z-50 pointer-events-none">
             <div className="bg-white dark:bg-gray-800 px-4 py-2 rounded-lg shadow-lg">
               <HiOutlinePhoto className="size-6 mx-auto mb-1 text-blue-500" />
-              <p className="text-sm font-medium text-blue-600 dark:text-blue-400">Drop image to upload</p>
+              <p className="text-sm font-medium text-blue-600 dark:text-blue-400">{t("editor.dropImageToUpload")}</p>
             </div>
           </div>
         )}
@@ -567,13 +568,15 @@ function RichTextEditorInner({
 const DualModeEditor = forwardRef<DualModeEditorHandle, DualModeEditorProps>(function DualModeEditor({
   value,
   onChange,
-  placeholder = "Write your comment...",
+  placeholder,
   height = 200,
   colorMode = "light",
   disabled = false,
   onModeChange,
   mentions = [],
 }, ref) {
+  const { t } = useTranslation("common");
+  const editorPlaceholder = placeholder || t("editor.writeComment");
   const [mode, setMode] = useState<EditorMode>("markdown");
   const [markdownValue, setMarkdownValue] = useState<string>("");
   const [richTextValue, setRichTextValue] = useState<string>("");
@@ -1017,7 +1020,7 @@ const DualModeEditor = forwardRef<DualModeEditorHandle, DualModeEditorProps>(fun
         className="rounded-md border border-[var(--border)] bg-[var(--background)] flex items-center justify-center"
         style={{ height }}
       >
-        <span className="text-[var(--muted-foreground)] text-sm">Loading...</span>
+        <span className="text-[var(--muted-foreground)] text-sm">{t("loading")}</span>
       </div>
     );
   }
@@ -1039,7 +1042,7 @@ const DualModeEditor = forwardRef<DualModeEditorHandle, DualModeEditorProps>(fun
               } ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
             >
               <HiCodeBracketSquare className="size-3.5" />
-              Markdown
+              {t("editor.markdown")}
             </button>
             <button
               type="button"
@@ -1052,11 +1055,11 @@ const DualModeEditor = forwardRef<DualModeEditorHandle, DualModeEditorProps>(fun
               } ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
             >
               <HiDocumentText className="size-3.5" />
-              Rich Text
+              {t("editor.richText")}
             </button>
           </div>
           <span className="text-[10px] text-[var(--muted-foreground)]">
-            {mode === "markdown" ? "Supports GFM" : "WYSIWYG"}
+            {mode === "markdown" ? t("editor.supportsGfm") : t("editor.wysiwyg")}
           </span>
         </div>
 
@@ -1073,7 +1076,7 @@ const DualModeEditor = forwardRef<DualModeEditorHandle, DualModeEditorProps>(fun
                 type="button"
                 onClick={handleImageButtonClick}
                 disabled={disabled}
-                title="Upload image"
+                title={t("editor.uploadImage")}
                 className={`p-1.5 rounded transition-colors text-[var(--muted-foreground)] hover:bg-[var(--muted)] hover:text-[var(--foreground)] ${
                   disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
                 }`}
@@ -1081,7 +1084,7 @@ const DualModeEditor = forwardRef<DualModeEditorHandle, DualModeEditorProps>(fun
               <HiOutlinePhoto className="size-4" />
             </button>
             <span className="text-[10px] text-[var(--muted-foreground)] ml-2">
-              Paste or drag images to upload
+              {t("editor.pasteOrDragImages")}
             </span>
           </div>
           
@@ -1100,7 +1103,7 @@ const DualModeEditor = forwardRef<DualModeEditorHandle, DualModeEditorProps>(fun
             <div className="absolute inset-0 bg-blue-500/10 border-2 border-dashed border-blue-500 rounded-md flex items-center justify-center z-50 pointer-events-none">
               <div className="bg-white dark:bg-gray-800 px-4 py-2 rounded-lg shadow-lg">
                 <HiOutlinePhoto className="size-6 mx-auto mb-1 text-blue-500" />
-                <p className="text-sm font-medium text-blue-600 dark:text-blue-400">Drop image to upload</p>
+                <p className="text-sm font-medium text-blue-600 dark:text-blue-400">{t("editor.dropImageToUpload")}</p>
               </div>
             </div>
           )}
@@ -1112,7 +1115,7 @@ const DualModeEditor = forwardRef<DualModeEditorHandle, DualModeEditorProps>(fun
             hideToolbar={false}
             height={height}
             textareaProps={{
-              placeholder,
+              placeholder: editorPlaceholder,
               disabled,
               onKeyDown: handleMarkdownKeyDown,
             }}
@@ -1152,7 +1155,7 @@ const DualModeEditor = forwardRef<DualModeEditorHandle, DualModeEditorProps>(fun
           key={contentVersion}
           value={richTextValue}
           onChange={handleRichTextChange}
-          placeholder={placeholder}
+          placeholder={editorPlaceholder}
           height={height}
           disabled={disabled}
           mentions={mentions}

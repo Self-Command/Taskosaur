@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { HiEnvelope } from "react-icons/hi2";
@@ -18,6 +19,7 @@ interface EmailIntegrationSettingsProps {
 }
 
 export default function EmailIntegrationSettings({ projectId }: EmailIntegrationSettingsProps) {
+  const { t } = useTranslation("inbox");
   const {
     currentInbox,
     isSyncing,
@@ -109,7 +111,7 @@ export default function EmailIntegrationSettings({ projectId }: EmailIntegration
       if (error.response?.status === 404) {
         setCurrentInbox(null);
       } else {
-        toast.error("Failed to load email integration settings");
+        toast.error(t("loadSettingsFailed"));
       }
     } finally {
       setLoadingInbox(false);
@@ -206,7 +208,7 @@ export default function EmailIntegrationSettings({ projectId }: EmailIntegration
     setValidationErrors(errors);
 
     if (Object.keys(errors).length > 0) {
-      toast.error("Please fix the validation errors");
+      toast.error(t("validationErrors"));
       return;
     }
 
@@ -220,15 +222,15 @@ export default function EmailIntegrationSettings({ projectId }: EmailIntegration
 
       if (currentInbox) {
         await updateInbox(projectId, inboxData);
-        toast.success("Inbox updated successfully");
+        toast.success(t("updateSuccess"));
         setHasUnsavedChanges(false);
       } else {
         await createInbox(projectId, inboxData);
-        toast.success("Inbox created successfully");
+        toast.success(t("createSuccess"));
         setCurrentStep(2);
       }
     } catch (error: any) {
-      toast.error(currentInbox ? "Failed to update inbox" : "Failed to create inbox");
+      toast.error(t("saveFailed"));
     } finally {
       setIsSaving(false);
     }
@@ -251,17 +253,17 @@ export default function EmailIntegrationSettings({ projectId }: EmailIntegration
       }
 
       // Step 2: Test the email connection
-      toast.loading("Testing email connection...", { id: "test-connection" });
+      toast.loading(t("testing"), { id: "test-connection" });
 
       const testResult = await inboxApi.testEmailConnection(projectId, accountResponse.id);
 
       toast.dismiss("test-connection");
 
       if (testResult.success) {
-        toast.success("Email connection test passed! ✓");
+        toast.success(t("testPassed"));
         setCurrentStep(3);
       } else {
-        toast.error(`Connection test failed: ${testResult.message}`);
+        toast.error(`${t("testFailed")}: ${testResult.message}`);
       }
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || error.message || "Failed to setup email account";
@@ -274,20 +276,20 @@ export default function EmailIntegrationSettings({ projectId }: EmailIntegration
 
   const finishSetup = () => {
     loadInboxData();
-    toast.success("Email integration is now active!");
+    toast.success(t("integrationActive"));
     setCurrentStep(4);
   };
 
   const handleTriggerSync = async () => {
     try {
       await triggerSync(projectId);
-      toast.success("Email sync triggered");
+      toast.success(t("syncTriggered"));
 
       setTimeout(() => {
         loadInboxData();
       }, 2000);
     } catch (error: any) {
-      toast.error("Failed to trigger sync");
+      toast.error(t("syncFailed"));
     }
   };
 
@@ -371,7 +373,7 @@ export default function EmailIntegrationSettings({ projectId }: EmailIntegration
             <div className="flex flex-col">
               <div className="flex items-center gap-2">
                 <HiEnvelope className="w-5 h-5 text-[var(--primary)]" />
-                <span className="text-md font-semibold">Email Integration Setup</span>
+                <span className="text-md font-semibold">{t("setupSectionTitle")}</span>
               </div>
               <p className="text-sm font-normal text-[var(--muted-foreground)]/60 mt-2">
                 Configure your email account to sync with tasks

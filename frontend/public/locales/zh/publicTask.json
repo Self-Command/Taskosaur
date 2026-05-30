@@ -1,0 +1,10 @@
+{
+  "downloadFailed": "下载附件失败",
+  "description": "描述",
+  "priority": "优先级",
+  "status": "状态",
+  "dueDate": "截止日期",
+  "createdBy": "创建者",
+  "assignees": "负责人",
+  "sharedVia": "通过 Taskosaur 安全分享"
+}

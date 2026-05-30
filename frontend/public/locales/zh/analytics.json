@@ -1,0 +1,84 @@
+{
+  "project_analytics_title": "项目分析",
+  "project_analytics_description": "了解你的项目绩效和团队生产力",
+  "kpi_metrics": "KPI 指标",
+  "chart_widgets": "图表组件",
+  "dashboard_settings": "仪表盘设置",
+  "customize_widgets": "自定义仪表盘组件",
+  "no_widgets_title": "没有可显示的组件",
+  "no_widgets_description": "所有组件当前已隐藏。使用自定义按钮来显示组件。",
+  "show_all_widgets": "显示全部组件",
+  "no_data_available": "此项目暂无分析数据。",
+  "load_data": "加载数据",
+  "no_settings_available": "暂无可用设置",
+  "unknown": "未知",
+  "na": "不适用",
+  "charts": {
+    "task_status_flow": {
+      "title": "任务状态流",
+      "description": "当前任务按状态分布"
+    },
+    "task_type_distribution": {
+      "title": "任务类型分布",
+      "description": "此项目中的任务类型",
+      "types": {
+        "story": "故事",
+        "task": "任务",
+        "bug": "缺陷",
+        "epic": "史诗",
+        "feature": "功能"
+      }
+    },
+    "task_priority_distribution": {
+      "title": "任务优先级分布",
+      "description": "项目任务的优先级分布",
+      "count": "数量",
+      "priorities": {
+        "lowest": "最低",
+        "low": "低",
+        "medium": "中",
+        "high": "高",
+        "highest": "最高"
+      }
+    },
+    "sprint_velocity_trend": {
+      "title": "冲刺速率趋势",
+      "description": "每个冲刺完成的预估工作量",
+      "story_points": "预估工作量",
+      "average_velocity": "平均速率",
+      "no_sprints": "未找到此项目的已完成冲刺"
+    }
+  },
+  "kpi": {
+    "total_tasks": {
+      "title": "总任务数",
+      "label": "任务",
+      "description": "项目中的所有任务"
+    },
+    "completed_tasks": {
+      "title": "已完成任务",
+      "label": "已完成任务",
+      "description": "已成功完成"
+    },
+    "active_sprints": {
+      "title": "活跃冲刺",
+      "label": "活跃冲刺",
+      "description": "当前正在运行"
+    },
+    "bug_resolution": {
+      "title": "缺陷解决率",
+      "label": "缺陷解决率",
+      "description": "{{resolved}}/{{total}} 缺陷已修复"
+    },
+    "task_completion": {
+      "title": "任务完成率",
+      "label": "任务完成率",
+      "description": "总体进度"
+    },
+    "open_bugs": {
+      "title": "未解决缺陷",
+      "label": "未解决缺陷",
+      "description": "需要关注"
+    }
+  }
+}

@@ -1,0 +1,141 @@
+{
+  "title": "你的项目",
+  "description": "管理和组织此组织内的项目。",
+  "search_placeholder": "搜索项目...",
+  "advanced_filters": "高级筛选",
+  "filter_placeholder": "筛选项目...",
+  "create_project": "创建项目",
+  "no_projects_found": "未找到项目",
+  "no_projects_match": "没有符合当前搜索和筛选条件的项目。请尝试调整条件。",
+  "clear_filters": "清除筛选",
+  "empty_state_title": "未找到项目",
+  "empty_state_description": "创建你的第一个项目，开始组织任务并与团队协作。",
+  "tasks_count": "任务数量",
+  "start_date": "开始日期",
+  "load_more": "加载更多",
+  "loading": "加载中...",
+  "showing_projects_one": "显示 {{count}} 个项目",
+  "showing_projects_other": "显示 {{count}} 个项目",
+  "matching": " 匹配 \"{{query}}\"",
+  "with_filters_one": " 应用了 {{count}} 个筛选",
+  "with_filters_other": " 应用了 {{count}} 个筛选",
+  "status": {
+    "active": "活跃",
+    "planning": "规划中",
+    "on_hold": "暂停",
+    "completed": "已完成"
+  },
+  "priority": {
+    "title": "优先级"
+  },
+  "messages": {
+    "created_success": "项目创建成功！",
+    "refresh_failed": "项目已创建但刷新列表失败",
+    "load_failed": "加载项目失败",
+    "auth_required": "需要身份验证。请重新登录。"
+  },
+  "modal": {
+    "createTitle": "创建新项目",
+    "createDescription": "组织任务并与团队协作",
+    "tryAgain": "重试",
+    "projectName": "项目名称",
+    "enterProjectName": "输入项目名称",
+    "url": "URL：",
+    "urlWorkspace": "workspace",
+    "urlProject": "project-name",
+    "workflow": "工作流",
+    "searchWorkflows": "搜索工作流...",
+    "noWorkflowsFound": "未找到工作流。",
+    "typeToSearchWorkflows": "输入搜索工作流",
+    "selectWorkflow": "选择工作流",
+    "workflowHint": "为项目流程选择工作流。",
+    "visibility": "可见性",
+    "selectVisibility": "选择可见性",
+    "noVisibilityOptions": "未找到可见性选项。",
+    "visibilityHint": "控制谁可以访问此项目。",
+    "workspace": "工作区",
+    "loadingWorkspaces": "加载工作区...",
+    "selectWorkspace": "选择工作区",
+    "searchWorkspaces": "搜索工作区...",
+    "noWorkspacesFound": "未找到工作区。",
+    "typeToSearchWorkspaces": "输入搜索工作区",
+    "workspaceHint": "项目将在此工作区中创建。",
+    "description": "描述",
+    "descriptionPlaceholder": "描述此项目的内容...",
+    "descriptionHint": "帮助团队了解项目的目标和范围。",
+    "projectColors": "项目颜色",
+    "selectCategory": "选择类别",
+    "noCategoriesFound": "未找到类别。",
+    "categoryHint": "选择类别以帮助组织和识别项目。",
+    "cancel": "取消",
+    "create": "创建项目",
+    "creating": "正在创建项目...",
+    "success": "项目 \"{{name}}\" 创建成功！",
+    "errorLoadWorkspaces": "加载工作区失败",
+    "errorCreate": "创建项目失败",
+    "visibilityOptions": {
+      "PRIVATE": {
+        "label": "私有",
+        "description": "仅成员可以访问此项目"
+      },
+      "INTERNAL": {
+        "label": "内部",
+        "description": "工作区成员可查看，成员可编辑"
+      },
+      "PUBLIC": {
+        "label": "公开",
+        "description": "任何人可查看，成员可编辑"
+      }
+    }
+  },
+  "categories": {
+    "operational": {
+      "label": "运营",
+      "description": "日常运营和维护"
+    },
+    "technical": {
+      "label": "技术",
+      "description": "开发和技术项目"
+    },
+    "strategic": {
+      "label": "战略",
+      "description": "长期规划和战略"
+    },
+    "hiring": {
+      "label": "招聘",
+      "description": "招聘和团队建设"
+    },
+    "financial": {
+      "label": "财务",
+      "description": "预算和财务规划"
+    },
+    "neutral": {
+      "label": "通用",
+      "description": "通用或未分类项目"
+    },
+    "innovation": {
+      "label": "创新",
+      "description": "创意和创新项目"
+    },
+    "community": {
+      "label": "社区",
+      "description": "社区和参与项目"
+    },
+    "sustainability": {
+      "label": "可持续发展",
+      "description": "可持续发展与环境项目"
+    },
+    "marketing": {
+      "label": "市场营销",
+      "description": "营销和推广活动"
+    },
+    "research": {
+      "label": "研究",
+      "description": "研究和分析项目"
+    },
+    "growth": {
+      "label": "增长",
+      "description": "增长和扩展项目"
+    }
+  }
+}

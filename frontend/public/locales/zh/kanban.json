@@ -1,0 +1,23 @@
+{
+  "workflowSettings": "工作流设置",
+  "createTask": "创建新任务",
+  "taskPlaceholder": "需要做什么？",
+  "dueDate": "截止日期",
+  "priority": "优先级",
+  "statusCreated": "状态已创建",
+  "statusCreateFailed": "创建状态失败",
+  "statusUpdated": "状态已更新",
+  "statusUpdateFailed": "更新状态失败",
+  "statusDeleted": "状态删除成功！",
+  "statusDeleteFailed": "删除状态失败",
+  "statusesFetchFailed": "获取状态失败",
+  "orderUpdated": "顺序已更新",
+  "orderSaveFailed": "保存顺序失败",
+  "statusNamePlaceholder": "状态名称",
+  "newStatusPlaceholder": "新状态...",
+  "deleteStatusTitle": "删除状态",
+  "searchUserPlaceholder": "按姓名或邮箱搜索",
+  "noUsers": "未找到用户",
+  "moreAssignees": "更多负责人",
+  "noTasks": "无任务"
+}

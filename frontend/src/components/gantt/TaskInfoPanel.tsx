@@ -3,6 +3,7 @@ import Link from "next/link";
 import { HiCalendarDays } from "react-icons/hi2";
 import { GripVertical } from "lucide-react";
 import { formatDateForDisplay } from "@/utils/date";
+import { useTranslation } from "react-i18next";
 
 interface TaskInfoPanelProps {
   task: Task;
@@ -31,6 +32,7 @@ export const TaskInfoPanel: React.FC<TaskInfoPanelProps> = ({
   dragAttributes,
   dragListeners,
 }) => {
+  const { t } = useTranslation("gantt");
   const safeWorkspaceSlug = sanitizeSlug(workspaceSlug);
   const safeProjectSlug = sanitizeSlug(projectSlug);
 
@@ -46,7 +48,7 @@ export const TaskInfoPanel: React.FC<TaskInfoPanelProps> = ({
         {...dragAttributes}
         {...dragListeners}
         className="cursor-grab active:cursor-grabbing text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors p-1 -ml-2 rounded-md hover:bg-[var(--accent)]"
-        title="Drag to reorder"
+        title={t("dragToReorder")}
       >
         <GripVertical className="w-4 h-4 shrink-0" />
       </div>
@@ -64,7 +66,7 @@ export const TaskInfoPanel: React.FC<TaskInfoPanelProps> = ({
             className={`font-medium text-[var(--foreground)] hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-200 flex-1 min-w-0 focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:ring-offset-2 rounded-sm ${
               isCompact ? "text-sm" : "text-base"
             } ${isOverdue ? "text-red-600 dark:text-red-400" : ""}`}
-            title={task.title || "Untitled Task"}
+            title={task.title || t("untitledTask")}
             onClick={() => onFocus(task.id)}
           >
             <span className="line-clamp-1 break-words text-sm">
@@ -73,7 +75,7 @@ export const TaskInfoPanel: React.FC<TaskInfoPanelProps> = ({
                   {task.parentTask.title} /
                 </span>
               )}
-              {task.title || "Untitled Task"}
+              {task.title || t("untitledTask")}
             </span>
           </Link>
 
@@ -85,15 +87,15 @@ export const TaskInfoPanel: React.FC<TaskInfoPanelProps> = ({
 
           <div
             className="flex items-center gap-1 text-xs text-[var(--muted-foreground)] shrink-0"
-            title={`Due: ${
-              task.dueDate ? formatDateForDisplay(task.dueDate) : "No due date"
+            title={`${t("due")}: ${
+              task.dueDate ? formatDateForDisplay(task.dueDate) : t("tasks:table.noDueDate")
             }`}
           >
             <HiCalendarDays className="w-3 h-3 shrink-0" />
             <span>
               {task.dueDate
                 ? formatDateForDisplay(task.dueDate, "MMM D")
-                : "No date"}
+                : t("tasks:table.noDueDate")}
             </span>
             {isOverdue && <span className="text-red-600 dark:text-red-400 font-bold ml-1">!</span>}
           </div>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/router";
+import { useTranslation } from "react-i18next";
 import { useNotification } from "@/contexts/notification-context";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +42,7 @@ interface PaginationInfo {
 
 export default function NotificationScreen({ userId, organizationId }: NotificationScreenProps) {
   const router = useRouter();
+  const { t } = useTranslation();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -250,12 +252,12 @@ export default function NotificationScreen({ userId, organizationId }: Notificat
         ...prev,
         unread: Math.max(0, prev.unread - notificationIds.length),
       }));
-      toast.success("Successfully marked as read");
+      toast.success(t("notifications.markedRead"));
 
       // Update global context
       refreshNotifications();
     } catch (error) {
-      toast.error(error?.message || "Failed to mark as read the notification(s)");
+      toast.error(error?.message || t("notifications.markReadFailed"));
       console.error("Failed to mark notification(s) as read:", error);
     }
   };
@@ -282,12 +284,12 @@ export default function NotificationScreen({ userId, organizationId }: Notificat
       } else {
         fetchNotifications();
       }
-      toast.success("Notifications(s) deleted successfully!");
+      toast.success(t("notifications.deleted"));
 
       // Update global context
       refreshNotifications();
     } catch (error) {
-      toast.error(error?.message || "Notifications(s) deleted successfully!");
+      toast.error(error?.message || t("notifications.deleteFailed"));
       console.error("Failed to delete notification(s):", error);
     }
   };
@@ -297,12 +299,12 @@ export default function NotificationScreen({ userId, organizationId }: Notificat
       await notificationApi.markAllUnreadAsRead(organizationId);
       setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
       setStats((prev) => ({ ...prev, unread: 0 }));
-      toast.success("Successfully marked all as read");
+      toast.success(t("notifications.allMarkedRead"));
 
       // Update global context
       refreshNotifications();
     } catch (error) {
-      toast.error(error?.message || "Failed to mark all as read");
+      toast.error(error?.message || t("notifications.markAllFailed"));
       console.error("Failed to mark all as read:", error);
     }
   };
@@ -435,7 +437,7 @@ export default function NotificationScreen({ userId, organizationId }: Notificat
       <div className="sticky top-0 z-10">
         <PageHeader
           icon={<HiBell className="size-20px" />}
-          title="Notifications"
+          title={t("notifications.pageTitle")}
           description={`${stats.total} total notifications, ${stats.unread} unread`}
           actions={
             <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3 gap-2">

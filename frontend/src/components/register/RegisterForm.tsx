@@ -23,6 +23,7 @@ import {
   Shield,
 } from "lucide-react";
 import { useTheme } from "next-themes";
+import { useTranslation } from "react-i18next";
 
 interface FormData {
   firstName: string;
@@ -36,6 +37,7 @@ interface FormData {
 export function RegisterForm() {
   const router = useRouter();
   const { resolvedTheme } = useTheme();
+  const { t } = useTranslation("auth");
 
   const searchParams = useSearchParams();
   const { register, checkOrganizationAndRedirect } = useAuth();
@@ -164,8 +166,8 @@ export function RegisterForm() {
           </div>
         </div>
 
-        <h1 className="signup-form-title">Create Account</h1>
-        <p className="signup-form-subtitle">Join thousands of teams using Taskosaur</p>
+        <h1 className="signup-form-title">{t("register.createAccount")}</h1>
+        <p className="signup-form-subtitle">{t("register.subtitle")}</p>
       </div>
 
       {/* Error Alert */}
@@ -178,7 +180,7 @@ export function RegisterForm() {
           <Alert variant="destructive" className="signup-error-alert">
             <AlertCircle className="signup-error-icon" />
             <AlertDescription className="font-medium">
-              <span className="signup-error-title">Registration Failed</span>
+              <span className="signup-error-title">{t("register.registrationFailed")}</span>
               <span className="signup-error-message">{error}</span>
             </AlertDescription>
           </Alert>
@@ -197,7 +199,7 @@ export function RegisterForm() {
           <div className="signup-field-container">
             <Label htmlFor="firstName" className="signup-field-label">
               <User className="signup-field-icon" />
-              <span>First Name</span>
+              <span>{t("register.firstName")}</span>
             </Label>
             <Input
               id="firstName"
@@ -207,13 +209,13 @@ export function RegisterForm() {
               required
               value={formData.firstName}
               onChange={handleChange}
-              placeholder="John"
+              placeholder={t("register.firstNamePlaceholder")}
               className="signup-input"
             />
           </div>
           <div className="signup-field-container">
             <Label htmlFor="lastName" className="signup-field-label-simple">
-              Last Name
+              {t("register.lastName")}
             </Label>
             <Input
               id="lastName"
@@ -223,7 +225,7 @@ export function RegisterForm() {
               required
               value={formData.lastName}
               onChange={handleChange}
-              placeholder="Doe"
+              placeholder={t("register.lastNamePlaceholder")}
               className="signup-input"
             />
           </div>
@@ -238,7 +240,7 @@ export function RegisterForm() {
         >
           <Label htmlFor="email" className="signup-field-label">
             <Mail className="signup-field-icon" />
-            <span>Email Address</span>
+            <span>{t("register.email")}</span>
           </Label>
           <Input
             id="email"
@@ -248,7 +250,7 @@ export function RegisterForm() {
             required
             value={formData.email}
             onChange={handleChange}
-            placeholder="john.doe@company.com"
+            placeholder={t("register.emailPlaceholder")}
             className="signup-input"
           />
         </motion.div>
@@ -262,7 +264,7 @@ export function RegisterForm() {
         >
           <Label htmlFor="password" className="signup-field-label">
             <Lock className="signup-field-icon" />
-            <span>Password</span>
+            <span>{t("register.password")}</span>
           </Label>
           <div className="signup-password-container">
             <Input
@@ -273,7 +275,7 @@ export function RegisterForm() {
               required
               value={formData.password}
               onChange={handleChange}
-              placeholder="Create a strong password"
+              placeholder={t("register.passwordPlaceholder")}
               className={`signup-password-input ${
                 formData.password && !isPasswordValid ? "border-red-500 ring-1 ring-red-500" : ""
               }`}
@@ -328,7 +330,7 @@ export function RegisterForm() {
                         : "signup-requirement-icon-invalid"
                     }
                   />
-                  <span>Uppercase letter</span>
+                  <span>{t("register.passwordUppercase")}</span>
                 </div>
                 <div
                   className={`signup-requirement-item ${
@@ -342,7 +344,7 @@ export function RegisterForm() {
                         : "signup-requirement-icon-invalid"
                     }
                   />
-                  <span>Lowercase letter</span>
+                  <span>{t("register.passwordLowercase")}</span>
                 </div>
                 <div
                   className={`signup-requirement-item ${
@@ -356,7 +358,7 @@ export function RegisterForm() {
                         : "signup-requirement-icon-invalid"
                     }
                   />
-                  <span>Number</span>
+                  <span>{t("register.passwordNumber")}</span>
                 </div>
               </div>
             </motion.div>
@@ -372,7 +374,7 @@ export function RegisterForm() {
         >
           <Label htmlFor="confirmPassword" className="signup-field-label">
             <Lock className="signup-field-icon" />
-            <span>Confirm Password</span>
+            <span>{t("register.confirmPassword")}</span>
           </Label>
           <div className="signup-password-container">
             <Input
@@ -383,7 +385,7 @@ export function RegisterForm() {
               required
               value={formData.confirmPassword}
               onChange={handleChange}
-              placeholder="Confirm your password"
+              placeholder={t("register.confirmPasswordPlaceholder")}
               className={`signup-password-input ${
                 formData.confirmPassword && !passwordsMatch
                   ? "border-red-500 ring-1 ring-red-500"

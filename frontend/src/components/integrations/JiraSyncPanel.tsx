@@ -54,7 +54,7 @@ function Stepper({ step }: { step: number }) {
 }
 
 export default function JiraSyncPanel({ projectId, projectStatuses = [] }: Props) {
-  const { t } = useTranslation("integrations");
+  const { t } = useTranslation(["integrations", "common"]);
   const { getStatus, validateAndListProjects, validateAndListStatuses, connect, triggerSync, updateConfig, disconnect, listStatuses } = useJiraSync();
   const { getTaskStatusByProject } = useProject();
 
@@ -99,19 +99,19 @@ export default function JiraSyncPanel({ projectId, projectStatuses = [] }: Props
   }, [projectId, projectStatuses.length, getTaskStatusByProject]);
 
   const handleValidate = async () => {
-    if (!subdomain.trim() || !email.trim() || !apiToken.trim()) { toast.error("All fields are required"); return; }
+    if (!subdomain.trim() || !email.trim() || !apiToken.trim()) { toast.error(t("trello.messages.credential_required")); return; }
     const siteUrl = `https://${subdomain.trim().replace(/^https?:\/\//, "").replace(/\.atlassian\.net.*$/, "")}.atlassian.net`;
     setConnecting(true);
     try {
       const data = await validateAndListProjects(siteUrl, email.trim(), apiToken.trim());
       setJiraProjects(data); setStep("project");
-      toast.success(`Found ${data.length} Jira project(s)`);
+      toast.success(t("trello.messages.found_boards", { count: data.length }));
     } catch (e: any) { toast.error(e.message); }
     finally { setConnecting(false); }
   };
 
   const handleSelectProject = async () => {
-    if (!selectedProject) { toast.error("Select a project"); return; }
+    if (!selectedProject) { toast.error(t("trello.messages.select_board_required")); return; }
     const siteUrl = `https://${subdomain.trim().replace(/^https?:\/\//, "").replace(/\.atlassian\.net.*$/, "")}.atlassian.net`;
     setConnecting(true);
     try {
@@ -139,9 +139,9 @@ export default function JiraSyncPanel({ projectId, projectStatuses = [] }: Props
     try {
       const s = await connect({ projectId, jiraSiteUrl: siteUrl, jiraProjectKey: selectedProject, jiraEmail: email.trim(), jiraApiToken: apiToken.trim(), syncInterval: intervalNum, statusMappings: Object.fromEntries(Object.entries(statusMappings).filter(([, v]) => v && v !== "none")) });
       setSyncStatus(s); setStep("done");
-      toast.success("Jira connected successfully!");
+      toast.success(t("trello.messages.connected_success"));
       setSyncing(true);
-      try { const r = await triggerSync(s.projectId!); toast.success(`Synced ${r.issuesProcessed} issues`); } catch {}
+      try { const r = await triggerSync(s.projectId!); toast.success(t("trello.messages.sync_complete", { count: r.issuesProcessed, duration: 0 })); } catch {}
       finally { setSyncing(false); }
       await refreshStatus(false);
     } catch (e: any) { toast.error(e.message); }
@@ -150,20 +150,20 @@ export default function JiraSyncPanel({ projectId, projectStatuses = [] }: Props
 
   const handleSync = async () => {
     setSyncing(true);
-    try { const r = await triggerSync(projectId); await refreshStatus(false); toast.success(`Synced ${r.issuesProcessed} issues in ${r.durationMs}ms`); }
+    try { const r = await triggerSync(projectId); await refreshStatus(false); toast.success(t("trello.messages.sync_complete", { count: r.issuesProcessed, duration: r.durationMs })); }
     catch (e: any) { toast.error(e.message); }
     finally { setSyncing(false); }
   };
 
   const handleToggle = async () => {
     if (!syncStatus) return;
-    try { const u = await updateConfig(projectId, { syncEnabled: !syncStatus.syncEnabled }); setSyncStatus(u); toast.success(u.syncEnabled ? "Auto-sync enabled" : "Auto-sync paused"); }
+    try { const u = await updateConfig(projectId, { syncEnabled: !syncStatus.syncEnabled }); setSyncStatus(u); toast.success(u.syncEnabled ? t("trello.messages.auto_sync_enabled") : t("trello.messages.auto_sync_paused")); }
     catch (e: any) { toast.error(e.message); }
   };
 
   const handleDisconnect = async () => {
     setConfirmOpen(false); setDisconnecting(true);
-    try { await disconnect(projectId); setSyncStatus(null); setStep("status"); setEmail(""); setApiToken(""); setSubdomain(""); toast.success("Jira disconnected"); }
+    try { await disconnect(projectId); setSyncStatus(null); setStep("status"); setEmail(""); setApiToken(""); setSubdomain(""); toast.success(t("trello.messages.disconnected_success")); }
     catch (e: any) { toast.error(e.message); }
     finally { setDisconnecting(false); }
   };
@@ -172,7 +172,7 @@ export default function JiraSyncPanel({ projectId, projectStatuses = [] }: Props
     if (!syncStatus) return;
     setIsEditing(true); setEditInterval(syncStatus.syncInterval); setEditMappings(syncStatus.statusMappings || {});
     try { const s = await listStatuses(projectId); setJiraStatuses(s); }
-    catch { toast.error("Failed to load statuses"); setIsEditing(false); }
+    catch { toast.error(t("trello.messages.failed_to_fetch_lists", "Failed to load statuses")); setIsEditing(false); }
   };
 
   const handleSaveEdit = async () => {
@@ -186,7 +186,7 @@ export default function JiraSyncPanel({ projectId, projectStatuses = [] }: Props
       return;
     }
     setSaving(true);
-    try { const u = await updateConfig(projectId, { syncInterval: intervalNum, statusMappings: Object.fromEntries(Object.entries(editMappings).filter(([, v]) => v && v !== "none")) }); setSyncStatus(u); setIsEditing(false); toast.success("Config updated"); }
+    try { const u = await updateConfig(projectId, { syncInterval: intervalNum, statusMappings: Object.fromEntries(Object.entries(editMappings).filter(([, v]) => v && v !== "none")) }); setSyncStatus(u); setIsEditing(false); toast.success(t("trello.messages.config_updated", "Config updated")); }
     catch (e: any) { toast.error(e.message); }
     finally { setSaving(false); }
   };
@@ -345,7 +345,7 @@ export default function JiraSyncPanel({ projectId, projectStatuses = [] }: Props
   return (
     <Card className="border-none bg-[var(--card)]">
       <CardHeader className="border-b border-[var(--border)]">
-        <div className="flex items-center gap-3"><SiJira className="text-[#0052CC]" size={24} /><div><CardTitle className="text-md">Connect Jira</CardTitle><CardDescription>Follow the steps to link your Jira project</CardDescription></div></div>
+        <div className="flex items-center gap-3"><SiJira className="text-[#0052CC]" size={24} /><div><CardTitle className="text-md">{t("jira.connect_btn")}</CardTitle><CardDescription>{t("trello.wizard.connect_subtitle")}</CardDescription></div></div>
         <Stepper step={stepIndex} />
       </CardHeader>
       <CardContent className="pt-8 pb-8">

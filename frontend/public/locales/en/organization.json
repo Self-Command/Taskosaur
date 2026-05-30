@@ -1,0 +1,9 @@
+{
+  "pageTitle": "Setup Organization",
+  "setupSuccess": "Profile and organization created successfully!",
+  "setupFailed": "Failed to complete setup. Please try again.",
+  "workspacePlaceholder": "e.g., Main Workspace",
+  "projectPlaceholder": "e.g., First Project",
+  "completeSetup": "Complete Setup",
+  "websitePlaceholder": "https://example.com"
+}

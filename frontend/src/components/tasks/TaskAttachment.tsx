@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import ActionButton from "@/components/common/ActionButton";
 import { ArrowDownToLine, Eye } from "lucide-react";
 import { HiPaperClip, HiTrash } from "react-icons/hi2";
@@ -49,6 +50,7 @@ const TaskAttachments: React.FC<TaskAttachmentsProps> = ({
   setLoading,
 }) => {
   const { getCurrentUser } = useAuth();
+  const { t } = useTranslation(["tasks", "common"]);
   const currentUser = getCurrentUser();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -171,7 +173,7 @@ const TaskAttachments: React.FC<TaskAttachmentsProps> = ({
   return (
     <div className="task-attachments-container">
       <div className="space-y-4">
-        <SectionHeader icon={HiPaperClip} title="Attachments" />
+        <SectionHeader icon={HiPaperClip} title={t("attachments.attachments")} />
 
         {!loadingAttachments && (
           <>
@@ -283,7 +285,7 @@ const TaskAttachments: React.FC<TaskAttachmentsProps> = ({
                           className="flex items-center gap-2 flex-shrink-0"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <Tooltip content="View" position="top" color="primary">
+                          <Tooltip content={t("common:view")} position="top" color="primary">
                             <ActionButton
                               variant="outline"
                               onClick={() => previewRefs.current[attachment.id]?.openPreview()}
@@ -297,7 +299,7 @@ const TaskAttachments: React.FC<TaskAttachmentsProps> = ({
                               )}
                             </ActionButton>
                           </Tooltip>
-                          <Tooltip content="Download" position="top" color="primary">
+                          <Tooltip content={t("common:download")} position="top" color="primary">
                             <ActionButton
                               variant="outline"
                               onClick={() => onDownloadAttachment(attachment.id, attachment.fileName)}
@@ -308,7 +310,7 @@ const TaskAttachments: React.FC<TaskAttachmentsProps> = ({
                             </ActionButton>
                           </Tooltip>
                           {attachment.createdBy === currentUser?.id && (
-                            <Tooltip content="Delete" position="top" color="primary">
+                            <Tooltip content={t("common:delete")} position="top" color="primary">
                               <ActionButton
                                 onClick={() => onDeleteAttachment(attachment.id)}
                                 secondary
@@ -366,10 +368,10 @@ const TaskAttachments: React.FC<TaskAttachmentsProps> = ({
                     {isUploading ? (
                       <div className="flex items-center gap-2">
                         <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                        Uploading...
+                        {t("attachments.uploading")}
                       </div>
                     ) : (
-                      <div className="text-center">Add Attachment</div>
+                      <div className="text-center">{t("attachments.addAttachment")}</div>
                     )}
                   </ActionButton>
                 </div>

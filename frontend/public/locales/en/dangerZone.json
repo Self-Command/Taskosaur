@@ -1,0 +1,11 @@
+{
+  "trigger": "Danger Zone",
+  "selectAction": "Select an action to perform on",
+  "confirmMessage": "Type **{{name}}** to confirm {{action}}",
+  "typeExactly": "Please type \"{{name}}\" exactly to confirm",
+  "actionSuccess": "{{type}} {{action}}d successfully!",
+  "actionFailed": "Failed to {{action}} {{type}}",
+  "modalTitle": "{{type}} Danger Zone",
+  "modalDescription": "Perform destructive actions on {{name}}",
+  "processing": "...ing..."
+}

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Task, TaskDependency, DependencyType, TimeEntry } from "@/types/tasks";
 import { Button } from "@/components/ui";
 import TaskDependencies from "./TaskDependencies";
@@ -19,6 +20,7 @@ export default function TaskDetailModal({
   onClose,
   onUpdate,
 }: TaskDetailModalProps) {
+  const { t } = useTranslation(["tasks", "common"]);
   const [activeTab, setActiveTab] = useState<"details" | "dependencies" | "hierarchy" | "time">(
     "details"
   );
@@ -210,7 +212,7 @@ export default function TaskDetailModal({
                     : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300"
                 }`}
               >
-                Details
+                {t("detail.tabDetails")}
               </button>
               <button
                 onClick={() => setActiveTab("dependencies")}
@@ -220,7 +222,7 @@ export default function TaskDetailModal({
                     : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300"
                 }`}
               >
-                Dependencies
+                {t("detail.tabDependencies")}
                 {task.dependsOn && task.dependsOn.length > 0 && (
                   <span className="ml-2 bg-indigo-100 text-indigo-600 dark:bg-indigo-900 dark:text-indigo-400 text-xs px-2 py-1 rounded-full">
                     {task.dependsOn.length}
@@ -235,7 +237,7 @@ export default function TaskDetailModal({
                     : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300"
                 }`}
               >
-                Hierarchy
+                {t("detail.tabHierarchy")}
                 {task.childTasks && task.childTasks.length > 0 && (
                   <span className="ml-2 bg-indigo-100 text-indigo-600 dark:bg-indigo-900 dark:text-indigo-400 text-xs px-2 py-1 rounded-full">
                     {task.childTasks.length}
@@ -250,7 +252,7 @@ export default function TaskDetailModal({
                     : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300"
                 }`}
               >
-                Time Tracking
+                {t("detail.tabTimeTracking")}
                 {task.timeEntries && task.timeEntries.length > 0 && (
                   <span className="ml-2 bg-indigo-100 text-indigo-600 dark:bg-indigo-900 dark:text-indigo-400 text-xs px-2 py-1 rounded-full">
                     {task.timeEntries.length}
@@ -279,42 +281,42 @@ export default function TaskDetailModal({
                     />
                   </svg>
                   <h3 className="mt-2 text-lg font-medium text-gray-900 dark:text-white">
-                    Task Details
+                    {t("detail.detailViewTitle")}
                   </h3>
                   <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    Comprehensive task editing interface will be implemented here.
+                    {t("detail.detailViewPlaceholder")}
                   </p>
                   <div className="mt-6 text-sm text-gray-600 dark:text-gray-400 space-y-2">
                     {task.parentTask && (
                       <p>
-                        <strong>Parent Task:</strong> {task.parentTask.slug}: {task.parentTask.title}
+                        <strong>{t("detail.parent")}</strong> {task.parentTask.slug}: {task.parentTask.title}
                       </p>
                     )}
                     <p>
-                      <strong>Description:</strong> {task.description || "No description"}
+                      <strong>{t("detail.descriptionColon")}</strong> {task.description || t("detail.noDescription")}
                     </p>
                     <p>
-                      <strong>Reporter:</strong> {task.reporter.firstName} {task.reporter.lastName}
+                      <strong>{t("detail.reporterColon")}</strong> {task.reporter.firstName} {task.reporter.lastName}
                     </p>
                     {task.assignee && (
                       <p>
-                        <strong>Assignee:</strong> {task.assignee.firstName}{" "}
+                        <strong>{t("detail.assigneeColon")}</strong> {task.assignee.firstName}{" "}
                         {task.assignee.lastName}
                       </p>
                     )}
                     {task.dueDate && (
                       <p>
-                        <strong>Due Date:</strong> {formatDateForDisplay(task.dueDate)}
+                        <strong>{t("detail.dueDateColon")}</strong> {formatDateForDisplay(task.dueDate)}
                       </p>
                     )}
                     {task.storyPoints && (
                       <p>
-                        <strong>Story Points:</strong> {task.storyPoints}
+                        <strong>{t("detail.storyPointsColon")}</strong> {task.storyPoints}
                       </p>
                     )}
                     {task.originalEstimate && (
                       <p>
-                        <strong>Original Estimate:</strong> {task.originalEstimate / 60} hours
+                        <strong>{t("detail.originalEstimateColon")}</strong> {task.originalEstimate / 60}{t("detail.hours")}
                       </p>
                     )}
                   </div>
@@ -356,9 +358,9 @@ export default function TaskDetailModal({
           {/* Actions */}
           <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-700">
             <Button variant="secondary" onClick={onClose}>
-              Close
+              {t("close")}
             </Button>
-            <Button>Save Changes</Button>
+            <Button>{t("common:saveChanges")}</Button>
           </div>
         </div>
       </div>

@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import Image from "next/image";
 import { useTheme } from "next-themes";
 import { ModeToggle } from '@/components/header/ModeToggle';
+import { useTranslation } from "react-i18next";
 
 interface PublicTaskViewProps {
   task: PublicSharedTask;
@@ -19,6 +20,7 @@ interface PublicTaskViewProps {
 }
 
 export default function PublicTaskView({ task, token }: PublicTaskViewProps) {
+  const { t } = useTranslation(["publicTask", "common"]);
   const { resolvedTheme } = useTheme();
 
   const formatDate = (dateString?: string) => {
@@ -55,7 +57,7 @@ export default function PublicTaskView({ task, token }: PublicTaskViewProps) {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Download error:', error);
-      toast.error('Failed to download attachment');
+      toast.error(t("downloadFailed"));
     }
   };
 
@@ -96,7 +98,7 @@ export default function PublicTaskView({ task, token }: PublicTaskViewProps) {
           <div className="lg:col-span-2 space-y-8">
             {/* Description */}
             <div className="space-y-2">
-              <Label className="text-base text-[var(--foreground)] font-semibold">Description</Label>
+              <Label className="text-base text-[var(--foreground)] font-semibold">{t("description")}</Label>
               {task.description ? (
                 <div className="prose dark:prose-invert max-w-none text-[var(--foreground)] text-sm leading-relaxed p-4 rounded-md border border-[var(--border)] bg-[var(--background)]">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -153,7 +155,7 @@ export default function PublicTaskView({ task, token }: PublicTaskViewProps) {
 
             {/* Priority */}
             <div>
-              <Label className="text-sm text-[var(--foreground)] block mb-2">Priority</Label>
+              <Label className="text-sm text-[var(--foreground)] block mb-2">{t("priority")}</Label>
               <PriorityBadge
                 priority={task.priority}
                 className="text-[13px] min-w-[120px] min-h-[29.33px] justify-start"
@@ -162,7 +164,7 @@ export default function PublicTaskView({ task, token }: PublicTaskViewProps) {
 
             {/* Status */}
             <div>
-              <Label className="text-sm text-[var(--foreground)] block mb-2">Status</Label>
+              <Label className="text-sm text-[var(--foreground)] block mb-2">{t("status")}</Label>
               <Badge
                 style={{ backgroundColor: task.status.color + '20', color: task.status.color }}
                 variant="outline"
@@ -174,7 +176,7 @@ export default function PublicTaskView({ task, token }: PublicTaskViewProps) {
 
             {/* Due Date */}
             <div>
-              <Label className="text-sm text-[var(--foreground)] block mb-2">Due Date</Label>
+              <Label className="text-sm text-[var(--foreground)] block mb-2">{t("dueDate")}</Label>
               <div className="flex items-center gap-2 text-[var(--foreground)] text-sm bg-[var(--muted)]/20 p-2 rounded-md border border-[var(--border)]">
                 <HiCalendar className="h-4 w-4 opacity-70" />
                 <span>{formatDate(task.dueDate)}</span>
@@ -182,7 +184,7 @@ export default function PublicTaskView({ task, token }: PublicTaskViewProps) {
             </div>
             {task.createdBy && (
               <div>
-                <Label className="text-sm text-[var(--foreground)] block mb-2">Created By</Label>
+                <Label className="text-sm text-[var(--foreground)] block mb-2">{t("createdBy")}</Label>
                 <div className="flex items-center gap-3 mt-2">
                   <UserAvatar
                     user={{
@@ -200,7 +202,7 @@ export default function PublicTaskView({ task, token }: PublicTaskViewProps) {
             {/* Assignees */}
             {task.assignees && task.assignees.length > 0 && (
               <div>
-                <Label className="text-sm text-[var(--foreground)] block mb-2">Assignees</Label>
+                <Label className="text-sm text-[var(--foreground)] block mb-2">{t("assignees")}</Label>
                 <div className="space-y-3 mt-2">
                   {task.assignees.map((assignee, i) => (
                     <div key={i} className="flex items-center gap-3">
@@ -225,7 +227,7 @@ export default function PublicTaskView({ task, token }: PublicTaskViewProps) {
 
         {/* Footer */}
         <div className="text-center text-xs text-[var(--muted-foreground)] py-8 mt-8 border-t border-[var(--border)]">
-          <p>Shared securely via Taskosaur</p>
+          <p>{t("sharedVia")}</p>
         </div>
 
       </div>

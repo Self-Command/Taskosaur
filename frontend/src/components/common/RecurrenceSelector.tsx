@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Label } from '@/components/ui/label';
 import {
     Select,
@@ -47,6 +48,7 @@ const DAYS_OF_WEEK = [
 ];
 
 export default function RecurrenceSelector({ value, onChange }: RecurrenceSelectorProps) {
+    const { t } = useTranslation("recurrence");
     const [showConfig, setShowConfig] = useState(!!value);
     const [config, setConfig] = useState<RecurrenceConfig>(
         value || {
@@ -102,7 +104,7 @@ export default function RecurrenceSelector({ value, onChange }: RecurrenceSelect
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <Repeat size={18} className="text-[var(--primary)]" />
-                    <Label className="font-semibold">Recurring Task</Label>
+                    <Label className="font-semibold">{t("recurringTask")}</Label>
                 </div>
                 {/* <Button type="button" variant="ghost" size="icon" onClick={handleDisable}>
                     <X size={18} />
@@ -111,7 +113,7 @@ export default function RecurrenceSelector({ value, onChange }: RecurrenceSelect
 
             {/* Pattern Type */}
             <div className="space-y-1.5">
-                <Label className="text-xs">Recurrence Pattern</Label>
+                <Label className="text-xs">{t("pattern")}</Label>
                 <div className="grid grid-cols-2 gap-2">
                     <div>
                         <Select
@@ -124,18 +126,18 @@ export default function RecurrenceSelector({ value, onChange }: RecurrenceSelect
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent className="border-[var(--border)] bg-[var(--popover)]">
-                                <SelectItem value="DAILY" className="text-xs hover:bg-[var(--hover-bg)]">Daily</SelectItem>
-                                <SelectItem value="WEEKLY" className="text-xs hover:bg-[var(--hover-bg)]">Weekly</SelectItem>
-                                <SelectItem value="MONTHLY" className="text-xs hover:bg-[var(--hover-bg)]">Monthly</SelectItem>
-                                <SelectItem value="QUARTERLY" className="text-xs hover:bg-[var(--hover-bg)]">Quarterly</SelectItem>
-                                <SelectItem value="YEARLY" className="text-xs hover:bg-[var(--hover-bg)]">Yearly</SelectItem>
-                                <SelectItem value="CUSTOM" className="text-xs hover:bg-[var(--hover-bg)]">Custom</SelectItem>
+                                <SelectItem value="DAILY" className="text-xs hover:bg-[var(--hover-bg)]">{t("daily")}</SelectItem>
+                                <SelectItem value="WEEKLY" className="text-xs hover:bg-[var(--hover-bg)]">{t("weekly")}</SelectItem>
+                                <SelectItem value="MONTHLY" className="text-xs hover:bg-[var(--hover-bg)]">{t("monthly")}</SelectItem>
+                                <SelectItem value="QUARTERLY" className="text-xs hover:bg-[var(--hover-bg)]">{t("quarterly")}</SelectItem>
+                                <SelectItem value="YEARLY" className="text-xs hover:bg-[var(--hover-bg)]">{t("yearly")}</SelectItem>
+                                <SelectItem value="CUSTOM" className="text-xs hover:bg-[var(--hover-bg)]">{t("custom")}</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
                     <div>
                         <div className="flex items-center gap-1.5">
-                            <span className="text-xs">Every</span>
+                            <span className="text-xs">{t("every")}</span>
                             <Input
                                 type="number"
                                 min="1"
@@ -159,7 +161,7 @@ export default function RecurrenceSelector({ value, onChange }: RecurrenceSelect
             {/* Days of Week (for WEEKLY) */}
             {config.recurrenceType === 'WEEKLY' && (
                 <div className="space-y-1.5">
-                    <Label className="text-xs">Repeat On</Label>
+                    <Label className="text-xs">{t("repeatOn")}</Label>
                     <div className="flex flex-wrap gap-1">
                         {DAYS_OF_WEEK.map((day) => (
                             <button
@@ -183,7 +185,7 @@ export default function RecurrenceSelector({ value, onChange }: RecurrenceSelect
                 config.recurrenceType === 'QUARTERLY' ||
                 config.recurrenceType === 'YEARLY') && (
                     <div className="space-y-1.5">
-                        <Label className="text-xs">Day of Month</Label>
+                        <Label className="text-xs">{t("dayOfMonth")}</Label>
                         <Input
                             type="number"
                             min="1"
@@ -194,7 +196,7 @@ export default function RecurrenceSelector({ value, onChange }: RecurrenceSelect
                                     dayOfMonth: parseInt(e.target.value) || undefined,
                                 })
                             }
-                            placeholder="e.g., 15"
+                            placeholder={t("dayPlaceholder")}
                             className="h-8 text-xs border-[var(--border)] bg-[var(--background)]"
                         />
                     </div>
@@ -203,13 +205,13 @@ export default function RecurrenceSelector({ value, onChange }: RecurrenceSelect
             {/* Month of Year (for YEARLY) */}
             {config.recurrenceType === 'YEARLY' && (
                 <div className="space-y-1.5">
-                    <Label className="text-xs">Month</Label>
+                    <Label className="text-xs">{t("month")}</Label>
                     <Select
                         value={config.monthOfYear?.toString() || ''}
                         onValueChange={(value) => updateConfig({ monthOfYear: parseInt(value) })}
                     >
                         <SelectTrigger className="h-8 text-xs border-[var(--border)] bg-[var(--background)]">
-                            <SelectValue placeholder="Select month" />
+                            <SelectValue placeholder={t("monthPlaceholder")} />
                         </SelectTrigger>
                         <SelectContent className="border-[var(--border)] bg-[var(--popover)]">
                             <SelectItem value="1" className="text-xs hover:bg-[var(--hover-bg)]">January</SelectItem>
@@ -231,7 +233,7 @@ export default function RecurrenceSelector({ value, onChange }: RecurrenceSelect
 
             {/* End Condition */}
             <div className="space-y-1.5">
-                <Label className="text-xs">Ends</Label>
+                <Label className="text-xs">{t("ends")}</Label>
                 <Select
                     value={config.endType}
                     onValueChange={(value: RecurrenceEndType) => updateConfig({ endType: value })}
@@ -240,9 +242,9 @@ export default function RecurrenceSelector({ value, onChange }: RecurrenceSelect
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="border-[var(--border)] bg-[var(--popover)]">
-                        <SelectItem value="NEVER" className="text-xs hover:bg-[var(--hover-bg)]">Never</SelectItem>
-                        <SelectItem value="ON_DATE" className="text-xs hover:bg-[var(--hover-bg)]">On Date</SelectItem>
-                        <SelectItem value="AFTER_OCCURRENCES" className="text-xs hover:bg-[var(--hover-bg)]">After Occurrences</SelectItem>
+                        <SelectItem value="NEVER" className="text-xs hover:bg-[var(--hover-bg)]">{t("never")}</SelectItem>
+                        <SelectItem value="ON_DATE" className="text-xs hover:bg-[var(--hover-bg)]">{t("onDate")}</SelectItem>
+                        <SelectItem value="AFTER_OCCURRENCES" className="text-xs hover:bg-[var(--hover-bg)]">{t("afterOccurrences")}</SelectItem>
                     </SelectContent>
                 </Select>
             </div>
@@ -250,7 +252,7 @@ export default function RecurrenceSelector({ value, onChange }: RecurrenceSelect
             {/* End Date */}
             {config.endType === 'ON_DATE' && (
                 <div className="space-y-1.5">
-                    <Label className="text-xs">End Date</Label>
+                    <Label className="text-xs">{t("endDate")}</Label>
                     <Popover>
                         <PopoverTrigger asChild>
                             <Button
@@ -277,7 +279,7 @@ export default function RecurrenceSelector({ value, onChange }: RecurrenceSelect
             {/* Occurrence Count */}
             {config.endType === 'AFTER_OCCURRENCES' && (
                 <div className="space-y-1.5">
-                    <Label className="text-xs">Number of Occurrences</Label>
+                    <Label className="text-xs">{t("occurrences")}</Label>
                     <Input
                         type="number"
                         min="1"
@@ -287,7 +289,7 @@ export default function RecurrenceSelector({ value, onChange }: RecurrenceSelect
                                 occurrenceCount: parseInt(e.target.value) || undefined,
                             })
                         }
-                        placeholder="e.g., 10"
+                        placeholder={t("occurrencesPlaceholder")}
                         className="h-8 text-xs border-[var(--border)] bg-[var(--background)]"
                     />
                 </div>

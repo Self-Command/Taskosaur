@@ -1,0 +1,141 @@
+{
+  "title": "冲刺管理",
+  "description": "将工作组织到聚焦的迭代中并有效追踪进度。",
+  "createSprint": "创建冲刺",
+  "noSprints": {
+    "title": "暂无冲刺",
+    "description": "创建你的第一个冲刺，开始将工作组织到聚焦的迭代中。"
+  },
+  "deleteSprint": {
+    "title": "删除冲刺",
+    "message": "确定要删除冲刺 \"{{name}}\" 吗？此操作无法撤销。",
+    "confirm": "删除",
+    "deleting": "正在删除...",
+    "cancel": "取消"
+  },
+  "errors": {
+    "workspaceNotFound": "未找到工作区",
+    "projectNotFound": "未找到项目",
+    "loadingProjectError": "加载项目数据时出错",
+    "loadingPageError": "加载页面数据时出错",
+    "fetchingProjectError": "获取项目数据时出错",
+    "fetchTasksFailed": "获取任务失败"
+  },
+  "sprintTasks": {
+    "title": "冲刺任务",
+    "description": "管理和追踪此冲刺中的所有任务。共 {{total}} 个任务",
+    "searchPlaceholder": "搜索任务..."
+  },
+  "card": {
+    "noDates": "未设置日期",
+    "days": "{{count}} 天",
+    "completeSprint": "完成冲刺",
+    "editSprint": "编辑冲刺",
+    "deleteSprint": "删除冲刺"
+  },
+  "form": {
+    "editTitle": "编辑冲刺",
+    "createTitle": "创建新冲刺",
+    "editDescription": "更新冲刺详情和时间线",
+    "createDescription": "创建新冲刺以将工作组织到聚焦的迭代中",
+    "nameLabel": "冲刺名称",
+    "namePlaceholder": "输入冲刺名称",
+    "goalLabel": "冲刺目标",
+    "goalPlaceholder": "描述此冲刺的主要目标和预期成果...",
+    "goalHint": "帮助团队了解冲刺的重点和预期成果。",
+    "statusLabel": "状态",
+    "statusPlaceholder": "选择状态",
+    "startDateLabel": "开始日期",
+    "endDateLabel": "结束日期",
+    "cancel": "取消",
+    "update": "更新",
+    "create": "创建",
+    "updating": "正在更新...",
+    "creating": "正在创建冲刺...",
+    "statuses": {
+      "planning": "规划中",
+      "active": "进行中",
+      "completed": "已完成",
+      "cancelled": "已取消"
+    },
+    "validation": {
+      "nameRequired": "冲刺名称为必填项",
+      "startDateRequired": "开始日期为必填项",
+      "endDateRequired": "结束日期为必填项",
+      "endDateAfterStart": "结束日期必须在开始日期之后"
+    },
+    "saveFailed": "保存冲刺失败"
+  },
+  "board": {
+    "loading": "加载中...",
+    "invalidDate": "无效日期",
+    "noSprintSelected": "未选择冲刺",
+    "selectSprintToView": "请选择一个冲刺以查看看板",
+    "noSprintSelectedSubtitle": "请从上方下拉菜单选择冲刺以查看进度。",
+    "tasks": "任务",
+    "points": "点数",
+    "startSprint": "开始冲刺",
+    "completeSprint": "完成冲刺",
+    "tasksCompleted": "已完成任务",
+    "storyPoints": "预估工作量",
+    "completionRate": "完成率",
+    "statuses": {
+      "sprintBacklog": "冲刺待办",
+      "inProgress": "进行中",
+      "testing": "测试中",
+      "done": "已完成"
+    }
+  },
+  "selector": {
+    "noActiveSprint": "无活跃冲刺",
+    "noSprintsAvailable": "无可用冲刺",
+    "createFirstSprint": "创建你的第一个冲刺"
+  },
+  "progress": {
+    "title": "冲刺进度",
+    "timeline": "冲刺时间线",
+    "daysRemaining": "剩余 {{count}} 天",
+    "sprintEnded": "冲刺已结束",
+    "complete": "完成",
+    "timeSpent": "已用时间",
+    "estimated": "预估",
+    "tasksComplete": "任务完成",
+    "inProgress": "进行中",
+    "velocity": "速率",
+    "storyPointsPerDay": "每日预估工作量",
+    "capacity": "容量",
+    "burndown": "冲刺燃尽图",
+    "burndownPlaceholder": "燃尽图将在此处实现",
+    "quickActions": "快捷操作",
+    "viewReport": "查看冲刺报告",
+    "exportData": "导出数据"
+  },
+  "planning": {
+    "title": "冲刺规划",
+    "selectSprint": "选择冲刺",
+    "selectSprintToPlan": "请从上方下拉菜单选择冲刺以开始规划。",
+    "saveChanges": "保存更改",
+    "startSprint": "开始冲刺",
+    "goal": "冲刺目标",
+    "noGoal": "未设定目标",
+    "duration": "持续时间",
+    "noDates": "未设置日期",
+    "capacity": "容量",
+    "hours": "小时",
+    "productBacklog": "产品待办",
+    "tasks": "任务",
+    "sp": "SP",
+    "noTasksInBacklog": "待办列表中无任务",
+    "sprintBacklog": "冲刺待办",
+    "dragTasksHere": "将任务拖到此处以添加到冲刺",
+    "clickToMove": "点击任务在待办列表和冲刺之间移动",
+    "summary": "冲刺摘要",
+    "estimatedTime": "预估时间"
+  },
+  "tasksPanel": {
+    "title": "冲刺任务",
+    "tasks": "任务",
+    "errorNoOrg": "未选择组织。请先选择组织。",
+    "fetchFailed": "获取任务失败"
+  }
+}

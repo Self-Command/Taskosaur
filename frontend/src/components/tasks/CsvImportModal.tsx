@@ -343,9 +343,9 @@ export function CsvImportModal({
                             <Upload className="projects-modal-icon-content w-5 h-5" />
                         </div>
                         <div className="projects-modal-info">
-                            <DialogTitle className="projects-modal-title">Import Tasks from CSV</DialogTitle>
+                            <DialogTitle className="projects-modal-title">{t("csvImport.importTasks")}</DialogTitle>
                             <DialogDescription className="projects-modal-description">
-                                Upload a CSV file to create tasks in bulk
+                                {t("csvImport.importDescription")}
                             </DialogDescription>
                         </div>
                     </div>
@@ -442,7 +442,7 @@ export function CsvImportModal({
 
                     {/* File upload */}
                     <div className="projects-form-field">
-                        <Label className="projects-form-label text-sm font-medium">CSV File</Label>
+                        <Label className="projects-form-label text-sm font-medium">{t("csvImport.csvFile")}</Label>
                         <input
                             ref={fileInputRef}
                             type="file"
@@ -479,9 +479,9 @@ export function CsvImportModal({
                             ) : (
                                 <div className="space-y-1">
                                     <Upload className="w-8 h-8 mx-auto text-[var(--muted-foreground)]" />
-                                    <p className="text-sm text-[var(--muted-foreground)]">Click to upload CSV file</p>
+                                    <p className="text-sm text-[var(--muted-foreground)]">{t("csvImport.clickToUpload")}</p>
                                     <p className="text-xs text-[var(--muted-foreground)]">
-                                        Required column: title. Optional: description, priority, type, dueDate
+                                        {t("csvImport.requiredColumnInfo")}
                                     </p>
                                 </div>
                             )}
@@ -507,11 +507,11 @@ export function CsvImportModal({
                                     <thead className="bg-[var(--accent)] sticky top-0">
                                         <tr>
                                             <th className="text-left p-2 font-medium w-8">#</th>
-                                            <th className="text-left p-2 font-medium w-1/4">Title</th>
-                                            <th className="text-left p-2 font-medium w-1/4">Description</th>
-                                            <th className="text-left p-2 font-medium w-1/6">Priority</th>
-                                            <th className="text-left p-2 font-medium w-1/6">Type</th>
-                                            <th className="text-left p-2 font-medium w-1/6">Due Date</th>
+                                            <th className="text-left p-2 font-medium w-1/4">{t("columns.title")}</th>
+                                            <th className="text-left p-2 font-medium w-1/4">{t("columns.description")}</th>
+                                            <th className="text-left p-2 font-medium w-1/6">{t("filters.priority")}</th>
+                                            <th className="text-left p-2 font-medium w-1/6">{t("filters.type")}</th>
+                                            <th className="text-left p-2 font-medium w-1/6">{t("table.dueDate")}</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -571,7 +571,7 @@ export function CsvImportModal({
                     {/* Actions */}
                     <div className="flex justify-end gap-3 pt-2">
                         <ActionButton onClick={onClose} disabled={isImporting}>
-                            {importDone ? "Close" : "Cancel"}
+                            {importDone ? t("csvImport.close") : t("common:cancel")}
                         </ActionButton>
                         {!importDone && (
                             <ActionButton

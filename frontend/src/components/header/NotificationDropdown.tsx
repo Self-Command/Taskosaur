@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useNotification } from "@/contexts/notification-context";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -42,6 +43,7 @@ export default function NotificationDropdown({
 }: NotificationDropdownProps) {
   // Use context for Unread Count to keep it in sync globally
   const { unreadCount: globalUnreadCount, refreshNotifications } = useNotification();
+  const { t } = useTranslation();
   
   // Local state for the dropdown list items
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -149,13 +151,13 @@ export default function NotificationDropdown({
 
   return (
     <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
-      <Tooltip content="Notifications" position="bottom" color="primary">
+      <Tooltip content={t("notifications.title")} position="bottom" color="primary">
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"
             size="icon"
             className={`header-notification-button relative w-10 h-10 rounded-full hover:bg-[var(--accent)] ${className}`}
-            aria-label="Notifications"
+            aria-label={t("notifications.title")}
           >
             <div className="relative">
               <HiBell className="w-6 h-6 text-[var(--muted-foreground)]" />
@@ -176,7 +178,7 @@ export default function NotificationDropdown({
         {/* Header */}
         <div className="header-dropdown-menu-header">
           <div className="header-dropdown-menu-title">
-            <span className="header-dropdown-menu-title-text">Notifications</span>
+            <span className="header-dropdown-menu-title-text">{t("notifications.title")}</span>
             <Badge variant="secondary" className="header-dropdown-menu-badge">
               {globalUnreadCount}
             </Badge>
@@ -205,7 +207,7 @@ export default function NotificationDropdown({
           ) : notifications.length === 0 ? (
             <div className="header-empty-state">
               <HiBell className="header-empty-icon" />
-              <p className="header-empty-text">No new notifications</p>
+              <p className="header-empty-text">{t("notifications.noNew")}</p>
             </div>
           ) : (
             <div className="header-notifications-item-container">

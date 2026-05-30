@@ -1,0 +1,30 @@
+{
+  "title": "活动动态",
+  "description": "在一个地方管理和追踪你的所有活动。",
+  "workspace_description": "\"{{workspaceName}}\" 工作区的最近活动和更新",
+  "filters": {
+    "all": "全部活动",
+    "tasks": "任务",
+    "projects": "项目",
+    "workspaces": "工作区",
+    "users": "用户",
+    "comments": "评论",
+    "status_changes": "状态变更",
+    "assignments": "分配",
+    "filter_by_type": "按类型筛选",
+    "clear_filter": "清除筛选"
+  },
+  "pagination": {
+    "page_info": "第 {{currentPage}}/{{totalPages}} 页",
+    "previous": "上一页",
+    "next": "下一页"
+  },
+  "recent_activity": "最近活动",
+  "workspace_activity": "工作区活动",
+  "failed_to_load": "加载活动失败",
+  "failed_to_refresh": "刷新活动失败",
+  "failed_to_load_workspace": "加载工作区活动失败",
+  "no_activity": "暂无活动",
+  "no_filter_results": "未找到 {{filter}}",
+  "workspace_not_found": "未找到工作区"
+}

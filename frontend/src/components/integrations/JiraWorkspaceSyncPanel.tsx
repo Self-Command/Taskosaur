@@ -20,7 +20,7 @@ import { useTranslation } from "react-i18next";
 interface Props { workspaceId: string; organizationId?: string; }
 
 export default function JiraWorkspaceSyncPanel({ workspaceId, organizationId }: Props) {
-  const { t } = useTranslation("integrations");
+  const { t } = useTranslation(["integrations", "common"]);
   const router = useRouter();
   const { workspaceSlug } = router.query;
   const {
@@ -71,13 +71,13 @@ export default function JiraWorkspaceSyncPanel({ workspaceId, organizationId }: 
   useEffect(() => { refresh(); }, [refresh]);
 
   const handleConnect = async () => {
-    if (!subdomain.trim() || !email.trim() || !apiToken.trim()) { toast.error("All fields required"); return; }
+    if (!subdomain.trim() || !email.trim() || !apiToken.trim()) { toast.error(t("trello.messages.credential_required")); return; }
     const siteUrl = `https://${subdomain.trim().replace(/^https?:\/\//, "").replace(/\.atlassian\.net.*$/, "")}.atlassian.net`;
     setConnecting(true);
     try {
       await connectWorkspace(workspaceId, { jiraSiteUrl: siteUrl, jiraEmail: email.trim(), jiraApiToken: apiToken.trim() });
       await refresh();
-      toast.success("Jira account connected!");
+      toast.success(t("trello.messages.connected_success"));
       setStep("select_projects");
       handleLoadProjects();
     } catch (e: any) { toast.error(e.message); }
@@ -92,7 +92,7 @@ export default function JiraWorkspaceSyncPanel({ workspaceId, organizationId }: 
   };
 
   const handleGoToMapping = async () => {
-    if (selectedKeys.size === 0) { toast.error("Select at least one project"); return; }
+    if (selectedKeys.size === 0) { toast.error(t("trello.messages.select_board_required")); return; }
     setLoadingStatuses(true);
     try {
       const newJiraStatuses: Record<string, JiraStatus[]> = {};
@@ -144,7 +144,7 @@ export default function JiraWorkspaceSyncPanel({ workspaceId, organizationId }: 
       }));
       
       const r = await importProjectsToWorkspace(workspaceId, projectsPayload);
-      toast.success(`Imported ${r.importedProjectsCount} project(s)`);
+      toast.success(t("trello.messages.import_complete", { count: r.importedProjectsCount }));
       setSelectedKeys(new Set()); setJiraProjects([]); setStep("connected");
       const p = await getWorkspaceSyncedProjects(workspaceId); setSyncedProjects(p);
       await refresh();
@@ -155,23 +155,23 @@ export default function JiraWorkspaceSyncPanel({ workspaceId, organizationId }: 
 
   const handleSyncAll = async () => {
     setSyncing(true);
-    try { const r = await syncAllWorkspaceProjects(workspaceId); toast.success(`Synced ${r.successCount}/${r.total} projects`); await refresh(); }
+    try { const r = await syncAllWorkspaceProjects(workspaceId); toast.success(t("trello.messages.sync_complete", { count: r.successCount, duration: r.total })); await refresh(); }
     catch (e: any) { toast.error(e.message); }
     finally { setSyncing(false); }
   };
 
   const handleDisconnect = async () => {
     setConfirmDisconnect(false); setDisconnecting(true);
-    try { await disconnectWorkspace(workspaceId); setStatus(null); setStep("status"); setSyncedProjects([]); toast.success("Jira disconnected"); }
+    try { await disconnectWorkspace(workspaceId); setStatus(null); setStep("status"); setSyncedProjects([]); toast.success(t("trello.messages.disconnected_success")); }
     catch (e: any) { toast.error(e.message); }
     finally { setDisconnecting(false); }
   };
 
   const handleUpdateCreds = async () => {
-    if (!subdomain.trim() || !email.trim() || !apiToken.trim()) { toast.error("All fields required"); return; }
+    if (!subdomain.trim() || !email.trim() || !apiToken.trim()) { toast.error(t("trello.messages.credential_required")); return; }
     const siteUrl = `https://${subdomain.trim().replace(/^https?:\/\//, "").replace(/\.atlassian\.net.*$/, "")}.atlassian.net`;
     setConnecting(true);
-    try { await updateWorkspaceConfig(workspaceId, { jiraSiteUrl: siteUrl, jiraEmail: email.trim(), jiraApiToken: apiToken.trim() }); toast.success("Credentials updated"); setIsEditingCreds(false); }
+    try { await updateWorkspaceConfig(workspaceId, { jiraSiteUrl: siteUrl, jiraEmail: email.trim(), jiraApiToken: apiToken.trim() }); toast.success(t("trello.messages.config_updated", "Credentials updated")); setIsEditingCreds(false); }
     catch (e: any) { toast.error(e.message); }
     finally { setConnecting(false); }
   };

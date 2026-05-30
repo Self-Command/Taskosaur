@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import Image from "next/image";
 
 interface SplashScreenProps {
@@ -7,21 +8,24 @@ interface SplashScreenProps {
   isExiting?: boolean;
 }
 
-const SplashScreen: React.FC<SplashScreenProps> = ({ 
-  statusText = "Initializing Taskosaur", 
+const SplashScreen: React.FC<SplashScreenProps> = ({
+  statusText,
   progress,
-  isExiting = false 
+  isExiting = false
 }) => {
+  const { t } = useTranslation("common");
   const [isVisible, setIsVisible] = useState(true);
-  const [displayText, setDisplayText] = useState(statusText);
+  const defaultStatusText = statusText || t("splash.initializing");
+  const [displayText, setDisplayText] = useState(defaultStatusText);
 
   // Smoothly update text to avoid jumping
   useEffect(() => {
-    if (statusText !== displayText) {
-      const timer = setTimeout(() => setDisplayText(statusText), 200);
+    const currentStatusText = statusText || t("splash.initializing");
+    if (currentStatusText !== displayText) {
+      const timer = setTimeout(() => setDisplayText(currentStatusText), 200);
       return () => clearTimeout(timer);
     }
-  }, [statusText, displayText]);
+  }, [statusText, displayText, t]);
 
   if (isExiting && !isVisible) return null;
 

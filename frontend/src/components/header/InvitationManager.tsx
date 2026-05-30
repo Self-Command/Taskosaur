@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useRouter, useSearchParams } from "next/navigation";
 import { formatDateForDisplay } from "@/utils/date";
 import { Button } from "@/components/ui/button";
@@ -40,6 +41,7 @@ interface InvitationManagerProps {
 }
 
 export default function InvitationManager({ userId, className = "" }: InvitationManagerProps) {
+  const { t } = useTranslation("invitation");
   const [pendingInvites, setPendingInvites] = useState<Invitation[]>([]);
   const [inviteModal, setInviteModal] = useState<null | {
     token: string;
@@ -146,7 +148,7 @@ export default function InvitationManager({ userId, className = "" }: Invitation
         router.refresh();
       }
     } catch (error) {
-      toast.error(error?.message || "Failed to accept the invitation");
+      toast.error(error?.message || t("acceptFailed"));
       console.error(`Failed to ${action} invitation:`, error);
     } finally {
       setProcessingInvite(false);
@@ -160,7 +162,7 @@ export default function InvitationManager({ userId, className = "" }: Invitation
       <DropdownMenu>
         <Tooltip content="Invitations" position="bottom" color="primary">
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className={`header-button-base ${className}`} data-automation-id="header-pending-invitations" aria-label="View pending invitations">
+            <Button variant="ghost" size="icon" className={`header-button-base ${className}`} data-automation-id="header-pending-invitations" aria-label={t("viewPending")}>
               <TbMailPlus className="header-button-icon" />
               {pendingInvites.length > 0 && (
                 <Badge
@@ -171,7 +173,7 @@ export default function InvitationManager({ userId, className = "" }: Invitation
                 </Badge>
               )}
               <span className="hidden max-[530px]:inline-block text-sm font-medium">
-                Invitations
+                {t("title")}
               </span>
             </Button>
           </DropdownMenuTrigger>
@@ -179,7 +181,7 @@ export default function InvitationManager({ userId, className = "" }: Invitation
         <DropdownMenuContent className="header-dropdown-menu-content" align="end" sideOffset={4}>
           <div className="header-dropdown-menu-header">
             <div className="header-dropdown-menu-title">
-              <span className="header-dropdown-menu-title-text">Invitations</span>
+              <span className="header-dropdown-menu-title-text">{t("title")}</span>
               <Badge variant="secondary" className="header-dropdown-menu-badge">
                 {pendingInvites.length}
               </Badge>
@@ -210,7 +212,7 @@ export default function InvitationManager({ userId, className = "" }: Invitation
             ) : pendingInvites.length === 0 ? (
               <div className="header-empty-state">
                 <TbMailPlus className="header-empty-icon" />
-                <p className="header-empty-text">No pending invitations</p>
+                <p className="header-empty-text">{t("noPendingShort")}</p>
               </div>
             ) : (
               <div className="header-invitations-item-container">

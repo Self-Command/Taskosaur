@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -108,6 +109,7 @@ const GroupByManager: React.FC<GroupByManagerProps> = ({
   groupBy,
   onGroupByChange,
 }) => {
+  const { t } = useTranslation("tasks");
   const [open, setOpen] = useState(false);
 
   // Persist selection
@@ -158,7 +160,7 @@ const GroupByManager: React.FC<GroupByManagerProps> = ({
                 <span
                   role="button"
                   tabIndex={0}
-                  aria-label="Clear group by"
+                  aria-label={t("groupBy.clearGroupBy")}
                   onClick={handleClear}
                   onKeyDown={(e) => e.key === "Enter" && handleClear(e as any)}
                   className="ml-0.5 rounded-full hover:bg-[var(--destructive)]/20 p-0.5 cursor-pointer"
@@ -245,7 +247,7 @@ const GroupByManager: React.FC<GroupByManagerProps> = ({
           <div className="flex items-center gap-2.5">
             <LayoutList className="w-4 h-4 text-[var(--muted-foreground)]" />
             <div>
-              <div className="text-xs font-medium">No Grouping</div>
+              <div className="text-xs font-medium">{t("groupBy.noGrouping")}</div>
               <div className="text-[10px] text-[var(--muted-foreground)]">
                 Show as flat list
               </div>
