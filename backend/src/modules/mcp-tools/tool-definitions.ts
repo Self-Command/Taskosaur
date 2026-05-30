@@ -338,7 +338,21 @@ export const MCP_TOOL_DEFINITIONS: MCPToolDefinition[] = [
         taskId: { type: 'string', description: 'Task ID (UUID) / 任务 ID' },
         title: { type: 'string', description: 'New title / 新标题' },
         description: { type: 'string', description: 'New description / 新描述' },
-        type: { type: 'string', enum: ['TASK', 'HABIT', 'STUDY', 'WORK', 'LIFE', 'GOAL', 'EVENT', 'NOTE', 'PROJECT', 'SUBTASK'] },
+        type: {
+          type: 'string',
+          enum: [
+            'TASK',
+            'HABIT',
+            'STUDY',
+            'WORK',
+            'LIFE',
+            'GOAL',
+            'EVENT',
+            'NOTE',
+            'PROJECT',
+            'SUBTASK',
+          ],
+        },
         priority: { type: 'string', enum: ['LOWEST', 'LOW', 'MEDIUM', 'HIGH', 'HIGHEST'] },
         statusId: { type: 'string', description: 'New status ID / 新状态 ID' },
         startDate: { type: 'string' },
@@ -890,12 +904,76 @@ export const MCP_TOOL_DEFINITIONS: MCPToolDefinition[] = [
     },
   },
   {
+    name: 'create_task_recurrence',
+    description:
+      'Set a task to recur on a schedule (daily, weekly, monthly, yearly). Use when user says "repeat every X", "recurring", "each week", etc. / 设置任务重复规则。当用户说"每周重复"、"每天一次"等时使用。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'Task ID (UUID) / 任务 ID' },
+        recurrenceType: {
+          type: 'string',
+          enum: ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'],
+          description:
+            'Recurrence type / 重复类型: DAILY(每天), WEEKLY(每周), MONTHLY(每月), YEARLY(每年)',
+        },
+        interval: {
+          type: 'number',
+          description:
+            'Interval between recurrences (default 1). 2 = every other, 3 = every third / 间隔（默认1）。2=每隔一次，3=每隔两次',
+        },
+        daysOfWeek: {
+          type: 'array',
+          items: { type: 'number' },
+          description:
+            'Days of week for WEEKLY (0=Sunday...6=Saturday). e.g. [1,3,5] = Mon/Wed/Fri / 每周的哪几天（0=周日...6=周六）',
+        },
+        endDate: {
+          type: 'string',
+          description: 'Date when recurrence ends (ISO 8601). / 重复结束日期',
+        },
+      },
+      required: ['taskId', 'recurrenceType'],
+    },
+  },
+  {
     name: 'disable_task_recurrence',
     description: 'Stop a task from recurring. / 停止任务重复。',
     input_schema: {
       type: 'object',
       properties: {
         taskId: { type: 'string', description: 'Task ID (UUID) / 任务 ID' },
+      },
+      required: ['taskId'],
+    },
+  },
+  {
+    name: 'update_task_recurrence',
+    description:
+      'Update an existing recurrence configuration. Change type (DAILY/WEEKLY/MONTHLY/YEARLY), interval, days, or end date. Also re-enables a disabled recurrence. / 更新已有重复配置。修改类型、间隔、日期或结束日期。同时重新启用已禁用的重复。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'Task ID (UUID) / 任务 ID' },
+        recurrenceType: {
+          type: 'string',
+          enum: ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'],
+          description: 'New recurrence type / 新的重复类型',
+        },
+        interval: {
+          type: 'number',
+          description: 'New interval between recurrences / 新的重复间隔',
+        },
+        daysOfWeek: {
+          type: 'array',
+          items: { type: 'number' },
+          description:
+            'Days of week for WEEKLY (0=Sunday...6=Saturday) / 每周的哪几天（0=周日...6=周六）',
+        },
+        endDate: {
+          type: 'string',
+          description: 'Date when recurrence ends (ISO 8601). / 重复结束日期',
+        },
       },
       required: ['taskId'],
     },
@@ -972,17 +1050,32 @@ export const MCP_TOOL_DEFINITIONS: MCPToolDefinition[] = [
   {
     name: 'navigate',
     description:
-      'Tell the frontend to navigate to a specific page. Use this after creating/updating entities to navigate the user. / 让前端导航到特定页面。',
+      'Tell the frontend to navigate to a specific page. Use structured params to build correct URLs — do NOT guess URL patterns. / 让前端导航到特定页面。使用结构化参数构建正确 URL——不要猜测 URL 模式。',
     input_schema: {
       type: 'object',
       properties: {
         path: {
           type: 'string',
           description:
-            'URL path to navigate to, e.g. /workspace-slug/project-slug / 要导航的 URL 路径',
+            'DEPRECATED. Raw URL path. Prefer structured params below. / 原始 URL 路径。推荐使用下面的结构化参数。',
+        },
+        workspaceSlug: {
+          type: 'string',
+          description:
+            'Workspace slug from get_workspace / list_workspaces result. / 工作区 slug。',
+        },
+        projectSlug: {
+          type: 'string',
+          description:
+            'Project slug from get_project / list_projects result. Requires workspaceSlug. / 项目 slug。需要 workspaceSlug。',
+        },
+        taskSlug: {
+          type: 'string',
+          description:
+            'Task slug (NOT task number or ID) from get_task / list_tasks result. Requires projectSlug + workspaceSlug. / 任务 slug（非编号或 ID）。需要 projectSlug + workspaceSlug。',
         },
       },
-      required: ['path'],
+      required: [],
     },
   },
 
@@ -1243,7 +1336,8 @@ export const MCP_TOOL_DEFINITIONS: MCPToolDefinition[] = [
   },
   {
     name: 'get_user_profile',
-    description: 'Get the current user profile including language, timezone, and preferences. / 获取当前用户资料。',
+    description:
+      'Get the current user profile including language, timezone, and preferences. / 获取当前用户资料。',
     input_schema: {
       type: 'object',
       properties: {},

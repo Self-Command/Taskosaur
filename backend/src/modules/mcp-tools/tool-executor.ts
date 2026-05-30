@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 import { UsersService } from '../users/users.service';
+import { InvitationsService } from '../invitations/invitations.service';
 import { McpLoggerService } from './mcp-logger.service';
 import { EventsGateway } from '../../gateway/events.gateway';
 import { TaskType } from '@prisma/client';
@@ -65,11 +66,11 @@ function trimForLLM(obj: any, depth = 0): any {
 
 @Injectable()
 export class ToolExecutor {
-
   constructor(
     private prisma: PrismaService,
     private settingsService: SettingsService,
     private usersService: UsersService,
+    private invitationsService: InvitationsService,
     private mcpLogger: McpLoggerService,
     private eventsGateway: EventsGateway,
   ) {}
@@ -166,188 +167,220 @@ export class ToolExecutor {
     }
   }
 
-  private async executeInternal(toolName: string, params: Record<string, any>, userId: string): Promise<any> {
+  private async executeInternal(
+    toolName: string,
+    params: Record<string, any>,
+    userId: string,
+  ): Promise<any> {
     switch (toolName) {
-        // Workspace
-        case 'list_workspaces':
-          return trimForLLM(await this.listWorkspaces(params, userId));
-        case 'get_workspace':
-          return trimForLLM(await this.getWorkspace(params, userId));
-        case 'create_workspace':
-          return trimForLLM(await this.createWorkspace(params, userId));
-        case 'update_workspace':
-          return trimForLLM(await this.updateWorkspace(params, userId));
-        case 'delete_workspace':
-          return await this.deleteWorkspace(params, userId);
-        // Project
-        case 'list_projects':
-          return trimForLLM(await this.listProjects(params, userId));
-        case 'get_project':
-          return trimForLLM(await this.getProject(params, userId));
-        case 'create_project':
-          return trimForLLM(await this.createProject(params, userId));
-        case 'update_project':
-          return trimForLLM(await this.updateProject(params, userId));
-        case 'delete_project':
-          return await this.deleteProject(params, userId);
-        // Task
-        case 'list_tasks':
-          return trimForLLM(await this.listTasks(params, userId));
-        case 'get_task':
-          return trimForLLM(await this.getTask(params, userId));
-        case 'create_task':
-          return trimForLLM(await this.createTask(params, userId));
-        case 'update_task':
-          return trimForLLM(await this.updateTask(params, userId));
-        case 'delete_task':
-          return await this.deleteTask(params, userId);
-        case 'update_task_status':
-          return trimForLLM(await this.updateTaskStatus(params, userId));
-        case 'update_task_priority':
-          return trimForLLM(await this.updateTaskPriority(params, userId));
-        // Comment
-        case 'list_task_comments':
-          return trimForLLM(await this.listTaskComments(params, userId));
-        case 'create_task_comment':
-          return trimForLLM(await this.createTaskComment(params, userId));
-        // Dependency
-        case 'list_task_dependencies':
-          return trimForLLM(await this.listTaskDependencies(params, userId));
-        case 'add_task_dependency':
-          return trimForLLM(await this.addTaskDependency(params, userId));
-        case 'remove_task_dependency':
-          return await this.removeTaskDependency(params, userId);
-        // Sprint
-        case 'list_sprints':
-          return trimForLLM(await this.listSprints(params, userId));
-        case 'create_sprint':
-          return trimForLLM(await this.createSprint(params, userId));
-        case 'update_sprint':
-          return trimForLLM(await this.updateSprint(params, userId));
-        case 'delete_sprint':
-          return await this.deleteSprint(params, userId);
-        // Label
-        case 'list_labels':
-          return trimForLLM(await this.listLabels(params, userId));
-        case 'create_label':
-          return trimForLLM(await this.createLabel(params, userId));
-        case 'update_label':
-          return trimForLLM(await this.updateLabel(params, userId));
-        case 'delete_label':
-          return await this.deleteLabel(params, userId);
-        // Time Entry
-        case 'list_time_entries':
-          return trimForLLM(await this.listTimeEntries(params, userId));
-        case 'create_time_entry':
-          return trimForLLM(await this.createTimeEntry(params, userId));
-        case 'delete_time_entry':
-          return await this.deleteTimeEntry(params, userId);
-        // Member
-        case 'list_workspace_members':
-          return trimForLLM(await this.listWorkspaceMembers(params, userId));
-        case 'add_workspace_member':
-          return trimForLLM(await this.addWorkspaceMember(params, userId));
-        case 'remove_workspace_member':
-          return await this.removeWorkspaceMember(params, userId);
-        case 'add_project_member':
-          return trimForLLM(await this.addProjectMember(params, userId));
-        case 'remove_project_member':
-          return await this.removeProjectMember(params, userId);
-        case 'update_project_member_role':
-          return trimForLLM(await this.updateProjectMemberRole(params, userId));
-        // Invitation
-        case 'list_invitations':
-          return trimForLLM(await this.listInvitations(params, userId));
-        case 'create_invitation':
-          return trimForLLM(await this.createInvitation(params, userId));
-        // Notification
-        case 'list_notifications':
-          return trimForLLM(await this.listNotifications(params, userId));
-        case 'mark_notification_read':
-          return trimForLLM(await this.markNotificationRead(params, userId));
-        // Workflow
-        case 'list_workflows':
-          return trimForLLM(await this.listWorkflows(params, userId));
-        case 'get_workflow':
-          return trimForLLM(await this.getWorkflow(params, userId));
-        case 'list_status_transitions':
-          return trimForLLM(await this.listStatusTransitions(params, userId));
-        // Custom Field
-        case 'list_custom_fields':
-          return trimForLLM(await this.listCustomFields(params, userId));
-        case 'get_custom_field':
-          return trimForLLM(await this.getCustomField(params, userId));
-        // Recurrence
-        case 'get_task_recurrence':
-          return trimForLLM(await this.getTaskRecurrence(params, userId));
-        case 'disable_task_recurrence':
-          return trimForLLM(await this.disableTaskRecurrence(params, userId));
-        // Public Share
-        case 'list_task_shares':
-          return trimForLLM(await this.listTaskShares(params, userId));
-        case 'share_task_publicly':
-          return trimForLLM(await this.shareTaskPublicly(params, userId));
-        case 'revoke_task_share':
-          return trimForLLM(await this.revokeTaskShare(params, userId));
-        // Attachment
-        case 'list_task_attachments':
-          return trimForLLM(await this.listTaskAttachments(params, userId));
-        // Automation
-        case 'list_automation_rules':
-          return trimForLLM(await this.listAutomationRules(params, userId));
-        case 'create_automation_rule':
-          return trimForLLM(await this.createAutomationRule(params, userId));
-        case 'toggle_automation_rule':
-          return trimForLLM(await this.toggleAutomationRule(params, userId));
-        // User
-        case 'list_users':
-          return trimForLLM(await this.listUsers(params, userId));
-        case 'get_user':
-          return trimForLLM(await this.getUser(params, userId));
-        // Inbox
-        case 'get_project_inbox':
-          return trimForLLM(await this.getProjectInbox(params, userId));
-        case 'list_inbox_rules':
-          return trimForLLM(await this.listInboxRules(params, userId));
-        case 'list_inbox_messages':
-          return trimForLLM(await this.listInboxMessages(params, userId));
-        // Organization
-        case 'get_organization':
-          return trimForLLM(await this.getOrganization(params, userId));
-        case 'update_organization':
-          return trimForLLM(await this.updateOrganization(params, userId));
-        case 'list_organization_members':
-          return trimForLLM(await this.listOrganizationMembers(params, userId));
-        // Workspace Member
-        case 'update_workspace_member_role':
-          return trimForLLM(await this.updateWorkspaceMemberRole(params, userId));
-        // Settings
-        case 'list_settings':
-          return trimForLLM(await this.listSettings(params, userId));
-        case 'get_setting':
-          return trimForLLM(await this.getSetting(params, userId));
-        case 'update_setting':
-          return trimForLLM(await this.updateSetting(params, userId));
-        // User Profile
-        case 'update_user_profile':
-          return await this.updateUserProfile(params, userId);
-        case 'get_user_profile':
-          return trimForLLM(await this.getUserProfile(params, userId));
-        // Activity
-        case 'list_activity_logs':
-          return trimForLLM(await this.listActivityLogs(params, userId));
-        // Other
-        case 'list_task_statuses':
-          return trimForLLM(await this.listTaskStatuses(params, userId));
-        case 'list_project_members':
-          return trimForLLM(await this.listProjectMembers(params, userId));
-        case 'list_organizations':
-          return trimForLLM(await this.listOrganizations(userId));
-        case 'navigate':
-          return { success: true, path: params.path, action: 'navigate' };
-        default:
-          return { success: false, error: `Unknown tool: ${toolName}` };
-      }
+      // Workspace
+      case 'list_workspaces':
+        return trimForLLM(await this.listWorkspaces(params, userId));
+      case 'get_workspace':
+        return trimForLLM(await this.getWorkspace(params, userId));
+      case 'create_workspace':
+        return trimForLLM(await this.createWorkspace(params, userId));
+      case 'update_workspace':
+        return trimForLLM(await this.updateWorkspace(params, userId));
+      case 'delete_workspace':
+        return await this.deleteWorkspace(params, userId);
+      // Project
+      case 'list_projects':
+        return trimForLLM(await this.listProjects(params, userId));
+      case 'get_project':
+        return trimForLLM(await this.getProject(params, userId));
+      case 'create_project':
+        return trimForLLM(await this.createProject(params, userId));
+      case 'update_project':
+        return trimForLLM(await this.updateProject(params, userId));
+      case 'delete_project':
+        return await this.deleteProject(params, userId);
+      // Task
+      case 'list_tasks':
+        return trimForLLM(await this.listTasks(params, userId));
+      case 'get_task':
+        return trimForLLM(await this.getTask(params, userId));
+      case 'create_task':
+        return trimForLLM(await this.createTask(params, userId));
+      case 'update_task':
+        return trimForLLM(await this.updateTask(params, userId));
+      case 'delete_task':
+        return await this.deleteTask(params, userId);
+      case 'update_task_status':
+        return trimForLLM(await this.updateTaskStatus(params, userId));
+      case 'update_task_priority':
+        return trimForLLM(await this.updateTaskPriority(params, userId));
+      // Comment
+      case 'list_task_comments':
+        return trimForLLM(await this.listTaskComments(params, userId));
+      case 'create_task_comment':
+        return trimForLLM(await this.createTaskComment(params, userId));
+      // Dependency
+      case 'list_task_dependencies':
+        return trimForLLM(await this.listTaskDependencies(params, userId));
+      case 'add_task_dependency':
+        return trimForLLM(await this.addTaskDependency(params, userId));
+      case 'remove_task_dependency':
+        return await this.removeTaskDependency(params, userId);
+      // Sprint
+      case 'list_sprints':
+        return trimForLLM(await this.listSprints(params, userId));
+      case 'create_sprint':
+        return trimForLLM(await this.createSprint(params, userId));
+      case 'update_sprint':
+        return trimForLLM(await this.updateSprint(params, userId));
+      case 'delete_sprint':
+        return await this.deleteSprint(params, userId);
+      // Label
+      case 'list_labels':
+        return trimForLLM(await this.listLabels(params, userId));
+      case 'create_label':
+        return trimForLLM(await this.createLabel(params, userId));
+      case 'update_label':
+        return trimForLLM(await this.updateLabel(params, userId));
+      case 'delete_label':
+        return await this.deleteLabel(params, userId);
+      // Time Entry
+      case 'list_time_entries':
+        return trimForLLM(await this.listTimeEntries(params, userId));
+      case 'create_time_entry':
+        return trimForLLM(await this.createTimeEntry(params, userId));
+      case 'delete_time_entry':
+        return await this.deleteTimeEntry(params, userId);
+      // Member
+      case 'list_workspace_members':
+        return trimForLLM(await this.listWorkspaceMembers(params, userId));
+      case 'add_workspace_member':
+        return trimForLLM(await this.addWorkspaceMember(params, userId));
+      case 'remove_workspace_member':
+        return await this.removeWorkspaceMember(params, userId);
+      case 'add_project_member':
+        return trimForLLM(await this.addProjectMember(params, userId));
+      case 'remove_project_member':
+        return await this.removeProjectMember(params, userId);
+      case 'update_project_member_role':
+        return trimForLLM(await this.updateProjectMemberRole(params, userId));
+      // Invitation
+      case 'list_invitations':
+        return trimForLLM(await this.listInvitations(params, userId));
+      case 'create_invitation':
+        return trimForLLM(await this.createInvitation(params, userId));
+      // Notification
+      case 'list_notifications':
+        return trimForLLM(await this.listNotifications(params, userId));
+      case 'mark_notification_read':
+        return trimForLLM(await this.markNotificationRead(params, userId));
+      // Workflow
+      case 'list_workflows':
+        return trimForLLM(await this.listWorkflows(params, userId));
+      case 'get_workflow':
+        return trimForLLM(await this.getWorkflow(params, userId));
+      case 'list_status_transitions':
+        return trimForLLM(await this.listStatusTransitions(params, userId));
+      // Custom Field
+      case 'list_custom_fields':
+        return trimForLLM(await this.listCustomFields(params, userId));
+      case 'get_custom_field':
+        return trimForLLM(await this.getCustomField(params, userId));
+      // Recurrence
+      case 'create_task_recurrence':
+        return trimForLLM(await this.createTaskRecurrence(params, userId));
+      case 'get_task_recurrence':
+        return trimForLLM(await this.getTaskRecurrence(params, userId));
+      case 'disable_task_recurrence':
+        return trimForLLM(await this.disableTaskRecurrence(params, userId));
+      case 'update_task_recurrence':
+        return trimForLLM(await this.updateTaskRecurrence(params, userId));
+      // Public Share
+      case 'list_task_shares':
+        return trimForLLM(await this.listTaskShares(params, userId));
+      case 'share_task_publicly':
+        return trimForLLM(await this.shareTaskPublicly(params, userId));
+      case 'revoke_task_share':
+        return trimForLLM(await this.revokeTaskShare(params, userId));
+      // Attachment
+      case 'list_task_attachments':
+        return trimForLLM(await this.listTaskAttachments(params, userId));
+      // Automation
+      case 'list_automation_rules':
+        return trimForLLM(await this.listAutomationRules(params, userId));
+      case 'create_automation_rule':
+        return trimForLLM(await this.createAutomationRule(params, userId));
+      case 'toggle_automation_rule':
+        return trimForLLM(await this.toggleAutomationRule(params, userId));
+      // User
+      case 'list_users':
+        return trimForLLM(await this.listUsers(params, userId));
+      case 'get_user':
+        return trimForLLM(await this.getUser(params, userId));
+      // Inbox
+      case 'get_project_inbox':
+        return trimForLLM(await this.getProjectInbox(params, userId));
+      case 'list_inbox_rules':
+        return trimForLLM(await this.listInboxRules(params, userId));
+      case 'list_inbox_messages':
+        return trimForLLM(await this.listInboxMessages(params, userId));
+      // Organization
+      case 'get_organization':
+        return trimForLLM(await this.getOrganization(params, userId));
+      case 'update_organization':
+        return trimForLLM(await this.updateOrganization(params, userId));
+      case 'list_organization_members':
+        return trimForLLM(await this.listOrganizationMembers(params, userId));
+      // Workspace Member
+      case 'update_workspace_member_role':
+        return trimForLLM(await this.updateWorkspaceMemberRole(params, userId));
+      // Settings
+      case 'list_settings':
+        return trimForLLM(await this.listSettings(params, userId));
+      case 'get_setting':
+        return trimForLLM(await this.getSetting(params, userId));
+      case 'update_setting':
+        return trimForLLM(await this.updateSetting(params, userId));
+      // User Profile
+      case 'update_user_profile':
+        return await this.updateUserProfile(params, userId);
+      case 'get_user_profile':
+        return trimForLLM(await this.getUserProfile(params, userId));
+      // Activity
+      case 'list_activity_logs':
+        return trimForLLM(await this.listActivityLogs(params, userId));
+      // Other
+      case 'list_task_statuses':
+        return trimForLLM(await this.listTaskStatuses(params, userId));
+      case 'list_project_members':
+        return trimForLLM(await this.listProjectMembers(params, userId));
+      case 'list_organizations':
+        return trimForLLM(await this.listOrganizations(userId));
+      case 'navigate':
+        return this.buildNavigatePath(params);
+      default:
+        return { success: false, error: `Unknown tool: ${toolName}` };
+    }
+  }
+
+  /** Construct the correct URL from structured parameters, falling back to raw path. */
+  private buildNavigatePath(params: Record<string, any>) {
+    const ws = params.workspaceSlug;
+    const ps = params.projectSlug;
+    const ts = params.taskSlug;
+
+    if (ws && ps && ts) {
+      return { success: true, path: `/${ws}/${ps}/tasks/${ts}`, action: 'navigate' };
+    }
+    if (ws && ps) {
+      return { success: true, path: `/${ws}/${ps}`, action: 'navigate' };
+    }
+    if (ws) {
+      return { success: true, path: `/${ws}`, action: 'navigate' };
+    }
+    if (params.path) {
+      return { success: true, path: params.path, action: 'navigate' };
+    }
+    return {
+      success: false,
+      error: 'navigate requires workspaceSlug, projectSlug/taskSlug, or a raw path.',
+    };
   }
 
   // ========== WORKSPACE ==========
@@ -1387,31 +1420,44 @@ export class ToolExecutor {
         error: 'At least one of organizationId, workspaceId, or projectId is required.',
       };
     }
-    const token = crypto.randomUUID();
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
-    const invitation = await this.prisma.invitation.create({
-      data: {
-        inviterId: userId,
-        inviteeEmail: params.inviteeEmail,
-        role: params.role,
-        token,
-        expiresAt,
-        organizationId: this.safeNullable(params.organizationId),
-        workspaceId: this.safeNullable(params.workspaceId),
-        projectId: this.safeNullable(params.projectId),
-      },
-    });
-    return {
-      success: true,
-      invitation: {
-        id: invitation.id,
-        inviteeEmail: invitation.inviteeEmail,
-        role: invitation.role,
-        token: invitation.token,
-        expiresAt: invitation.expiresAt,
-      },
-      message: `Invitation sent to ${params.inviteeEmail}`,
-    };
+    try {
+      const result = await this.invitationsService.createInvitation(
+        {
+          inviteeEmail: params.inviteeEmail,
+          role: params.role,
+          organizationId: params.organizationId || undefined,
+          workspaceId: params.workspaceId || undefined,
+          projectId: params.projectId || undefined,
+        },
+        userId,
+      );
+      // InvitationsService returns either a direct_add result or a standard invitation
+      const r = result as any;
+      if (r.type === 'direct_add') {
+        return {
+          success: true,
+          message:
+            r.message || `User ${params.inviteeEmail} added directly (already an org member)`,
+          directAdd: true,
+        };
+      }
+      return {
+        success: true,
+        invitation: {
+          id: r.id,
+          inviteeEmail: r.inviteeEmail,
+          role: r.role,
+          token: r.token,
+          expiresAt: r.expiresAt,
+        },
+        emailSent: r.emailSent ?? false,
+        message: r.emailSent
+          ? `Invitation sent to ${params.inviteeEmail}`
+          : `Invitation created for ${params.inviteeEmail} (email delivery may have failed)`,
+      };
+    } catch (error: any) {
+      return { success: false, error: error.message || 'Failed to create invitation' };
+    }
   }
 
   // ========== NOTIFICATION ==========
@@ -1578,6 +1624,112 @@ export class ToolExecutor {
 
   // ========== RECURRING TASK ==========
 
+  private async createTaskRecurrence(params: Record<string, any>, userId: string) {
+    const err =
+      this.requireUUID(params.taskId, 'taskId') ||
+      this.requireString(params.recurrenceType, 'recurrenceType');
+    if (err) return { success: false, error: err };
+    const validTypes = ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'];
+    if (!validTypes.includes(params.recurrenceType))
+      return {
+        success: false,
+        error: `Invalid recurrenceType "${params.recurrenceType}". Valid: ${validTypes.join(', ')}`,
+      };
+
+    const task = await this.prisma.task.findUnique({
+      where: { id: params.taskId },
+      select: { id: true },
+    });
+    if (!task) return { success: false, error: 'Task not found.' };
+
+    const existing = await this.prisma.recurringTask.findUnique({
+      where: { taskId: params.taskId },
+    });
+    if (existing)
+      return {
+        success: false,
+        error:
+          'Task already has a recurrence. Use get_task_recurrence to view, or disable_task_recurrence first.',
+      };
+
+    const interval = Math.max(1, +(params.interval || 1));
+    const daysOfWeek: number[] =
+      params.daysOfWeek || (params.recurrenceType === 'WEEKLY' ? [new Date().getDay()] : []);
+    const now = new Date();
+    const nextOccurrence = this.computeNextOccurrence(
+      params.recurrenceType,
+      interval,
+      daysOfWeek,
+      now,
+    );
+
+    const recurrence = await this.prisma.recurringTask.create({
+      data: {
+        taskId: params.taskId,
+        recurrenceType: params.recurrenceType,
+        interval,
+        daysOfWeek,
+        endType: params.endDate ? 'ON_DATE' : 'NEVER',
+        endDate: this.safeDate(params.endDate),
+        isActive: true,
+        nextOccurrence,
+        currentOccurrence: 1,
+      },
+    });
+
+    await this.prisma.task.update({
+      where: { id: params.taskId },
+      data: { isRecurring: true, recurringTaskId: recurrence.id },
+    });
+
+    return {
+      success: true,
+      message: `Task set to recur ${params.recurrenceType} every ${interval} unit(s). Next occurrence: ${nextOccurrence.toISOString().slice(0, 10)}`,
+      recurrence: {
+        id: recurrence.id,
+        recurrenceType: recurrence.recurrenceType,
+        interval: recurrence.interval,
+        daysOfWeek: recurrence.daysOfWeek,
+        isActive: recurrence.isActive,
+        nextOccurrence: recurrence.nextOccurrence,
+      },
+    };
+  }
+
+  private computeNextOccurrence(
+    type: string,
+    interval: number,
+    daysOfWeek: number[],
+    from: Date,
+  ): Date {
+    const d = new Date(from);
+    switch (type) {
+      case 'DAILY':
+        d.setDate(d.getDate() + interval);
+        break;
+      case 'WEEKLY': {
+        const targetDays = daysOfWeek.length > 0 ? daysOfWeek.sort((a, b) => a - b) : [d.getDay()];
+        const currentDay = d.getDay();
+        const nextDay = targetDays.find((day) => day > currentDay);
+        if (nextDay !== undefined) {
+          d.setDate(d.getDate() + (nextDay - currentDay));
+        } else {
+          d.setDate(d.getDate() + (7 - currentDay + targetDays[0]));
+        }
+        if (interval > 1) d.setDate(d.getDate() + 7 * (interval - 1));
+        break;
+      }
+      case 'MONTHLY':
+        d.setMonth(d.getMonth() + interval);
+        break;
+      case 'YEARLY':
+        d.setFullYear(d.getFullYear() + interval);
+        break;
+    }
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+
   private async getTaskRecurrence(params: Record<string, any>, userId: string) {
     const err = this.requireUUID(params.taskId, 'taskId');
     if (err) return { success: false, error: err };
@@ -1618,6 +1770,74 @@ export class ToolExecutor {
     });
     await this.prisma.task.update({ where: { id: params.taskId }, data: { isRecurring: false } });
     return { success: true, message: 'Task recurrence disabled' };
+  }
+
+  private async updateTaskRecurrence(params: Record<string, any>, userId: string) {
+    const err = this.requireUUID(params.taskId, 'taskId');
+    if (err) return { success: false, error: err };
+
+    const existing = await this.prisma.recurringTask.findUnique({
+      where: { taskId: params.taskId },
+    });
+    if (!existing)
+      return {
+        success: false,
+        error:
+          'This task does not have a recurrence configuration. Use create_task_recurrence first.',
+      };
+
+    const recurrenceType = params.recurrenceType || existing.recurrenceType;
+    const validTypes = ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'];
+    if (!validTypes.includes(recurrenceType))
+      return {
+        success: false,
+        error: `Invalid recurrenceType "${recurrenceType}". Valid: ${validTypes.join(', ')}`,
+      };
+
+    const interval =
+      params.interval !== undefined ? Math.max(1, +params.interval) : existing.interval;
+    const daysOfWeek = params.daysOfWeek !== undefined ? params.daysOfWeek : existing.daysOfWeek;
+    const nextOccurrence = this.computeNextOccurrence(
+      recurrenceType,
+      interval,
+      daysOfWeek,
+      new Date(),
+    );
+
+    const data: Record<string, any> = {
+      recurrenceType,
+      interval,
+      daysOfWeek,
+      nextOccurrence,
+      isActive: true,
+    };
+    if (params.endDate !== undefined) {
+      data.endType = params.endDate ? 'ON_DATE' : 'NEVER';
+      data.endDate = this.safeDate(params.endDate);
+    }
+
+    const updated = await this.prisma.recurringTask.update({
+      where: { taskId: params.taskId },
+      data,
+    });
+
+    await this.prisma.task.update({
+      where: { id: params.taskId },
+      data: { isRecurring: true },
+    });
+
+    return {
+      success: true,
+      message: `Recurrence updated to ${recurrenceType} every ${interval} unit(s). Next occurrence: ${nextOccurrence.toISOString().slice(0, 10)}`,
+      recurrence: {
+        id: updated.id,
+        recurrenceType: updated.recurrenceType,
+        interval: updated.interval,
+        daysOfWeek: updated.daysOfWeek,
+        isActive: updated.isActive,
+        nextOccurrence: updated.nextOccurrence,
+      },
+    };
   }
 
   // ========== PUBLIC TASK SHARE ==========
@@ -1934,8 +2154,20 @@ export class ToolExecutor {
     const cat = params.category;
     if (!cat || cat === 'user' || cat === 'general') {
       if (user) {
-        result.push({ key: 'language', value: user.language, description: 'User display language (en/zh/es/fr/pt). Use update_user_profile to change.', category: 'user', isEncrypted: false });
-        result.push({ key: 'timezone', value: user.timezone, description: 'User timezone. Use update_user_profile to change.', category: 'user', isEncrypted: false });
+        result.push({
+          key: 'language',
+          value: user.language,
+          description: 'User display language (en/zh/es/fr/pt). Use update_user_profile to change.',
+          category: 'user',
+          isEncrypted: false,
+        });
+        result.push({
+          key: 'timezone',
+          value: user.timezone,
+          description: 'User timezone. Use update_user_profile to change.',
+          category: 'user',
+          isEncrypted: false,
+        });
       }
     }
     return { success: true, count: result.length, settings: result };
@@ -1951,8 +2183,7 @@ export class ToolExecutor {
   }
 
   private async updateSetting(params: Record<string, any>, userId: string) {
-    const err =
-      this.requireString(params.key, 'key') || this.requireString(params.value, 'value');
+    const err = this.requireString(params.key, 'key') || this.requireString(params.value, 'value');
     if (err) return { success: false, error: err };
     // Check global AND user-specific settings for encryption
     const existing = await this.prisma.settings.findFirst({
@@ -1984,17 +2215,27 @@ export class ToolExecutor {
     const validLangs = ['en', 'zh', 'es', 'fr', 'pt'];
     if (params.language !== undefined) {
       if (!validLangs.includes(params.language))
-        return { success: false, error: `Invalid language "${params.language}". Valid: ${validLangs.join(', ')}` };
+        return {
+          success: false,
+          error: `Invalid language "${params.language}". Valid: ${validLangs.join(', ')}`,
+        };
       data.language = params.language;
     }
     if (params.timezone !== undefined) {
       data.timezone = params.timezone;
     }
     if (Object.keys(data).length === 0)
-      return { success: false, error: 'No valid fields to update. Provide language and/or timezone.' };
+      return {
+        success: false,
+        error: 'No valid fields to update. Provide language and/or timezone.',
+      };
     await this.usersService.update(userId, data);
     this.eventsGateway.emitUserProfileUpdated(userId, data);
-    return { success: true, message: `Profile updated: ${Object.keys(data).join(', ')}`, updated: data };
+    return {
+      success: true,
+      message: `Profile updated: ${Object.keys(data).join(', ')}`,
+      updated: data,
+    };
   }
 
   private async getUserProfile(params: Record<string, any>, userId: string) {

@@ -63,7 +63,9 @@ export class TasksService {
   private getTaskType(value?: string): TaskType {
     if (!value) return TaskType.TASK;
     const upper = value.toUpperCase();
-    return Object.values(TaskType).includes(upper as TaskType) ? (upper as TaskType) : TaskType.TASK;
+    return Object.values(TaskType).includes(upper as TaskType)
+      ? (upper as TaskType)
+      : TaskType.TASK;
   }
 
   private getTaskPriority(value?: string): TaskPriority {
@@ -3862,7 +3864,7 @@ export class TasksService {
     // Update task to mark it as recurring
     await this.prisma.task.update({
       where: { id: taskFromAccess.id },
-      data: { isRecurring: true },
+      data: { isRecurring: true, recurringTaskId: recurringTask.id },
     });
 
     return recurringTask;

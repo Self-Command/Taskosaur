@@ -366,9 +366,7 @@ export class OrganizationChartsService {
       }),
     ]);
 
-    const onTimeCompleted = completedWithDueDate.filter(
-      (t) => t.completedAt! <= t.dueDate!,
-    ).length;
+    const onTimeCompleted = completedWithDueDate.filter((t) => t.completedAt! <= t.dueDate!).length;
     const totalWithDueDate = completedWithDueDate.length;
 
     return {
@@ -520,7 +518,7 @@ export class OrganizationChartsService {
     });
   }
 
-/**
+  /**
    * 7) Quality Metrics (general task quality)
    */
   async organizationQualityMetrics(orgId: string, userId: string): Promise<QualityMetrics> {
@@ -540,25 +538,26 @@ export class OrganizationChartsService {
 
     const now = new Date();
 
-    const [totalTasks, completedTasks, criticalTasks, resolvedCriticalTasks, overdueTasks] = await Promise.all([
-      this.prisma.task.count({ where }),
-      this.prisma.task.count({
-        where: { ...where, completedAt: { not: null } },
-      }),
-      this.prisma.task.count({
-        where: { ...where, priority: { in: ['HIGH', 'HIGHEST'] } },
-      }),
-      this.prisma.task.count({
-        where: {
-          ...where,
-          priority: { in: ['HIGH', 'HIGHEST'] },
-          completedAt: { not: null },
-        },
-      }),
-      this.prisma.task.count({
-        where: { ...where, dueDate: { lt: now }, completedAt: null },
-      }),
-    ]);
+    const [totalTasks, completedTasks, criticalTasks, resolvedCriticalTasks, overdueTasks] =
+      await Promise.all([
+        this.prisma.task.count({ where }),
+        this.prisma.task.count({
+          where: { ...where, completedAt: { not: null } },
+        }),
+        this.prisma.task.count({
+          where: { ...where, priority: { in: ['HIGH', 'HIGHEST'] } },
+        }),
+        this.prisma.task.count({
+          where: {
+            ...where,
+            priority: { in: ['HIGH', 'HIGHEST'] },
+            completedAt: { not: null },
+          },
+        }),
+        this.prisma.task.count({
+          where: { ...where, dueDate: { lt: now }, completedAt: null },
+        }),
+      ]);
 
     return {
       totalTasks,

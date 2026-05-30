@@ -278,7 +278,7 @@ function IntroQuestions({ onComplete }: { onComplete: () => void }) {
                     Setting up...
                   </>
                 ) : isLastQuestion ? (
-                  {t("completeSetup")}
+                  t("completeSetup")
                 ) : (
                   "Next"
                 )}

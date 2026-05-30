@@ -238,9 +238,7 @@ export class ProjectChartsService {
         }),
       ]);
 
-    const onTimeCompleted = completedWithDueDate.filter(
-      (t) => t.completedAt! <= t.dueDate!,
-    ).length;
+    const onTimeCompleted = completedWithDueDate.filter((t) => t.completedAt! <= t.dueDate!).length;
     const totalWithDueDate = completedWithDueDate.length;
 
     return {

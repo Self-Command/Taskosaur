@@ -461,7 +461,9 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   // User profile events (triggered by MCP tools)
   emitUserProfileUpdated(userId: string, updates: any) {
-    this.logger.log(`Pushing user_profile_updated to user:${userId} — updates: ${JSON.stringify(updates)}`);
+    this.logger.log(
+      `Pushing user_profile_updated to user:${userId} — updates: ${JSON.stringify(updates)}`,
+    );
     this.server.to(`user:${userId}`).emit('user_profile_updated', {
       event: 'user_profile_updated',
       data: { userId, updates },

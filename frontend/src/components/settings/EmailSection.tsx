@@ -95,7 +95,7 @@ export default function EmailSection() {
                   Updating...
                 </div>
               ) : (
-                {t("profile_section.edit_profile")}
+                t("profile_section.edit_profile")
               )}
             </ActionButton>
           </div>

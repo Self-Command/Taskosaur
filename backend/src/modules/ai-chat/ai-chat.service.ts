@@ -18,6 +18,9 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { Conversation } from '@prisma/client';
 
 const MAX_TOOL_ITERATIONS = 10;
+const FETCH_TIMEOUT_MS = 60000; // 60s for LLM API calls
+const FETCH_TIMEOUT_SIMPLE_MS = 30000; // 30s for simple calls (title gen, test)
+const SSE_READ_TIMEOUT_MS = 30000; // 30s max between SSE chunks
 
 // ── Inline guard: the three tool-loop methods below replace
 //    `this.mcpToolsService.executeTool(name, params, userId)`
@@ -27,10 +30,7 @@ const MAX_TOOL_ITERATIONS = 10;
 // ──────────────────────────────────────────────────────────────
 type ToolExec = { tool: string; params: any; result: any; status?: string };
 
-function makeGuardedExecutor(
-  mcp: McpToolsService,
-  toolExecutions: ToolExec[],
-) {
+function makeGuardedExecutor(mcp: McpToolsService, toolExecutions: ToolExec[]) {
   const seen = new Map<string, number>();
   const toolCounts = new Map<string, number>();
 
@@ -81,12 +81,22 @@ function makeGuardedExecutor(
 }
 
 function buildFallbackMessage(toolExecutions: ToolExec[]): string {
-  const actionPrefixes = ['create_', 'delete_', 'update_', 'add_', 'remove_', 'toggle_', 'mark_', 'share_', 'revoke_', 'disable_', 'navigate'];
-  const actions = toolExecutions.filter((te) =>
-    actionPrefixes.some((p) => te.tool.startsWith(p)),
-  );
-  const queries = toolExecutions.filter((te) =>
-    te.tool.startsWith('list_') || te.tool.startsWith('get_'),
+  const actionPrefixes = [
+    'create_',
+    'delete_',
+    'update_',
+    'add_',
+    'remove_',
+    'toggle_',
+    'mark_',
+    'share_',
+    'revoke_',
+    'disable_',
+    'navigate',
+  ];
+  const actions = toolExecutions.filter((te) => actionPrefixes.some((p) => te.tool.startsWith(p)));
+  const queries = toolExecutions.filter(
+    (te) => te.tool.startsWith('list_') || te.tool.startsWith('get_'),
   );
 
   if (actions.length > 0) {
@@ -122,8 +132,107 @@ export class AiChatService {
     private mcpToolsService: McpToolsService,
   ) {}
 
+  /**
+   * Load conversation history and reconstruct full LLM message context,
+   * including tool_calls and tool result messages from stored toolExecutions JSON.
+   */
+  private async loadHistoryMessages(conversationId: string): Promise<any[]> {
+    const historyMsgs = await this.prisma.chatMessage.findMany({
+      where: { conversationId },
+      orderBy: { createdAt: 'asc' },
+      take: 20,
+    });
+    const entries: any[] = [];
+    for (const m of historyMsgs) {
+      if (m.role === 'user') {
+        entries.push({ role: 'user', content: m.content });
+      } else if (m.role === 'assistant') {
+        const toolExecs: any[] = (m as any).toolExecutions || [];
+        if (toolExecs.length > 0) {
+          const tool_calls = toolExecs.map((te: any, i: number) => ({
+            id: `hist_${m.id}_${i}`,
+            type: 'function' as const,
+            function: { name: te.tool, arguments: JSON.stringify(te.params) },
+          }));
+          entries.push({ role: 'assistant', content: m.content || null, tool_calls });
+          for (let i = 0; i < toolExecs.length; i++) {
+            entries.push({
+              role: 'tool',
+              content: JSON.stringify(toolExecs[i].result),
+              tool_call_id: `hist_${m.id}_${i}`,
+            });
+          }
+        } else {
+          entries.push({ role: 'assistant', content: m.content });
+        }
+      }
+    }
+    return entries;
+  }
+
   private isUUID(v: string): boolean {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+  }
+
+  /**
+   * Fetch with timeout via AbortController. Throws a clear error on timeout.
+   */
+  private async fetchWithTimeout(
+    url: string,
+    options: RequestInit,
+    timeoutMs: number,
+  ): Promise<Response> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(url, { ...options, signal: controller.signal });
+      return response;
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        throw new BadRequestException(
+          `AI API request timed out after ${timeoutMs / 1000}s. The service may be overloaded or unreachable.`,
+        );
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /**
+   * Read a chunk from an SSE reader with timeout.
+   */
+  private async readSSEChunk(
+    reader: ReadableStreamDefaultReader<Uint8Array>,
+  ): Promise<ReadableStreamReadResult<Uint8Array>> {
+    const result = await Promise.race([
+      reader.read(),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () =>
+            reject(
+              new BadRequestException('AI response stream timed out — no data received for 30s.'),
+            ),
+          SSE_READ_TIMEOUT_MS,
+        ),
+      ),
+    ]);
+    return result;
+  }
+
+  /**
+   * Translate common LLM API errors to user-friendly messages.
+   */
+  private translateLlmError(status: number, body: any): string {
+    const msg = body?.error?.message || '';
+    if (status === 401) return 'AI API key is invalid. Please check your API key in settings.';
+    if (status === 402) return 'AI API quota exceeded. Please check your billing/credits.';
+    if (status === 429) return 'AI API rate limit reached. Please wait a moment and try again.';
+    if (status === 503) return 'AI service is temporarily unavailable. Please try again later.';
+    if (msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('billing'))
+      return `AI API quota issue: ${msg}`;
+    if (msg.toLowerCase().includes('rate')) return `AI API rate limit: ${msg}`;
+    return msg || `AI API returned HTTP ${status}`;
   }
 
   private async getUserTimezone(userId: string): Promise<string> {
@@ -183,9 +292,10 @@ export class AiChatService {
     ]);
 
     if (!rawApiUrl)
-      throw new BadRequestException('AI API URL not configured. Please set the API URL in settings.');
-    if (!model)
-      throw new BadRequestException('AI model not configured.');
+      throw new BadRequestException(
+        'AI API URL not configured. Please set the API URL in settings.',
+      );
+    if (!model) throw new BadRequestException('AI model not configured.');
 
     const apiUrl = this.validateApiUrl(rawApiUrl);
     const provider = this.detectProvider(apiUrl);
@@ -253,27 +363,20 @@ export class AiChatService {
         });
       }
 
-      // Load recent history AFTER system + user message (prepend between system and user)
+      // Load recent history with full tool context
       if (conversation) {
-        const historyMsgs = await this.prisma.chatMessage.findMany({
-          where: { conversationId: conversation.id },
-          orderBy: { createdAt: 'asc' },
-          take: 20,
-        });
-        const historyEntries: ChatMessageDto[] = [];
-        for (const m of historyMsgs) {
-          if (m.role === 'user' || m.role === 'assistant') {
-            historyEntries.push({ role: m.role as 'user' | 'assistant', content: m.content });
-          }
-        }
-        // Insert history between system prompt and the new user message
+        const historyEntries = await this.loadHistoryMessages(conversation.id);
         messages.splice(1, 0, ...historyEntries);
       }
 
       // Kick off title generation early so it runs in parallel with tool execution
       let titlePromise: Promise<void> | null = null;
       if (conversation?.title === 'New Chat') {
-        titlePromise = this.generateConversationTitle(conversation.id, chatRequest.message, userId).catch(() => {});
+        titlePromise = this.generateConversationTitle(
+          conversation.id,
+          chatRequest.message,
+          userId,
+        ).catch(() => {});
       }
 
       // Tool-calling loop with AI SDK protocol streaming
@@ -322,6 +425,9 @@ export class AiChatService {
               toolName: toolName,
               result: toolResult,
             })}\n`;
+            if (toolName === 'navigate' && toolResult?.path) {
+              yield `${streamIndex++}:${JSON.stringify({ type: 'navigate', path: toolResult.path })}\n`;
+            }
 
             messages.push({
               role: 'tool',
@@ -375,10 +481,7 @@ export class AiChatService {
   async *chatStreamPost(chatRequest: ChatRequestDto, userId: string): AsyncGenerator<any> {
     try {
       const { apiKey, apiUrl, provider, model } = await this.resolveChatConfig(userId);
-      const { messages, userMessage } = await this.buildChatMessages(
-        chatRequest,
-        userId,
-      );
+      const { messages, userMessage } = await this.buildChatMessages(chatRequest, userId);
 
       // Find or create conversation FIRST so we can load history
       let conversation = await this.prisma.conversation.findUnique({
@@ -390,18 +493,8 @@ export class AiChatService {
         });
       }
 
-      // Load recent history (last 20 messages) for context continuity
-      const historyMsgs = await this.prisma.chatMessage.findMany({
-        where: { conversationId: conversation.id },
-        orderBy: { createdAt: 'asc' },
-        take: 20,
-      });
-      const historyEntries: ChatMessageDto[] = [];
-      for (const m of historyMsgs) {
-        if (m.role === 'user' || m.role === 'assistant') {
-          historyEntries.push({ role: m.role as 'user' | 'assistant', content: m.content });
-        }
-      }
+      // Load recent history with full tool context
+      const historyEntries = await this.loadHistoryMessages(conversation.id);
       messages.splice(1, 0, ...historyEntries);
 
       // Kick off title generation early so it runs in parallel
@@ -424,15 +517,33 @@ export class AiChatService {
         const tokenQueue: string[] = [];
         let pushResolve: (() => void) | null = null;
         let streamDone = false;
-        let streamResult: { content: string | null; toolCalls: Array<{ id: string; name: string; arguments: any }> | null } | null = null;
+        let streamResult: {
+          content: string | null;
+          toolCalls: Array<{ id: string; name: string; arguments: any }> | null;
+        } | null = null;
 
         const streamPromise = this.callLlmWithToolsStreaming(
-          messages, userId, provider, apiUrl, apiKey,
+          messages,
+          userId,
+          provider,
+          apiUrl,
+          apiKey,
           async (token) => {
             tokenQueue.push(token);
-            if (pushResolve) { pushResolve(); pushResolve = null; }
+            if (pushResolve) {
+              pushResolve();
+              pushResolve = null;
+            }
           },
-        ).then((r) => { streamResult = r; streamDone = true; if (pushResolve) { pushResolve(); pushResolve = null; } return r; });
+        ).then((r) => {
+          streamResult = r;
+          streamDone = true;
+          if (pushResolve) {
+            pushResolve();
+            pushResolve = null;
+          }
+          return r;
+        });
 
         // Yield tokens as they arrive — zero delay
         while (true) {
@@ -441,7 +552,9 @@ export class AiChatService {
           } else if (streamDone) {
             break;
           } else {
-            await new Promise<void>((r) => { pushResolve = r; });
+            await new Promise<void>((r) => {
+              pushResolve = r;
+            });
           }
         }
 
@@ -472,6 +585,9 @@ export class AiChatService {
 
             // Emit tool result event
             yield { type: 'tool_result', tool: toolName, params: toolParams, result: toolResult };
+            if (toolName === 'navigate' && toolResult?.path) {
+              yield { type: 'navigate', path: toolResult.path };
+            }
 
             messages.push({
               role: 'tool',
@@ -490,6 +606,9 @@ export class AiChatService {
 
       if (!finalResponse && toolExecutions.length > 0) {
         finalResponse = buildFallbackMessage(toolExecutions);
+      } else if (!finalResponse) {
+        finalResponse =
+          'No response from AI. The service may be experiencing issues — please try again.';
       }
 
       // Save conversation messages
@@ -655,14 +774,17 @@ export class AiChatService {
       // Kick off title generation early so it runs in parallel with tool execution
       let titlePromise: Promise<void> | null = null;
       if (conversationId) {
-        titlePromise = this.prisma.conversation.findUnique({
-          where: { id: conversationId },
-          select: { title: true },
-        }).then((conv) => {
-          if (conv?.title === 'New Chat') {
-            return this.generateConversationTitle(conversationId, chatRequest.message, userId);
-          }
-        }).catch(() => {});
+        titlePromise = this.prisma.conversation
+          .findUnique({
+            where: { id: conversationId },
+            select: { title: true },
+          })
+          .then((conv) => {
+            if (conv?.title === 'New Chat') {
+              return this.generateConversationTitle(conversationId, chatRequest.message, userId);
+            }
+          })
+          .catch(() => {});
       }
 
       let finalResponse = '';
@@ -672,13 +794,19 @@ export class AiChatService {
       for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
         let streamedContent = '';
         const llmResponse = await this.callLlmWithToolsStreaming(
-          messages, userId, provider, apiUrl, apiKey,
+          messages,
+          userId,
+          provider,
+          apiUrl,
+          apiKey,
           async (token) => {
             streamedContent += token;
-            await this.prisma.chatMessage.update({
-              where: { id: messageId },
-              data: { content: streamedContent },
-            }).catch(() => {});
+            await this.prisma.chatMessage
+              .update({
+                where: { id: messageId },
+                data: { content: streamedContent },
+              })
+              .catch(() => {});
           },
         );
 
@@ -703,7 +831,12 @@ export class AiChatService {
             const toolCallId = toolCall.id;
 
             // Write pending entry BEFORE execution so observers see "running" status
-            toolExecutions.push({ tool: toolName, params: toolParams, result: null, status: 'running' });
+            toolExecutions.push({
+              tool: toolName,
+              params: toolParams,
+              result: null,
+              status: 'running',
+            });
             await this.prisma.chatMessage.update({
               where: { id: messageId },
               data: { toolExecutions: [...toolExecutions] as any },
@@ -740,6 +873,9 @@ export class AiChatService {
 
       if (!finalResponse && toolExecutions.length > 0) {
         finalResponse = buildFallbackMessage(toolExecutions);
+      } else if (!finalResponse) {
+        finalResponse =
+          'No response from AI. The service may be experiencing issues — please try again.';
       }
 
       // Wait for title generation (started earlier) to complete before marking done
@@ -866,19 +1002,15 @@ export class AiChatService {
         };
     }
 
-    const response = await fetch(requestUrl, {
-      method: 'POST',
-      headers: requestHeaders,
-      body: JSON.stringify(requestBody),
-    });
+    const response = await this.fetchWithTimeout(
+      requestUrl,
+      { method: 'POST', headers: requestHeaders, body: JSON.stringify(requestBody) },
+      FETCH_TIMEOUT_MS,
+    );
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      if (response.status === 401) throw new BadRequestException('Invalid API key.');
-      if (response.status === 429) throw new BadRequestException('Rate limit exceeded.');
-      throw new BadRequestException(
-        errorData?.error?.message || `LLM API returned status ${response.status}`,
-      );
+      throw new BadRequestException(this.translateLlmError(response.status, errorData));
     }
 
     // Parse SSE stream
@@ -889,7 +1021,7 @@ export class AiChatService {
     const toolAcc: Map<number, { id: string; name: string; args: string }> = new Map();
 
     while (true) {
-      const { done, value } = await reader.read();
+      const { done, value } = await this.readSSEChunk(reader);
       if (done) break;
 
       buf += decoder.decode(value, { stream: true });
@@ -932,7 +1064,13 @@ export class AiChatService {
         .map((t) => ({
           id: t.id || `call_${Date.now()}_${Math.random().toString(36).substring(2)}`,
           name: t.name,
-          arguments: (() => { try { return JSON.parse(t.args); } catch { return {}; } })(),
+          arguments: (() => {
+            try {
+              return JSON.parse(t.args);
+            } catch {
+              return {};
+            }
+          })(),
         }));
       return { content: fullContent || null, toolCalls };
     }
@@ -1061,22 +1199,15 @@ export class AiChatService {
       }
     }
 
-    const response = await fetch(requestUrl, {
-      method: 'POST',
-      headers: requestHeaders,
-      body: JSON.stringify(requestBody),
-    });
+    const response = await this.fetchWithTimeout(
+      requestUrl,
+      { method: 'POST', headers: requestHeaders, body: JSON.stringify(requestBody) },
+      FETCH_TIMEOUT_MS,
+    );
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      if (response.status === 401) {
-        throw new BadRequestException('Invalid API key.');
-      } else if (response.status === 429) {
-        throw new BadRequestException('Rate limit exceeded.');
-      }
-      throw new BadRequestException(
-        errorData?.error?.message || `LLM API returned status ${response.status}`,
-      );
+      throw new BadRequestException(this.translateLlmError(response.status, errorData));
     }
 
     const responseData = await response.json();
@@ -1322,18 +1453,17 @@ export class AiChatService {
         break;
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
     try {
-      const response = await fetch(requestUrl, {
-        method: 'POST',
-        headers: requestHeaders,
-        body: JSON.stringify(requestBody),
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
+      const response = await this.fetchWithTimeout(
+        requestUrl,
+        { method: 'POST', headers: requestHeaders, body: JSON.stringify(requestBody) },
+        FETCH_TIMEOUT_SIMPLE_MS,
+      );
 
-      if (!response.ok) throw new Error(`LLM API error: ${response.status}`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(this.translateLlmError(response.status, errorData));
+      }
 
       const responseData = await response.json();
       let aiMessage = '';
@@ -1349,8 +1479,8 @@ export class AiChatService {
       }
 
       return aiMessage.trim();
-    } finally {
-      clearTimeout(timeout);
+    } catch (err: any) {
+      throw new Error(err.message || 'LLM request failed');
     }
   }
 
@@ -1435,17 +1565,11 @@ Respond ONLY with the description text, nothing else.`;
         temperature: 0,
       });
 
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 30000);
-
-      const response = await fetch(requestUrl, {
-        method: 'POST',
-        headers,
-        body,
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeout);
+      const response = await this.fetchWithTimeout(
+        requestUrl,
+        { method: 'POST', headers, body },
+        FETCH_TIMEOUT_SIMPLE_MS,
+      );
 
       if (!response.ok) {
         let errorDetail = `HTTP ${response.status}`;
@@ -1542,7 +1666,8 @@ Respond ONLY with the description text, nothing else.`;
       const tools: any[] = Array.isArray(msg.toolExecutions) ? msg.toolExecutions : [];
       const totalCount = tools.length;
       const completedCount = tools.filter(
-        (t) => t.status === 'completed' || (!t.status && t.result !== null && t.result !== undefined),
+        (t) =>
+          t.status === 'completed' || (!t.status && t.result !== null && t.result !== undefined),
       ).length;
 
       // New tool appeared (running state)
@@ -1561,7 +1686,8 @@ Respond ONLY with the description text, nothing else.`;
       // Tool result came in
       else if (completedCount > lastCompletedCount) {
         const newlyCompleted = tools.filter(
-          (t) => t.status === 'completed' || (!t.status && t.result !== null && t.result !== undefined),
+          (t) =>
+            t.status === 'completed' || (!t.status && t.result !== null && t.result !== undefined),
         );
         const fresh = newlyCompleted.slice(lastCompletedCount);
         for (const t of fresh) {

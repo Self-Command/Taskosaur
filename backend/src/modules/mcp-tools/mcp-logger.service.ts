@@ -1,8 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 
 const WRITE_TOOLS = new Set([
-  'create_', 'update_', 'delete_', 'add_', 'remove_',
-  'toggle_', 'mark_', 'share_', 'revoke_', 'disable_',
+  'create_',
+  'update_',
+  'delete_',
+  'add_',
+  'remove_',
+  'toggle_',
+  'mark_',
+  'share_',
+  'revoke_',
+  'disable_',
 ]);
 
 function redactParams(params: Record<string, any>): Record<string, any> {

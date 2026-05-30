@@ -221,6 +221,9 @@ export default function ChatPanel() {
               case "tool_result":
                 setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") { const execs = (last.toolExecs || []).map((t: any) => t.tool === data.tool && t.pending ? { ...t, result: data.result, pending: false } : t); c[c.length - 1] = { ...last, toolExecs: execs, streaming: true }; } return c; });
                 break;
+              case "navigate":
+                if (data.path) router.push(data.path);
+                break;
               case "message":
                 setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") c[c.length - 1] = { ...last, content: data.message || data.content, toolExecs: (data.toolExecutions || []).map((t: any) => ({ tool: t.tool, params: t.params, result: t.result, pending: false })), streaming: false }; return c; });
                 setLoading(false);

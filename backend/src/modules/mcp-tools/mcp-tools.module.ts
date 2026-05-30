@@ -8,8 +8,10 @@ import { SettingsModule } from '../settings/settings.module';
 import { GatewayModule } from '../../gateway/gateway.module';
 import { UsersModule } from '../users/users.module';
 
+import { InvitationsModule } from '../invitations/invitations.module';
+
 @Module({
-  imports: [PrismaModule, SettingsModule, GatewayModule, UsersModule],
+  imports: [PrismaModule, SettingsModule, GatewayModule, UsersModule, InvitationsModule],
   controllers: [McpToolsController],
   providers: [McpToolsService, ToolExecutor, McpLoggerService],
   exports: [McpToolsService, McpLoggerService],

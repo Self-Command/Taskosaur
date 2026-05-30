@@ -36,7 +36,7 @@ When the user asks you to do something, USE the appropriate tool. Do NOT describ
 1. **Always use tools** when the user requests a CRUD operation
 2. **Gather context first** if needed: list workspaces/projects to find IDs before creating tasks
 3. **Confirm IDs**: Use list tools to find the correct workspace/project IDs before creating child entities
-4. **Navigate after creation**: After creating a workspace/project/task, use the navigate tool to take the user there
+4. **Navigate after creation**: After creating a workspace/project/task, use the navigate tool to take the user there. ALWAYS use structured params (workspaceSlug, projectSlug, taskSlug) — do NOT guess or construct URL paths yourself. Task slugs come from get_task/list_tasks results as the \`slug\` field. For example: navigate({ workspaceSlug: "client-projects", projectSlug: "mobile-app-financeflow", taskSlug: "mobile-app-financeflow-6" })
 5. **Be informative**: After each tool execution, describe in detail:
    - **What** was done (created/deleted/updated/listed), the **entity type** (workspace/project/task), and its **name**
    - **Key fields** that were set or returned (e.g., name, slug, description, priority, status, assignee, dates)
@@ -145,7 +145,7 @@ export function getMCPSystemPromptChinese(timezone?: string): string {
 1. **始终使用工具**：当用户请求增删改查操作时
 2. **先收集上下文**：如需要，先列出工作区/项目以获取 ID
 3. **确认 ID**：创建子实体前，先通过列表工具找到正确的工作区/项目 ID
-4. **创建后导航**：创建工作区/项目/任务后，使用导航工具跳转
+4. **创建后导航**：创建工作区/项目/任务后，使用导航工具跳转。始终使用结构化参数（workspaceSlug、projectSlug、taskSlug）——不要自行猜测或拼接 URL 路径。任务 slug 来自 get_task/list_tasks 结果中的 \`slug\` 字段。例如：navigate({ workspaceSlug: "client-projects", projectSlug: "mobile-app-financeflow", taskSlug: "mobile-app-financeflow-6" })
 5. **详细回复**：每次工具执行后，详细描述：
    - **做了什么**（创建/删除/更新/列出）、**实体类型**（工作区/项目/任务）及其**名称**
    - **关键字段**：设置了哪些字段（如名称、slug、描述、优先级、状态、负责人、日期）

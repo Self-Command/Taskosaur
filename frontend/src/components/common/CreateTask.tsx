@@ -1055,7 +1055,7 @@ export default function CreateTask({ projectSlug, workspace, projects }: CreateT
                 Creating task...
               </div>
             ) : (
-              {t("createTask")}
+              t("createTask")
             )}
           </ActionButton>
         </div>
