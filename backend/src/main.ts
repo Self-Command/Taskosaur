@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { execSync } from 'child_process';
 import * as express from 'express';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import {
@@ -31,6 +32,26 @@ process.on('unhandledRejection', (reason: unknown) => {
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
+
+  // Auto-run database migrations on startup
+  try {
+    logger.log('Running database migrations...');
+    execSync('npx prisma migrate deploy', {
+      stdio: 'pipe',
+      env: { ...process.env, PRISMA_HIDE_UPDATE_PROMPT: 'true' },
+    });
+    logger.log('Database migrations completed');
+  } catch (err: any) {
+    const msg = err.stderr || err.message || '';
+    if (msg.includes('P1001') || msg.includes('ECONNREFUSED')) {
+      logger.warn('Database not available — migrations skipped');
+    } else if (msg.includes('no migration')) {
+      logger.log('No pending migrations');
+    } else {
+      logger.warn(`Migration issue: ${msg.slice(0, 200)}`);
+    }
+  }
+
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
 
