@@ -162,80 +162,10 @@ export default function ChatPanel() {
 
   const loadConvs = async () => { try { const r = await api.get("/ai-chat/conversations"); setConvs(r.data || []); } catch {} };
 
-  /* ── Send message ── */
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  useEffect(() => { return () => { if (pollRef.current) clearInterval(pollRef.current); }; }, []);
+  /* ── Abort controller for SSE stream ── */
+  const abortRef = useRef<AbortController | null>(null);
 
-  const pollMessages = useCallback(async (targetConvId: string, targetMsgId: string) => {
-    try {
-      const r = await api.get(`/ai-chat/conversations/${targetConvId}`);
-      const conv = r.data;
-      if (!conv?.messages) return true;
-      const assistantMsgs = conv.messages.filter((m: any) => m.role === "assistant");
-      const target = assistantMsgs.find((m: any) => m.id === targetMsgId);
-      if (!target) return assistantMsgs.length > 0;
-
-      const tools: ToolExec[] = Array.isArray(target.toolExecutions)
-        ? target.toolExecutions.map((t: any) => ({ tool: t.tool || "", params: t.params || {}, result: t.result || {}, pending: false }))
-        : [];
-
-      if (target.status === "completed") {
-        setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") c[c.length - 1] = { ...last, content: target.content || "Done.", toolExecs: tools, streaming: false }; return c; });
-        setConvId(targetConvId);
-        loadConvs();
-        return false; // stop polling
-      }
-      if (target.status === "error") {
-        setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") c[c.length - 1] = { ...last, content: target.content || "Error.", toolExecs: tools, streaming: false }; return c; });
-        return false;
-      }
-      // streaming or pending — update toolExecs as they come
-      setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") c[c.length - 1] = { ...last, content: "", toolExecs: tools, streaming: true }; return c; });
-      return true; // keep polling
-    } catch { return true; }
-  }, [loadConvs]);
-
-  const startPolling = useCallback((targetConvId: string) => {
-    if (pollRef.current) clearInterval(pollRef.current);
-    const interval = setInterval(async () => {
-      try {
-        const r = await api.get(`/ai-chat/conversations/${targetConvId}`);
-        const conv = r.data;
-        if (!conv?.messages) return;
-        const assistantMsgs = conv.messages.filter((m: any) => m.role === "assistant");
-        const lastAssistant = assistantMsgs[assistantMsgs.length - 1];
-        if (!lastAssistant || lastAssistant.status === "completed" || lastAssistant.status === "error") {
-          if (lastAssistant) {
-            const allMsgs = conv.messages.map((m: any) => ({
-              id: m.id || "" + Date.now(), role: m.role,
-              content: m.content || "",
-              toolExecs: Array.isArray(m.toolExecutions) ? m.toolExecutions.map((t: any) => ({ tool: t.tool || "", params: t.params || {}, result: t.result || {}, pending: false })) : [],
-              streaming: false,
-            }));
-            setMessages(allMsgs);
-            setConvId(targetConvId);
-            loadConvs();
-          }
-          clearInterval(interval);
-          pollRef.current = null;
-          setLoading(false);
-          return;
-        }
-        const tools: ToolExec[] = Array.isArray(lastAssistant.toolExecutions)
-          ? lastAssistant.toolExecutions.map((t: any) => ({ tool: t.tool || "", params: t.params || {}, result: t.result || {}, pending: false }))
-          : [];
-        setMessages((p) => {
-          const c = [...p];
-          const last = c[c.length - 1];
-          if (last?.role === "assistant") c[c.length - 1] = { ...last, content: lastAssistant.content || "", toolExecs: tools, streaming: true };
-          else c.push({ id: lastAssistant.id, role: "assistant", content: lastAssistant.content || "", toolExecs: tools, streaming: true });
-          return c;
-        });
-      } catch {}
-    }, 800);
-    pollRef.current = interval;
-  }, [loadConvs]);
-
+  /* ── Send message via direct SSE streaming (no polling) ── */
   const send = async () => {
     const text = input.trim(); if (!text || loading || !user) return;
     const um: Message = { id: "" + Date.now(), role: "user", content: text, toolExecs: [], streaming: false };
@@ -246,19 +176,68 @@ export default function ChatPanel() {
       const parts = pathname.split("/").filter(Boolean);
       const sid = sessionId || "s" + Date.now();
       if (!sessionId) setSessionId(sid);
-      const body: any = { message: text, workspaceId: parts[0] || null, projectId: parts[1] || null, sessionId: sid, currentOrganizationId: localStorage.getItem("currentOrganizationId") };
-      const r = await api.post("/ai-chat/chat", body);
-      const { conversationId: cid, messageId: mid, status } = r.data;
-      if (status === "processing" && cid) {
-        setConvId(cid);
-        startPolling(cid);
-      } else {
-        // Error or immediate response
-        setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") c[c.length - 1] = { ...last, content: (r.data as any).message || "Error", streaming: false }; return c; });
-        setLoading(false);
+      const body: any = {
+        message: text,
+        workspaceId: parts[0] || undefined,
+        projectId: parts[1] || undefined,
+        sessionId: sid,
+        currentOrganizationId: localStorage.getItem("currentOrganizationId"),
+      };
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3000/api";
+      const token = localStorage.getItem("access_token");
+      const controller = new AbortController();
+      abortRef.current = controller;
+      const response = await fetch(`${baseUrl}/ai-chat/chat/stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify(body),
+        credentials: "include",
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error((errData as any).error || `HTTP ${response.status}`);
+      }
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() || "";
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const data = JSON.parse(line.slice(6));
+            switch (data.type) {
+              case "text_delta":
+                setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") c[c.length - 1] = { ...last, content: (last.content || "") + data.delta, streaming: true }; return c; });
+                break;
+              case "tool_start":
+                setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") c[c.length - 1] = { ...last, toolExecs: [...(last.toolExecs || []), { tool: data.tool, params: data.params, result: {}, pending: true }], streaming: true }; return c; });
+                break;
+              case "tool_result":
+                setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") { const execs = (last.toolExecs || []).map((t: any) => t.tool === data.tool && t.pending ? { ...t, result: data.result, pending: false } : t); c[c.length - 1] = { ...last, toolExecs: execs, streaming: true }; } return c; });
+                break;
+              case "message":
+                setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") c[c.length - 1] = { ...last, content: data.message || data.content, toolExecs: (data.toolExecutions || []).map((t: any) => ({ tool: t.tool, params: t.params, result: t.result, pending: false })), streaming: false }; return c; });
+                setLoading(false);
+                if (data.conversationId) setConvId(data.conversationId);
+                loadConvs();
+                break;
+              case "error":
+                setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") c[c.length - 1] = { ...last, content: "错误: " + data.error, streaming: false }; return c; });
+                setLoading(false);
+                break;
+            }
+          } catch {}
+        }
       }
     } catch (err: any) {
-      setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") c[c.length - 1] = { ...last, content: "错误: " + err.message, streaming: false }; return c; });
+      if (err.name === "AbortError") return;
+      setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") c[c.length - 1] = { ...last, content: "错误: " + (err.message || "Unknown"), streaming: false }; return c; });
       setLoading(false);
     }
   };
@@ -269,7 +248,7 @@ export default function ChatPanel() {
   }, [loading, user, input]);
 
   /* ── Stop polling ── */
-  const stop = () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } setLoading(false); setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.streaming) c[c.length - 1] = { ...last, streaming: false }; return c; }); };
+  const stop = () => { abortRef.current?.abort(); setLoading(false); setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.streaming) c[c.length - 1] = { ...last, streaming: false }; return c; }); };
 
   if (!isChatOpen) return null;
 
@@ -290,7 +269,7 @@ export default function ChatPanel() {
             </div>
             {/* new chat */}
             <div className="px-3 py-2.5 border-b border-gray-100 dark:border-gray-800 shrink-0">
-              <button onClick={() => { setMessages([]); setConvId(""); setSessionId(""); setHistOpen(false); }} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 text-sm font-medium hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-200 transition-all">
+              <button onClick={() => { abortRef.current?.abort(); setMessages([]); setConvId(""); setSessionId(""); setHistOpen(false); }} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 text-sm font-medium hover:border-gray-300 dark:hover:border-gray-600 hover:text-gray-700 dark:hover:text-gray-200 transition-all">
                 <HiPlus className="w-4 h-4" />新建对话
               </button>
             </div>
@@ -311,8 +290,9 @@ export default function ChatPanel() {
                       streaming: m.status === "streaming" || m.status === "pending",
                     }));
                     setMessages(msgs);
+                    // If there's a streaming message, just show loading (no polling resume)
                     const hasStreaming = (c.messages || []).some((m: any) => m.status === "streaming" || m.status === "pending");
-                    if (hasStreaming) { setLoading(true); startPolling(c.id); }
+                    if (hasStreaming) setLoading(true);
                   }}
                   className={`group flex items-center gap-2.5 px-3 py-2.5 rounded-xl cursor-pointer transition-all ${c.id === convId ? "bg-gray-100 dark:bg-gray-800" : "hover:bg-gray-50 dark:hover:bg-gray-800/50"}`}
                 >
@@ -374,7 +354,7 @@ export default function ChatPanel() {
         </div>
         <div className="flex items-center gap-1">
           {messages.length > 0 && (
-            <button onClick={() => { setMessages([]); setConvId(""); setSessionId(""); }} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 transition-colors" title="新对话">
+            <button onClick={() => { abortRef.current?.abort(); setMessages([]); setConvId(""); setSessionId(""); }} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 transition-colors" title="新对话">
               <HiPlus className="w-4 h-4" />
             </button>
           )}

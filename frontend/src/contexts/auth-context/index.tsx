@@ -3,6 +3,7 @@ import { userApi, UpdateEmailData } from "@/utils/api/userApi";
 import { organizationApi } from "@/utils/api/organizationApi";
 import { settingsApi } from "@/utils/api/settingsApi";
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from "react";
+import i18n from "@/lib/i18n";
 import { notificationApi } from "@/utils/api/notificationApi";
 import {
   ApiResponse,
@@ -103,6 +104,38 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
     error: null,
   });
 
+  // Sync i18n language with user profile whenever auth state changes
+  useEffect(() => {
+    if (authState.user?.language && authState.user.language !== i18n.language?.split('-')[0]) {
+      i18n.changeLanguage(authState.user.language);
+    }
+  }, [authState.user?.language]);
+
+  // Listen for MCP-triggered user profile updates via WebSocket
+  useEffect(() => {
+    const handler = async (e: CustomEvent) => {
+      const { userId } = e.detail?.data || {};
+      if (userId && userId === authState.user?.id) {
+        try {
+          const freshUser = await authApi.getUserProfile();
+          if (freshUser) {
+            setAuthState((prev) => ({ ...prev, user: freshUser }));
+          }
+        } catch {
+          // silent — user data refresh is best-effort
+        }
+      }
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('user_profile_updated', handler as EventListener);
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('user_profile_updated', handler as EventListener);
+      }
+    };
+  }, [authState.user?.id]);
+
   const setupUserOrganization = useCallback(async (userId: string) => {
     try {
       // Check if a current orgId exists in local storage
@@ -156,26 +189,29 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   // Initialize auth state once on mount
   useEffect(() => {
     const initializeAuth = async () => {
-      // Skip initialization for public routes to prevent stale tokens from triggering background 401s
       if (typeof window !== "undefined" && window.location.pathname.startsWith("/public/")) {
         setAuthState((prev) => ({ ...prev, isLoading: false }));
         return;
       }
 
       try {
-        const user = authApi.getCurrentUser();
         const isAuth = authApi.isAuthenticated();
 
-        if (user && isAuth) {
-          setAuthState((prev) => ({ ...prev, user }));
+        if (isAuth) {
+          let freshUser = null;
+          try {
+            freshUser = await authApi.getCurrentUser();
+          } catch {
+            // API call may fail — continue with cached token
+          }
 
-          // Setup organization for the user
-          await setupUserOrganization(user.id);
+          if (freshUser) {
+            setAuthState((prev) => ({ ...prev, user: freshUser }));
+            await setupUserOrganization(freshUser.id);
+          }
 
-          // Sync AI settings from backend profile/settings
           await loadUserAISettings();
 
-          // Initialize WebSocket connection for already logged-in users (on page refresh)
           const token = localStorage.getItem("access_token");
           if (token) {
             initializeSocket(token);

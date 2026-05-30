@@ -1,5 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { SettingsService } from '../settings/settings.service';
+import { UsersService } from '../users/users.service';
+import { McpLoggerService } from './mcp-logger.service';
+import { EventsGateway } from '../../gateway/events.gateway';
 import { TaskType } from '@prisma/client';
 import slugify from 'slugify';
 import * as crypto from 'crypto';
@@ -61,9 +65,14 @@ function trimForLLM(obj: any, depth = 0): any {
 
 @Injectable()
 export class ToolExecutor {
-  private readonly logger = new Logger(ToolExecutor.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private settingsService: SettingsService,
+    private usersService: UsersService,
+    private mcpLogger: McpLoggerService,
+    private eventsGateway: EventsGateway,
+  ) {}
 
   // ---- helpers ----
   private requireString(v: unknown, name: string): string | null {
@@ -138,18 +147,27 @@ export class ToolExecutor {
           'Referenced parent resource does not exist. Check the parent ID with list_* tools first.',
       };
     }
-    this.logger.error(`[${tool}] ${msg}`);
     return {
       success: false,
-      error: msg.includes('prisma')
-        ? `Database error. Check that all IDs are valid UUIDs obtained from list_* tools.`
-        : msg,
+      error: `Tool error: ${msg}`,
     };
   }
 
   async execute(toolName: string, params: Record<string, any>, userId: string): Promise<any> {
+    const startTime = Date.now();
+    this.mcpLogger.logToolCall(toolName, userId, params);
     try {
-      switch (toolName) {
+      const result = await this.executeInternal(toolName, params, userId);
+      this.mcpLogger.logToolSuccess(toolName, userId, Date.now() - startTime);
+      return result;
+    } catch (error: any) {
+      this.mcpLogger.logToolError(toolName, userId, error, Date.now() - startTime);
+      return this.catchError(toolName, params, error);
+    }
+  }
+
+  private async executeInternal(toolName: string, params: Record<string, any>, userId: string): Promise<any> {
+    switch (toolName) {
         // Workspace
         case 'list_workspaces':
           return trimForLLM(await this.listWorkspaces(params, userId));
@@ -310,6 +328,11 @@ export class ToolExecutor {
           return trimForLLM(await this.getSetting(params, userId));
         case 'update_setting':
           return trimForLLM(await this.updateSetting(params, userId));
+        // User Profile
+        case 'update_user_profile':
+          return await this.updateUserProfile(params, userId);
+        case 'get_user_profile':
+          return trimForLLM(await this.getUserProfile(params, userId));
         // Activity
         case 'list_activity_logs':
           return trimForLLM(await this.listActivityLogs(params, userId));
@@ -325,9 +348,6 @@ export class ToolExecutor {
         default:
           return { success: false, error: `Unknown tool: ${toolName}` };
       }
-    } catch (error: any) {
-      return this.catchError(toolName, params, error);
-    }
   }
 
   // ========== WORKSPACE ==========
@@ -497,9 +517,10 @@ export class ToolExecutor {
           workflow: { select: { id: true, name: true } },
         },
       });
-    } else if (params.slug && params.workspaceId) {
-      project = await this.prisma.project.findFirst({
-        where: { slug: params.slug, workspaceId: params.workspaceId },
+    } else if (params.slug) {
+      // slug is globally unique (@unique in schema), workspaceId is optional for narrowing
+      project = await this.prisma.project.findUnique({
+        where: { slug: params.slug },
         include: {
           _count: { select: { tasks: true, members: true, sprints: true, labels: true } },
           workflow: { select: { id: true, name: true } },
@@ -612,8 +633,9 @@ export class ToolExecutor {
 
   private async listTasks(params: Record<string, any>, userId: string) {
     const where: any = { isArchived: false };
-    if (params.projectId) where.projectId = params.projectId;
-    if (params.workspaceId) {
+    if (params.projectId) {
+      where.projectId = params.projectId;
+    } else if (params.workspaceId) {
       const pids = await this.prisma.project.findMany({
         where: { workspaceId: params.workspaceId },
         select: { id: true },
@@ -1894,56 +1916,93 @@ export class ToolExecutor {
   // ========== SETTINGS ==========
 
   private async listSettings(params: Record<string, any>, userId: string) {
-    const where: any = { userId: null }; // global settings only for safety
-    if (params.category) where.category = params.category;
-    const settings = await this.prisma.settings.findMany({
-      where,
-      orderBy: { category: 'asc' },
-      select: {
-        id: true,
-        key: true,
-        value: true,
-        description: true,
-        category: true,
-        isEncrypted: true,
-      },
-    });
-    return { success: true, count: settings.length, settings };
+    const [settings, user] = await Promise.all([
+      this.settingsService.getAll(userId, params.category),
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { language: true, timezone: true },
+      }),
+    ]);
+    const result = settings.map((s) => ({
+      key: s.key,
+      value: s.isEncrypted && s.value ? '••••••••' : s.value,
+      description: s.description,
+      category: s.category,
+      isEncrypted: s.isEncrypted,
+    }));
+    // Include user profile fields as pseudo-settings so LLM can discover them
+    const cat = params.category;
+    if (!cat || cat === 'user' || cat === 'general') {
+      if (user) {
+        result.push({ key: 'language', value: user.language, description: 'User display language (en/zh/es/fr/pt). Use update_user_profile to change.', category: 'user', isEncrypted: false });
+        result.push({ key: 'timezone', value: user.timezone, description: 'User timezone. Use update_user_profile to change.', category: 'user', isEncrypted: false });
+      }
+    }
+    return { success: true, count: result.length, settings: result };
   }
 
   private async getSetting(params: Record<string, any>, userId: string) {
     const err = this.requireString(params.key, 'key');
     if (err) return { success: false, error: err };
-    const setting = await this.prisma.settings.findFirst({
-      where: { key: params.key, userId: null },
-      select: {
-        id: true,
-        key: true,
-        value: true,
-        description: true,
-        category: true,
-        isEncrypted: true,
-      },
-    });
-    if (!setting) return { success: false, error: `Setting "${params.key}" not found.` };
-    return { success: true, setting };
+    const value = await this.settingsService.get(params.key, userId, params.defaultValue);
+    if (value === null || value === undefined)
+      return { success: false, error: `Setting "${params.key}" not found.` };
+    return { success: true, key: params.key, value };
   }
 
   private async updateSetting(params: Record<string, any>, userId: string) {
-    const err = this.requireString(params.key, 'key');
+    const err =
+      this.requireString(params.key, 'key') || this.requireString(params.value, 'value');
     if (err) return { success: false, error: err };
-    const setting = await this.prisma.settings.findFirst({
-      where: { key: params.key, userId: null },
-      select: { id: true, isEncrypted: true, key: true },
+    // Check global AND user-specific settings for encryption
+    const existing = await this.prisma.settings.findFirst({
+      where: { key: params.key, OR: [{ userId: null }, { userId }] },
+      select: { isEncrypted: true },
+      orderBy: { userId: { sort: 'asc', nulls: 'last' } },
     });
-    if (!setting) return { success: false, error: `Setting "${params.key}" not found.` };
-    if (setting.isEncrypted)
+    if (existing?.isEncrypted)
       return {
         success: false,
         error: `Setting "${params.key}" is encrypted and cannot be updated via MCP for security reasons.`,
       };
-    await this.prisma.settings.update({ where: { id: setting.id }, data: { value: params.value } });
+    await this.settingsService.set(
+      params.key,
+      params.value,
+      userId,
+      params.description,
+      params.category || 'general',
+      false,
+    );
+    this.eventsGateway.emitSettingsChanged(userId, params.key);
     return { success: true, message: `Setting "${params.key}" updated` };
+  }
+
+  // ========== USER PROFILE ==========
+
+  private async updateUserProfile(params: Record<string, any>, userId: string) {
+    const data: any = {};
+    const validLangs = ['en', 'zh', 'es', 'fr', 'pt'];
+    if (params.language !== undefined) {
+      if (!validLangs.includes(params.language))
+        return { success: false, error: `Invalid language "${params.language}". Valid: ${validLangs.join(', ')}` };
+      data.language = params.language;
+    }
+    if (params.timezone !== undefined) {
+      data.timezone = params.timezone;
+    }
+    if (Object.keys(data).length === 0)
+      return { success: false, error: 'No valid fields to update. Provide language and/or timezone.' };
+    await this.usersService.update(userId, data);
+    this.eventsGateway.emitUserProfileUpdated(userId, data);
+    return { success: true, message: `Profile updated: ${Object.keys(data).join(', ')}`, updated: data };
+  }
+
+  private async getUserProfile(params: Record<string, any>, userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { language: true, timezone: true, preferences: true },
+    });
+    return { success: true, profile: user };
   }
 
   // ========== USER ==========

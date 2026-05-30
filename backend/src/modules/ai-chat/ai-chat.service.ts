@@ -1,6 +1,4 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
-import { Observable, Subject } from 'rxjs';
-import { MessageEvent } from '@nestjs/common';
 import {
   ChatRequestDto,
   ChatResponseDto,
@@ -21,6 +19,101 @@ import { Conversation } from '@prisma/client';
 
 const MAX_TOOL_ITERATIONS = 10;
 
+// ── Inline guard: the three tool-loop methods below replace
+//    `this.mcpToolsService.executeTool(name, params, userId)`
+//    with   `executeTool(name, params, userId)`.
+//    The wrapper blocks exact-repeat read-only calls and builds
+//    a meaningful fallback when the LLM never produces a final answer.
+// ──────────────────────────────────────────────────────────────
+type ToolExec = { tool: string; params: any; result: any; status?: string };
+
+function makeGuardedExecutor(
+  mcp: McpToolsService,
+  toolExecutions: ToolExec[],
+) {
+  const seen = new Map<string, number>();
+  const toolCounts = new Map<string, number>();
+
+  return async (toolName: string, params: Record<string, any>, userId: string) => {
+    const isReadOnly = toolName.startsWith('list_') || toolName.startsWith('get_');
+
+    if (isReadOnly) {
+      // Exact-duplicate check
+      const sk = JSON.stringify(params, Object.keys(params).sort());
+      const key = `${toolName}::${sk}`;
+      if (seen.has(key)) {
+        const times = seen.get(key)! + 1;
+        seen.set(key, times);
+        return {
+          success: false,
+          _guard: true,
+          error:
+            `DUPLICATE BLOCKED: ${toolName} with these exact params was already called ${times} times. ` +
+            `You have the data — take ACTION now (delete_task, update_task, etc.). Do NOT re-query.`,
+        };
+      }
+      seen.set(key, 1);
+
+      // Same-tool repetition counter (different params each time)
+      toolCounts.set(toolName, (toolCounts.get(toolName) || 0) + 1);
+    } else {
+      // Action tool — reset all counters (LLM is making progress)
+      seen.clear();
+      toolCounts.clear();
+    }
+
+    const result = await mcp.executeTool(toolName, params, userId);
+
+    // If same read-only tool called 3+ times with varying params, attach warning
+    const toolTimes = toolCounts.get(toolName) || 0;
+    if (isReadOnly && toolTimes >= 3) {
+      return {
+        ...result,
+        _guard_warning: true,
+        guidance:
+          `WARNING: ${toolName} called ${toolTimes} times with different parameters. ` +
+          `Stop retrying. Use the data you already have to take ACTION, or tell the user what went wrong.`,
+      };
+    }
+
+    return result;
+  };
+}
+
+function buildFallbackMessage(toolExecutions: ToolExec[]): string {
+  const actionPrefixes = ['create_', 'delete_', 'update_', 'add_', 'remove_', 'toggle_', 'mark_', 'share_', 'revoke_', 'disable_', 'navigate'];
+  const actions = toolExecutions.filter((te) =>
+    actionPrefixes.some((p) => te.tool.startsWith(p)),
+  );
+  const queries = toolExecutions.filter((te) =>
+    te.tool.startsWith('list_') || te.tool.startsWith('get_'),
+  );
+
+  if (actions.length > 0) {
+    const lines = actions
+      .map((te) => te.result?.message || `${te.tool.replace(/_/g, ' ')} done`)
+      .filter(Boolean);
+    if (lines.length > 0) return lines.join('\n');
+  }
+
+  if (queries.length > 0) {
+    const uniqueTools = [...new Set(queries.map((te) => te.tool))];
+    const actionToolNames = uniqueTools.map((t) => {
+      if (t.includes('task')) return 'delete_task / update_task';
+      if (t.includes('project')) return 'delete_project / update_project';
+      if (t.includes('workspace')) return 'create_project / delete_workspace';
+      return 'the appropriate write tool';
+    });
+    return [
+      `Executed ${toolExecutions.length} read-only queries (${uniqueTools.join(', ')}) but took NO action.`,
+      `To complete the request, the AI should now call: ${[...new Set(actionToolNames)].join(', ')}.`,
+      `Please rephrase your request or try a more specific instruction.`,
+    ].join(' ');
+  }
+
+  return 'No operations were performed.';
+}
+
 @Injectable()
 export class AiChatService {
   constructor(
@@ -28,6 +121,22 @@ export class AiChatService {
     private prisma: PrismaService,
     private mcpToolsService: McpToolsService,
   ) {}
+
+  private isUUID(v: string): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+  }
+
+  private async getUserTimezone(userId: string): Promise<string> {
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { timezone: true },
+      });
+      return user?.timezone || 'UTC';
+    } catch {
+      return 'UTC';
+    }
+  }
 
   private detectProvider(apiUrl: string): string {
     try {
@@ -54,33 +163,83 @@ export class AiChatService {
   }
 
   /**
+   * Resolve AI chat configuration — shared by all chat entry points.
+   * Throws BadRequestException if AI is disabled or not configured.
+   */
+  private async resolveChatConfig(userId: string): Promise<{
+    apiKey: string | null;
+    apiUrl: string;
+    provider: string;
+    model: string;
+  }> {
+    const isEnabled = await this.settingsService.get('ai_enabled', userId);
+    if (isEnabled !== 'true')
+      throw new BadRequestException('AI chat is currently disabled. Please enable it in settings.');
+
+    const [apiKey, rawApiUrl, model] = await Promise.all([
+      this.settingsService.get('ai_api_key', userId),
+      this.settingsService.get('ai_api_url', userId),
+      this.settingsService.get('ai_model', userId),
+    ]);
+
+    if (!rawApiUrl)
+      throw new BadRequestException('AI API URL not configured. Please set the API URL in settings.');
+    if (!model)
+      throw new BadRequestException('AI model not configured.');
+
+    const apiUrl = this.validateApiUrl(rawApiUrl);
+    const provider = this.detectProvider(apiUrl);
+
+    if (!apiKey && provider !== 'ollama')
+      throw new BadRequestException('AI API key not configured. Please set it in settings.');
+
+    return { apiKey, apiUrl, provider, model };
+  }
+
+  /**
+   * Build chat messages array — shared by all chat entry points.
+   */
+  private async buildChatMessages(
+    chatRequest: ChatRequestDto,
+    userId: string,
+  ): Promise<{ messages: ChatMessageDto[]; userMessage: string }> {
+    const messages: ChatMessageDto[] = [];
+    const tz = await this.getUserTimezone(userId);
+    messages.push({ role: 'system', content: getMCPSystemPrompt(tz) });
+
+    let userMessage = chatRequest.message;
+    if (chatRequest.workspaceId || chatRequest.projectId) {
+      const contextParts: string[] = [];
+      if (chatRequest.currentOrganizationId)
+        contextParts.push(`organizationId: ${chatRequest.currentOrganizationId}`);
+      if (chatRequest.workspaceId) {
+        contextParts.push(
+          this.isUUID(chatRequest.workspaceId)
+            ? `workspaceId: ${chatRequest.workspaceId}`
+            : `workspaceSlug: ${chatRequest.workspaceId}`,
+        );
+      }
+      if (chatRequest.projectId) {
+        contextParts.push(
+          this.isUUID(chatRequest.projectId)
+            ? `projectId: ${chatRequest.projectId}`
+            : `projectSlug: ${chatRequest.projectId}`,
+        );
+      }
+      userMessage = `[Context: ${contextParts.join(', ')}]\n\n${userMessage}`;
+    }
+
+    messages.push({ role: 'user', content: userMessage });
+    return { messages, userMessage };
+  }
+
+  /**
    * Streaming chat method compatible with Vercel AI SDK protocol
    */
   async *chatStreamAISDK(chatRequest: ChatRequestDto, userId: string): AsyncGenerator<string> {
     try {
-      const isEnabled = await this.settingsService.get('ai_enabled', userId);
-      if (isEnabled !== 'true') {
-        yield `0:${JSON.stringify({ type: 'error', error: 'AI chat is currently disabled' })}\n`;
-        return;
-      }
-
-      const [apiKey, rawApiUrl] = await Promise.all([
-        this.settingsService.get('ai_api_key', userId),
-        this.settingsService.get('ai_api_url', userId),
-      ]);
-
-      if (!rawApiUrl) {
-        yield `0:${JSON.stringify({ type: 'error', error: 'AI API URL not configured' })}\n`;
-        return;
-      }
-
-      const apiUrl = this.validateApiUrl(rawApiUrl);
-      const provider = this.detectProvider(apiUrl);
-
-      if (!apiKey && provider !== 'ollama') {
-        yield `0:${JSON.stringify({ type: 'error', error: 'AI API key not configured' })}\n`;
-        return;
-      }
+      const { apiKey, apiUrl, provider, model } = await this.resolveChatConfig(userId);
+      const { messages, userMessage } = await this.buildChatMessages(chatRequest, userId);
 
       // Find or create conversation
       let conversation: any = chatRequest.sessionId
@@ -94,21 +253,28 @@ export class AiChatService {
         });
       }
 
-      // Build messages
-      const messages: ChatMessageDto[] = [];
-      messages.push({ role: 'system', content: getMCPSystemPrompt() });
-
-      let userMessage = chatRequest.message;
-      if (chatRequest.workspaceId || chatRequest.projectId) {
-        const contextParts: string[] = [];
-        if (chatRequest.workspaceId) contextParts.push(`workspaceId: ${chatRequest.workspaceId}`);
-        if (chatRequest.projectId) contextParts.push(`projectId: ${chatRequest.projectId}`);
-        if (chatRequest.currentOrganizationId)
-          contextParts.push(`organizationId: ${chatRequest.currentOrganizationId}`);
-        userMessage = `[Context: ${contextParts.join(', ')}]\n\n${userMessage}`;
+      // Load recent history AFTER system + user message (prepend between system and user)
+      if (conversation) {
+        const historyMsgs = await this.prisma.chatMessage.findMany({
+          where: { conversationId: conversation.id },
+          orderBy: { createdAt: 'asc' },
+          take: 20,
+        });
+        const historyEntries: ChatMessageDto[] = [];
+        for (const m of historyMsgs) {
+          if (m.role === 'user' || m.role === 'assistant') {
+            historyEntries.push({ role: m.role as 'user' | 'assistant', content: m.content });
+          }
+        }
+        // Insert history between system prompt and the new user message
+        messages.splice(1, 0, ...historyEntries);
       }
 
-      messages.push({ role: 'user', content: userMessage });
+      // Kick off title generation early so it runs in parallel with tool execution
+      let titlePromise: Promise<void> | null = null;
+      if (conversation?.title === 'New Chat') {
+        titlePromise = this.generateConversationTitle(conversation.id, chatRequest.message, userId).catch(() => {});
+      }
 
       // Tool-calling loop with AI SDK protocol streaming
       let streamIndex = 0;
@@ -191,14 +357,7 @@ export class AiChatService {
             data: { conversationId: conversation.id, role: 'assistant', content: finalResponse },
           })
           .catch(() => {});
-        if (conversation.title === 'New Chat') {
-          const convId = conversation.id;
-          const msg = userMessage;
-          const uid = userId;
-          setImmediate(() => {
-            this.generateConversationTitle(convId, msg, uid).catch(() => {});
-          });
-        }
+        if (titlePromise) await titlePromise;
       }
 
       // Emit finish event
@@ -215,47 +374,13 @@ export class AiChatService {
    */
   async *chatStreamPost(chatRequest: ChatRequestDto, userId: string): AsyncGenerator<any> {
     try {
-      const isEnabled = await this.settingsService.get('ai_enabled', userId);
-      if (isEnabled !== 'true') {
-        yield { type: 'error', error: 'AI chat is currently disabled' };
-        return;
-      }
+      const { apiKey, apiUrl, provider, model } = await this.resolveChatConfig(userId);
+      const { messages, userMessage } = await this.buildChatMessages(
+        chatRequest,
+        userId,
+      );
 
-      const [apiKey, rawApiUrl] = await Promise.all([
-        this.settingsService.get('ai_api_key', userId),
-        this.settingsService.get('ai_api_url', userId),
-      ]);
-
-      if (!rawApiUrl) {
-        yield { type: 'error', error: 'AI API URL not configured' };
-        return;
-      }
-
-      const apiUrl = this.validateApiUrl(rawApiUrl);
-      const provider = this.detectProvider(apiUrl);
-
-      if (!apiKey && provider !== 'ollama') {
-        yield { type: 'error', error: 'AI API key not configured' };
-        return;
-      }
-
-      // Build messages
-      const messages: ChatMessageDto[] = [];
-      messages.push({ role: 'system', content: getMCPSystemPrompt() });
-
-      let userMessage = chatRequest.message;
-      if (chatRequest.workspaceId || chatRequest.projectId) {
-        const contextParts: string[] = [];
-        if (chatRequest.workspaceId) contextParts.push(`workspaceId: ${chatRequest.workspaceId}`);
-        if (chatRequest.projectId) contextParts.push(`projectId: ${chatRequest.projectId}`);
-        if (chatRequest.currentOrganizationId)
-          contextParts.push(`organizationId: ${chatRequest.currentOrganizationId}`);
-        userMessage = `[Context: ${contextParts.join(', ')}]\n\n${userMessage}`;
-      }
-
-      messages.push({ role: 'user', content: userMessage });
-
-      // Find or create conversation
+      // Find or create conversation FIRST so we can load history
       let conversation = await this.prisma.conversation.findUnique({
         where: { sessionId: chatRequest.sessionId! },
       });
@@ -265,12 +390,62 @@ export class AiChatService {
         });
       }
 
-      // Tool-calling loop with streaming
+      // Load recent history (last 20 messages) for context continuity
+      const historyMsgs = await this.prisma.chatMessage.findMany({
+        where: { conversationId: conversation.id },
+        orderBy: { createdAt: 'asc' },
+        take: 20,
+      });
+      const historyEntries: ChatMessageDto[] = [];
+      for (const m of historyMsgs) {
+        if (m.role === 'user' || m.role === 'assistant') {
+          historyEntries.push({ role: m.role as 'user' | 'assistant', content: m.content });
+        }
+      }
+      messages.splice(1, 0, ...historyEntries);
+
+      // Kick off title generation early so it runs in parallel
+      let titlePromise: Promise<void> | null = null;
+      if (conversation.title === 'New Chat') {
+        titlePromise = this.generateConversationTitle(
+          conversation.id,
+          chatRequest.message,
+          userId,
+        ).catch(() => {});
+      }
+
+      // Tool-calling loop with real-time text streaming
       let finalResponse = '';
-      const toolExecutions: Array<{ tool: string; params: any; result: any }> = [];
+      const toolExecutions: ToolExec[] = [];
+      const executeTool = makeGuardedExecutor(this.mcpToolsService, toolExecutions);
 
       for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
-        const llmResponse = await this.callLlmWithTools(messages, userId, provider, apiUrl, apiKey);
+        // Promise-push pattern: each token triggers an immediate yield, no polling
+        const tokenQueue: string[] = [];
+        let pushResolve: (() => void) | null = null;
+        let streamDone = false;
+        let streamResult: { content: string | null; toolCalls: Array<{ id: string; name: string; arguments: any }> | null } | null = null;
+
+        const streamPromise = this.callLlmWithToolsStreaming(
+          messages, userId, provider, apiUrl, apiKey,
+          async (token) => {
+            tokenQueue.push(token);
+            if (pushResolve) { pushResolve(); pushResolve = null; }
+          },
+        ).then((r) => { streamResult = r; streamDone = true; if (pushResolve) { pushResolve(); pushResolve = null; } return r; });
+
+        // Yield tokens as they arrive — zero delay
+        while (true) {
+          if (tokenQueue.length > 0) {
+            yield { type: 'text_delta', delta: tokenQueue.shift()! };
+          } else if (streamDone) {
+            break;
+          } else {
+            await new Promise<void>((r) => { pushResolve = r; });
+          }
+        }
+
+        const llmResponse = streamResult!;
 
         if (llmResponse.toolCalls && llmResponse.toolCalls.length > 0) {
           const assistantMsg: any = {
@@ -292,7 +467,7 @@ export class AiChatService {
             // Emit tool start event
             yield { type: 'tool_start', tool: toolName, params: toolParams };
 
-            const toolResult = await this.mcpToolsService.executeTool(toolName, toolParams, userId);
+            const toolResult = await executeTool(toolName, toolParams, userId);
             toolExecutions.push({ tool: toolName, params: toolParams, result: toolResult });
 
             // Emit tool result event
@@ -314,10 +489,7 @@ export class AiChatService {
       }
 
       if (!finalResponse && toolExecutions.length > 0) {
-        const toolSummary = toolExecutions
-          .map((te) => te.result?.message || `${te.tool} executed`)
-          .join('; ');
-        finalResponse = toolSummary || 'Task completed.';
+        finalResponse = buildFallbackMessage(toolExecutions);
       }
 
       // Save conversation messages
@@ -334,15 +506,7 @@ export class AiChatService {
           },
         });
 
-        // Fire-and-forget AI title generation — completely detached from request lifecycle
-        if (conversation.title === 'New Chat') {
-          const convId = conversation.id;
-          const msg = chatRequest.message;
-          const uid = userId;
-          setImmediate(() => {
-            this.generateConversationTitle(convId, msg, uid).catch(() => {});
-          });
-        }
+        if (titlePromise) await titlePromise;
       }
 
       // Emit final response with conversation info
@@ -361,183 +525,12 @@ export class AiChatService {
   }
 
   /**
-   * Streaming chat method with real-time tool execution updates
-   */
-  chatStream(chatRequest: ChatRequestDto, userId: string): Observable<MessageEvent> {
-    const subject = new Subject<MessageEvent>();
-
-    // Run the chat logic asynchronously and emit events
-    (async () => {
-      try {
-        const isEnabled = await this.settingsService.get('ai_enabled', userId);
-        if (isEnabled !== 'true') {
-          subject.next({
-            data: { type: 'error', error: 'AI chat is currently disabled' },
-          } as MessageEvent);
-          subject.complete();
-          return;
-        }
-
-        const [apiKey, rawApiUrl] = await Promise.all([
-          this.settingsService.get('ai_api_key', userId),
-          this.settingsService.get('ai_api_url', userId),
-        ]);
-
-        if (!rawApiUrl) {
-          subject.next({
-            data: { type: 'error', error: 'AI API URL not configured' },
-          } as MessageEvent);
-          subject.complete();
-          return;
-        }
-
-        const apiUrl = this.validateApiUrl(rawApiUrl);
-        const provider = this.detectProvider(apiUrl);
-
-        if (!apiKey && provider !== 'ollama') {
-          subject.next({
-            data: { type: 'error', error: 'AI API key not configured' },
-          } as MessageEvent);
-          subject.complete();
-          return;
-        }
-
-        // Build messages
-        const messages: ChatMessageDto[] = [];
-        messages.push({ role: 'system', content: getMCPSystemPrompt() });
-
-        let userMessage = chatRequest.message;
-        if (chatRequest.workspaceId || chatRequest.projectId) {
-          const contextParts: string[] = [];
-          if (chatRequest.workspaceId) contextParts.push(`workspaceId: ${chatRequest.workspaceId}`);
-          if (chatRequest.projectId) contextParts.push(`projectId: ${chatRequest.projectId}`);
-          if (chatRequest.currentOrganizationId)
-            contextParts.push(`organizationId: ${chatRequest.currentOrganizationId}`);
-          userMessage = `[Context: ${contextParts.join(', ')}]\n\n${userMessage}`;
-        }
-
-        messages.push({ role: 'user', content: userMessage });
-
-        // Tool-calling loop with streaming
-        let finalResponse = '';
-        const toolExecutions: Array<{ tool: string; params: any; result: any }> = [];
-
-        for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
-          const llmResponse = await this.callLlmWithTools(
-            messages,
-            userId,
-            provider,
-            apiUrl,
-            apiKey,
-          );
-
-          if (llmResponse.toolCalls && llmResponse.toolCalls.length > 0) {
-            const assistantMsg: any = {
-              role: 'assistant',
-              content: llmResponse.content || null,
-              tool_calls: llmResponse.toolCalls.map((tc) => ({
-                id: tc.id,
-                type: 'function',
-                function: { name: tc.name, arguments: JSON.stringify(tc.arguments) },
-              })),
-            };
-            messages.push(assistantMsg);
-
-            for (const toolCall of llmResponse.toolCalls) {
-              const toolName = toolCall.name;
-              const toolParams = toolCall.arguments;
-              const toolCallId = toolCall.id;
-
-              // Emit tool start event
-              subject.next({
-                data: { type: 'tool_start', tool: toolName, params: toolParams },
-              } as MessageEvent);
-
-              const toolResult = await this.mcpToolsService.executeTool(
-                toolName,
-                toolParams,
-                userId,
-              );
-              toolExecutions.push({ tool: toolName, params: toolParams, result: toolResult });
-
-              // Emit tool result event
-              subject.next({
-                data: {
-                  type: 'tool_result',
-                  tool: toolName,
-                  params: toolParams,
-                  result: toolResult,
-                },
-              } as MessageEvent);
-
-              messages.push({
-                role: 'tool',
-                content: JSON.stringify(toolResult),
-                tool_call_id: toolCallId,
-              } as any);
-            }
-          } else {
-            finalResponse = llmResponse.content || 'Done.';
-            if (llmResponse.content) {
-              messages.push({ role: 'assistant', content: llmResponse.content });
-            }
-            break;
-          }
-        }
-
-        if (!finalResponse && toolExecutions.length > 0) {
-          const toolSummary = toolExecutions
-            .map((te) => te.result?.message || `${te.tool} executed`)
-            .join('; ');
-          finalResponse = toolSummary || 'Task completed.';
-        }
-
-        // Emit final response
-        subject.next({
-          data: { type: 'message', message: finalResponse, toolExecutions },
-        } as MessageEvent);
-
-        subject.complete();
-      } catch (error: any) {
-        console.error(error);
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        subject.next({ data: { type: 'error', error: errorMessage } } as MessageEvent);
-        subject.complete();
-      }
-    })();
-
-    return subject.asObservable();
-  }
-
-  /**
    * Main chat method with MCP tool-calling loop
    */
   async chat(chatRequest: ChatRequestDto, userId: string): Promise<ChatResponseDto> {
     try {
-      const isEnabled = await this.settingsService.get('ai_enabled', userId);
-      if (isEnabled !== 'true') {
-        throw new BadRequestException(
-          'AI chat is currently disabled. Please enable it in settings.',
-        );
-      }
-
-      const [apiKey, rawApiUrl] = await Promise.all([
-        this.settingsService.get('ai_api_key', userId),
-        this.settingsService.get('ai_api_url', userId),
-      ]);
-
-      if (!rawApiUrl) {
-        throw new BadRequestException(
-          'AI API URL not configured. Please set the API URL in settings.',
-        );
-      }
-
-      const apiUrl = this.validateApiUrl(rawApiUrl);
-      const provider = this.detectProvider(apiUrl);
-
-      if (!apiKey && provider !== 'ollama') {
-        throw new BadRequestException('AI API key not configured. Please set it in settings.');
-      }
+      const config = await this.resolveChatConfig(userId);
+      const { messages, userMessage } = await this.buildChatMessages(chatRequest, userId);
 
       // Find or create conversation
       let conversation: Conversation | null = null;
@@ -569,28 +562,11 @@ export class AiChatService {
         }
       }
 
-      // Build messages with system prompt
-      const messages: ChatMessageDto[] = [];
-      messages.push({
-        role: 'system',
-        content: getMCPSystemPrompt(),
-      });
-
+      // Insert DB history or request-provided history between system prompt and user message
       if (dbHistory.length > 0) {
-        dbHistory.forEach((msg) => messages.push(msg));
+        messages.splice(1, 0, ...dbHistory);
       } else if (chatRequest.history && Array.isArray(chatRequest.history)) {
-        chatRequest.history.forEach((msg) => messages.push(msg));
-      }
-
-      // Add context info if workspace/project provided
-      let userMessage = chatRequest.message;
-      if (chatRequest.workspaceId || chatRequest.projectId) {
-        const contextParts: string[] = [];
-        if (chatRequest.workspaceId) contextParts.push(`workspaceId: ${chatRequest.workspaceId}`);
-        if (chatRequest.projectId) contextParts.push(`projectId: ${chatRequest.projectId}`);
-        if (chatRequest.currentOrganizationId)
-          contextParts.push(`organizationId: ${chatRequest.currentOrganizationId}`);
-        userMessage = `[Context: ${contextParts.join(', ')}]\n\n${userMessage}`;
+        messages.splice(1, 0, ...chatRequest.history);
       }
 
       // Save user message + create placeholder for background processing
@@ -603,8 +579,6 @@ export class AiChatService {
             content: chatRequest.message,
           },
         });
-
-        // Create placeholder assistant message synchronously so we can return its ID
         const assistantMsg = await this.prisma.chatMessage.create({
           data: {
             conversationId: conversation.id,
@@ -614,28 +588,16 @@ export class AiChatService {
           },
         });
         assistantMsgId = assistantMsg.id;
-
-        if (conversation.title === 'New Chat') {
-          // Fire-and-forget AI title generation — completely detached from request lifecycle
-          const convId = conversation.id;
-          const msg = chatRequest.message;
-          const uid = userId;
-          setImmediate(() => {
-            this.generateConversationTitle(convId, msg, uid).catch(() => {});
-          });
-        }
       }
-
-      messages.push({ role: 'user', content: userMessage });
 
       // Start background AI processing — don't await
       const convId = conversation?.id || '';
       this.processChatInBackground(
         chatRequest,
         userId,
-        provider,
-        apiUrl,
-        apiKey,
+        config.provider,
+        config.apiUrl,
+        config.apiKey,
         convId,
         assistantMsgId,
         messages,
@@ -690,11 +652,35 @@ export class AiChatService {
         data: { status: 'streaming' },
       });
 
+      // Kick off title generation early so it runs in parallel with tool execution
+      let titlePromise: Promise<void> | null = null;
+      if (conversationId) {
+        titlePromise = this.prisma.conversation.findUnique({
+          where: { id: conversationId },
+          select: { title: true },
+        }).then((conv) => {
+          if (conv?.title === 'New Chat') {
+            return this.generateConversationTitle(conversationId, chatRequest.message, userId);
+          }
+        }).catch(() => {});
+      }
+
       let finalResponse = '';
-      const toolExecutions: Array<{ tool: string; params: any; result: any }> = [];
+      const toolExecutions: ToolExec[] = [];
+      const executeTool = makeGuardedExecutor(this.mcpToolsService, toolExecutions);
 
       for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
-        const llmResponse = await this.callLlmWithTools(messages, userId, provider, apiUrl, apiKey);
+        let streamedContent = '';
+        const llmResponse = await this.callLlmWithToolsStreaming(
+          messages, userId, provider, apiUrl, apiKey,
+          async (token) => {
+            streamedContent += token;
+            await this.prisma.chatMessage.update({
+              where: { id: messageId },
+              data: { content: streamedContent },
+            }).catch(() => {});
+          },
+        );
 
         if (llmResponse.toolCalls && llmResponse.toolCalls.length > 0) {
           const assistantMsg2: any = {
@@ -716,22 +702,32 @@ export class AiChatService {
             const toolParams = toolCall.arguments;
             const toolCallId = toolCall.id;
 
-            const toolResult = await this.mcpToolsService.executeTool(toolName, toolParams, userId);
-            toolExecutions.push({ tool: toolName, params: toolParams, result: toolResult });
+            // Write pending entry BEFORE execution so observers see "running" status
+            toolExecutions.push({ tool: toolName, params: toolParams, result: null, status: 'running' });
+            await this.prisma.chatMessage.update({
+              where: { id: messageId },
+              data: { toolExecutions: [...toolExecutions] as any },
+            });
+
+            const toolResult = await executeTool(toolName, toolParams, userId);
+
+            // Update entry with result AFTER execution
+            toolExecutions[toolExecutions.length - 1] = {
+              tool: toolName,
+              params: toolParams,
+              result: toolResult,
+              status: 'completed',
+            };
+            await this.prisma.chatMessage.update({
+              where: { id: messageId },
+              data: { toolExecutions: [...toolExecutions] as any },
+            });
 
             messages.push({
               role: 'tool',
               content: JSON.stringify(toolResult),
               tool_call_id: toolCallId,
             } as any);
-
-            // Update message incrementally so frontend polling sees progress
-            await this.prisma.chatMessage.update({
-              where: { id: messageId },
-              data: {
-                toolExecutions: [...toolExecutions] as any,
-              },
-            });
           }
         } else {
           finalResponse = llmResponse.content || 'Done.';
@@ -743,12 +739,11 @@ export class AiChatService {
       }
 
       if (!finalResponse && toolExecutions.length > 0) {
-        const successMsg = toolExecutions
-          .map((te) => te.result?.message)
-          .filter(Boolean)
-          .join('\n');
-        finalResponse = successMsg || '操作已完成，点击上方卡片查看详情。';
+        finalResponse = buildFallbackMessage(toolExecutions);
       }
+
+      // Wait for title generation (started earlier) to complete before marking done
+      if (titlePromise) await titlePromise;
 
       // Save complete response
       await this.prisma.chatMessage.update({
@@ -777,6 +772,172 @@ export class AiChatService {
           .catch(() => {});
       }
     }
+  }
+
+  /**
+   * Call LLM with streaming enabled. Yields text tokens via onToken callback
+   * as they arrive, while still supporting tool calls.
+   * Falls back to non-streaming for Anthropic/Google.
+   */
+  private async callLlmWithToolsStreaming(
+    messages: ChatMessageDto[],
+    userId: string,
+    provider: string,
+    apiUrl: string,
+    apiKey: string | null,
+    onToken: (text: string) => Promise<void>,
+  ): Promise<{
+    content: string | null;
+    toolCalls: Array<{ id: string; name: string; arguments: any }> | null;
+  }> {
+    const model = await this.settingsService.get('ai_model', userId);
+    if (!model) throw new BadRequestException('AI model not configured.');
+
+    const isGpt5Model = typeof model === 'string' && model.startsWith('gpt-5');
+
+    // For Anthropic/Google: fall back to non-streaming (streaming format differs)
+    if (provider === 'anthropic' || provider === 'google') {
+      const result = await this.callLlmWithTools(messages, userId, provider, apiUrl, apiKey);
+      if (result.content) await onToken(result.content);
+      return result;
+    }
+
+    let requestUrl = apiUrl;
+    const requestHeaders: any = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    };
+    let requestBody: any;
+
+    switch (provider) {
+      case 'openrouter':
+        requestUrl = `${apiUrl}/chat/completions`;
+        requestHeaders['HTTP-Referer'] = process.env.APP_URL || 'http://localhost:3000';
+        requestHeaders['X-Title'] = 'Taskosaur AI Assistant';
+        requestBody = {
+          model,
+          messages: this.formatMessagesForOpenAI(messages),
+          tools: this.mcpToolsService.getOpenAITools(),
+          tool_choice: 'auto',
+          stream: true,
+        };
+        requestBody.temperature = 0.1;
+        break;
+
+      case 'openai':
+        requestUrl = `${apiUrl}/chat/completions`;
+        requestBody = {
+          model,
+          messages: this.formatMessagesForOpenAI(messages),
+          tools: this.mcpToolsService.getOpenAITools(),
+          tool_choice: 'auto',
+          stream: true,
+          max_completion_tokens: 2000,
+        };
+        if (!isGpt5Model) requestBody.temperature = 0.1;
+        break;
+
+      case 'ollama':
+        if (apiUrl.includes('/v1')) {
+          requestUrl = apiUrl.endsWith('/chat/completions') ? apiUrl : `${apiUrl}/chat/completions`;
+        } else {
+          requestUrl = `${apiUrl}/v1/chat/completions`;
+        }
+        delete requestHeaders['Authorization'];
+        requestBody = {
+          model,
+          messages: this.formatMessagesForOpenAI(messages),
+          tools: this.mcpToolsService.getOpenAITools(),
+          tool_choice: 'auto',
+          temperature: 0.1,
+          stream: true,
+        };
+        break;
+
+      default:
+        requestUrl = `${apiUrl}/chat/completions`;
+        requestBody = {
+          model,
+          messages: this.formatMessagesForOpenAI(messages),
+          tools: this.mcpToolsService.getOpenAITools(),
+          tool_choice: 'auto',
+          temperature: 0.1,
+          stream: true,
+        };
+    }
+
+    const response = await fetch(requestUrl, {
+      method: 'POST',
+      headers: requestHeaders,
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      if (response.status === 401) throw new BadRequestException('Invalid API key.');
+      if (response.status === 429) throw new BadRequestException('Rate limit exceeded.');
+      throw new BadRequestException(
+        errorData?.error?.message || `LLM API returned status ${response.status}`,
+      );
+    }
+
+    // Parse SSE stream
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    let fullContent = '';
+    const toolAcc: Map<number, { id: string; name: string; args: string }> = new Map();
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop() || '';
+
+      for (const raw of lines) {
+        const line = raw.trim();
+        if (!line || !line.startsWith('data: ')) continue;
+        const json = line.slice(6);
+        if (json === '[DONE]') break;
+
+        try {
+          const chunk = JSON.parse(json);
+          const delta = chunk?.choices?.[0]?.delta;
+          if (!delta) continue;
+
+          if (delta.content) {
+            fullContent += delta.content;
+            await onToken(delta.content);
+          }
+
+          if (delta.tool_calls) {
+            for (const tc of delta.tool_calls) {
+              const idx = tc.index ?? 0;
+              if (!toolAcc.has(idx)) toolAcc.set(idx, { id: '', name: '', args: '' });
+              const a = toolAcc.get(idx)!;
+              if (tc.id) a.id = tc.id;
+              if (tc.function?.name) a.name += tc.function.name;
+              if (tc.function?.arguments) a.args += tc.function.arguments;
+            }
+          }
+        } catch {}
+      }
+    }
+
+    if (toolAcc.size > 0) {
+      const toolCalls = Array.from(toolAcc.values())
+        .filter((t) => t.name)
+        .map((t) => ({
+          id: t.id || `call_${Date.now()}_${Math.random().toString(36).substring(2)}`,
+          name: t.name,
+          arguments: (() => { try { return JSON.parse(t.args); } catch { return {}; } })(),
+        }));
+      return { content: fullContent || null, toolCalls };
+    }
+
+    return { content: fullContent || null, toolCalls: null };
   }
 
   /**
@@ -1161,28 +1322,36 @@ export class AiChatService {
         break;
     }
 
-    const response = await fetch(requestUrl, {
-      method: 'POST',
-      headers: requestHeaders,
-      body: JSON.stringify(requestBody),
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    try {
+      const response = await fetch(requestUrl, {
+        method: 'POST',
+        headers: requestHeaders,
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
 
-    if (!response.ok) throw new Error(`LLM API error: ${response.status}`);
+      if (!response.ok) throw new Error(`LLM API error: ${response.status}`);
 
-    const responseData = await response.json();
-    let aiMessage = '';
+      const responseData = await response.json();
+      let aiMessage = '';
 
-    if (provider === 'google') {
-      aiMessage = responseData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    } else if (provider === 'anthropic') {
-      aiMessage = responseData?.content?.[0]?.text || '';
-    } else {
-      aiMessage = responseData?.choices?.[0]?.message?.content || '';
-      if (!aiMessage) aiMessage = responseData?.message?.content || '';
-      if (!aiMessage) aiMessage = responseData?.response || '';
+      if (provider === 'google') {
+        aiMessage = responseData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      } else if (provider === 'anthropic') {
+        aiMessage = responseData?.content?.[0]?.text || '';
+      } else {
+        aiMessage = responseData?.choices?.[0]?.message?.content || '';
+        if (!aiMessage) aiMessage = responseData?.message?.content || '';
+        if (!aiMessage) aiMessage = responseData?.response || '';
+      }
+
+      return aiMessage.trim();
+    } finally {
+      clearTimeout(timeout);
     }
-
-    return aiMessage.trim();
   }
 
   // ========== KEEP EXISTING METHODS ==========
@@ -1332,6 +1501,122 @@ Respond ONLY with the description text, nothing else.`;
     }
   }
 
+  /**
+   * Watch a message for real-time tool execution updates (SSE async generator).
+   * Polls DB every 300ms — lightweight and survives client disconnect.
+   */
+  async *watchMessage(
+    conversationId: string,
+    messageId: string,
+    userId: string,
+  ): AsyncGenerator<{
+    type: 'tool_start' | 'tool_result' | 'text_delta' | 'message' | 'error' | 'heartbeat';
+    [key: string]: any;
+  }> {
+    const conversation = await this.prisma.conversation.findFirst({
+      where: { id: conversationId, userId },
+    });
+    if (!conversation) {
+      yield { type: 'error', error: 'Conversation not found' };
+      return;
+    }
+
+    const startTime = Date.now();
+    const MAX_DURATION_MS = 5 * 60 * 1000; // 5 minutes max
+    let lastToolCount = -1;
+    let lastCompletedCount = 0;
+    let lastContentLength = 0;
+    const POLL_INTERVAL_MS = 300;
+
+    while (Date.now() - startTime < MAX_DURATION_MS) {
+      const msg = await this.prisma.chatMessage.findUnique({
+        where: { id: messageId, conversationId },
+        select: { content: true, status: true, toolExecutions: true },
+      });
+
+      if (!msg) {
+        yield { type: 'error', error: 'Message not found' };
+        return;
+      }
+
+      const tools: any[] = Array.isArray(msg.toolExecutions) ? msg.toolExecutions : [];
+      const totalCount = tools.length;
+      const completedCount = tools.filter(
+        (t) => t.status === 'completed' || (!t.status && t.result !== null && t.result !== undefined),
+      ).length;
+
+      // New tool appeared (running state)
+      if (totalCount > lastToolCount) {
+        const newTools = tools.slice(lastToolCount);
+        for (const t of newTools) {
+          if (t.status === 'running' || (!t.status && !t.result)) {
+            yield { type: 'tool_start', tool: t.tool, params: t.params };
+          } else {
+            yield { type: 'tool_result', tool: t.tool, params: t.params, result: t.result };
+          }
+        }
+        lastToolCount = totalCount;
+        lastCompletedCount = completedCount;
+      }
+      // Tool result came in
+      else if (completedCount > lastCompletedCount) {
+        const newlyCompleted = tools.filter(
+          (t) => t.status === 'completed' || (!t.status && t.result !== null && t.result !== undefined),
+        );
+        const fresh = newlyCompleted.slice(lastCompletedCount);
+        for (const t of fresh) {
+          yield { type: 'tool_result', tool: t.tool, params: t.params, result: t.result };
+        }
+        lastCompletedCount = completedCount;
+      }
+
+      // Stream text content as it grows (real-time token streaming)
+      const currentContent = msg.content || '';
+      if (currentContent.length > lastContentLength && msg.status === 'streaming') {
+        yield {
+          type: 'text_delta',
+          delta: currentContent.slice(lastContentLength),
+          toolExecutions: tools.map((t) => ({
+            tool: t.tool,
+            params: t.params,
+            result: t.result,
+            status: t.status || (t.result ? 'completed' : 'running'),
+          })),
+          conversationId,
+        };
+        lastContentLength = currentContent.length;
+      }
+
+      // Final states
+      if (msg.status === 'completed') {
+        yield {
+          type: 'message',
+          content: currentContent,
+          toolExecutions: tools.map((t) => ({
+            tool: t.tool,
+            params: t.params,
+            result: t.result,
+            status: t.status || (t.result ? 'completed' : 'running'),
+          })),
+          conversationId,
+        };
+        return;
+      }
+
+      if (msg.status === 'error') {
+        yield { type: 'error', error: currentContent || 'Unknown error', content: currentContent };
+        return;
+      }
+
+      // Heartbeat to keep connection alive
+      yield { type: 'heartbeat' };
+
+      await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+    }
+
+    yield { type: 'error', error: 'Watch timed out' };
+  }
+
   // ========== CONVERSATION MANAGEMENT ==========
 
   async getConversation(userId: string, id: string) {
@@ -1372,26 +1657,22 @@ Respond ONLY with the description text, nothing else.`;
     userMessage: string,
     userId: string,
   ): Promise<void> {
+    let finalTitle = userMessage.substring(0, 30) + (userMessage.length > 30 ? '...' : '');
     try {
       const titlePrompt = `Generate a very short title (max 4 words) for: "${userMessage.substring(0, 100)}"`;
       const aiTitle = await this.callLlmSimple([{ role: 'user', content: titlePrompt }], userId);
-      let cleanTitle = aiTitle.replace(/['""`.\n]/g, '').trim();
+      let cleanTitle = aiTitle.replace(/[`'"".\n]/g, '').trim();
       if (cleanTitle.length > 40) cleanTitle = cleanTitle.substring(0, 40) + '...';
-      if (cleanTitle.length >= 2) {
-        await this.prisma.conversation.update({
-          where: { id: conversationId },
-          data: { title: cleanTitle },
-        });
-      }
+      if (cleanTitle.length >= 2) finalTitle = cleanTitle;
     } catch {
-      const fallback = userMessage.substring(0, 30) + (userMessage.length > 30 ? '...' : '');
-      try {
-        await this.prisma.conversation.update({
-          where: { id: conversationId },
-          data: { title: fallback || 'New Chat' },
-        });
-      } catch {}
+      // fallback remains userMessage prefix
     }
+    try {
+      await this.prisma.conversation.update({
+        where: { id: conversationId },
+        data: { title: finalTitle || 'Chat' },
+      });
+    } catch {}
   }
 
   async renameConversation(userId: string, id: string, dto: RenameConversationDto) {

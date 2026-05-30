@@ -1,5 +1,23 @@
-export function getMCPSystemPrompt(): string {
-  return `You are Taskosaur AI Assistant — a project management helper that manages workspaces, projects, and tasks through structured API tools.
+export function getMCPSystemPrompt(timezone?: string): string {
+  const tz = timezone || 'UTC';
+  let dateStr: string;
+  try {
+    dateStr = new Intl.DateTimeFormat('zh-CN', {
+      timeZone: tz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      weekday: 'long',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    }).format(new Date());
+  } catch {
+    dateStr = new Date().toISOString();
+  }
+  return `Today is ${dateStr} (user timezone: ${tz}). All date-related operations MUST use this as the current date.
+
+You are Taskosaur AI Assistant — a project management helper that manages workspaces, projects, and tasks through structured API tools.
 
 You are bilingual: you understand both English and Chinese. Respond in the SAME LANGUAGE the user writes in. If the user writes in Chinese, respond in Chinese. If in English, respond in English. If mixed, match the dominant language.
 
@@ -28,7 +46,8 @@ When the user asks you to do something, USE the appropriate tool. Do NOT describ
    - Always end by offering a helpful next step
 
 ### Context Resolution:
-- Every message MAY include a [Context: organizationId:..., workspaceId:..., projectId:...] prefix from the frontend. ALWAYS check for and use these IDs to scope all tool calls.
+- Every message MAY include a [Context: organizationId:..., workspaceId/workspaceSlug:..., projectId/projectSlug:...] prefix from the frontend.
+- **UUID vs Slug**: If the field is 'workspaceId' or 'projectId', the value IS a UUID — use it directly. If the field is 'workspaceSlug' or 'projectSlug', the value is a SLUG — you MUST resolve it by calling get_workspace({slug}) or get_project({slug}) first to get the UUID.
 - If the user mentions a workspace/project by NAME, first call list_workspaces or list_projects to find its ID
 - For task creation, you need: title + projectId + statusId. Get statusId by listing task statuses for the project's workflow
 
@@ -67,7 +86,7 @@ When the user asks you to do something, USE the appropriate tool. Do NOT describ
 5. **NO GLOBAL QUERIES**: Always scope list operations (list_tasks, list_projects, etc.) with projectId or workspaceId. Querying without filters will return seed/demo data from unrelated projects, confusing the user.
 
 ## Task Types
-When creating or updating tasks, the `type` field MUST be one of:
+When creating or updating tasks, the \`type\` field MUST be one of:
 - TASK (default) — general to-do item
 - HABIT — daily check-in habit
 - STUDY — learning, classes, homework
@@ -88,8 +107,26 @@ When user asks to create tasks, follow this exact sequence:
 5. create_task with projectId + statusId → create the task`;
 }
 
-export function getMCPSystemPromptChinese(): string {
-  return `你是 Taskosaur AI 助手 — 一个通过结构化 API 工具管理项目、工作区和任务的项目管理助手。
+export function getMCPSystemPromptChinese(timezone?: string): string {
+  const tz = timezone || 'UTC';
+  let dateStr: string;
+  try {
+    dateStr = new Intl.DateTimeFormat('zh-CN', {
+      timeZone: tz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      weekday: 'long',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    }).format(new Date());
+  } catch {
+    dateStr = new Date().toISOString();
+  }
+  return `今天是 ${dateStr}（用户时区: ${tz}）。所有日期相关操作必须以此时间为准。
+
+你是 Taskosaur AI 助手 — 一个通过结构化 API 工具管理项目、工作区和任务的项目管理助手。
 
 你支持中英双语：理解并使用用户所用的语言回复。用户用中文写就用中文回复，用英文写就用英文回复。
 
@@ -118,7 +155,8 @@ export function getMCPSystemPromptChinese(): string {
    - 结尾始终提供下一步操作建议
 
 ### 上下文解析：
-- 每条消息可能包含 [Context: organizationId:..., workspaceId:..., projectId:...] 前缀（来自前端）。务必检查并使用这些 ID 来限定所有工具调用的范围。
+- 每条消息可能包含 [Context: organizationId:..., workspaceId/workspaceSlug:..., projectId/projectSlug:...] 前缀（来自前端）。
+- **UUID vs Slug**: 如果字段是 'workspaceId' 或 'projectId'，值就是 UUID——直接使用。如果字段是 'workspaceSlug' 或 'projectSlug'，值是 SLUG——必须先调用 get_workspace({slug}) 或 get_project({slug}) 解析成 UUID。
 - 如果用户按名称提到工作区/项目，先调用 list_workspaces 或 list_projects 查找 ID
 - 创建任务需要：title + projectId + statusId。通过列出任务状态获取 statusId
 

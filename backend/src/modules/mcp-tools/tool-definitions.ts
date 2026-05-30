@@ -1221,6 +1221,35 @@ export const MCP_TOOL_DEFINITIONS: MCPToolDefinition[] = [
     },
   },
 
+  // ========== USER PROFILE TOOLS ==========
+  {
+    name: 'update_user_profile',
+    description:
+      'Update the current user profile fields (language, timezone). Use this when the user asks to change their language or timezone. / 更新当前用户资料（语言、时区等）。当用户要求修改语言或时区时使用。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        language: {
+          type: 'string',
+          enum: ['en', 'zh', 'es', 'fr', 'pt'],
+          description: 'Language code: en/zh/es/fr/pt / 语言代码',
+        },
+        timezone: {
+          type: 'string',
+          description: 'Timezone string, e.g. "Asia/Shanghai", "UTC" / 时区',
+        },
+      },
+    },
+  },
+  {
+    name: 'get_user_profile',
+    description: 'Get the current user profile including language, timezone, and preferences. / 获取当前用户资料。',
+    input_schema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+
   // ========== ACTIVITY LOG TOOLS ==========
   {
     name: 'list_activity_logs',

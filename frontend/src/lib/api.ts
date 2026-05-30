@@ -645,7 +645,7 @@ export const apiUtils = {
 
   getCurrentUser: async (): Promise<any> => {
     try {
-      const response = await api.get("/auth/me");
+      const response = await api.get("/auth/profile");
       return response.data;
     } catch (error) {
       if (isAxiosError(error) && error.response?.status === 401) {

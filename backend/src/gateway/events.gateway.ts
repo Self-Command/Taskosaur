@@ -459,6 +459,25 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     });
   }
 
+  // User profile events (triggered by MCP tools)
+  emitUserProfileUpdated(userId: string, updates: any) {
+    this.logger.log(`Pushing user_profile_updated to user:${userId} — updates: ${JSON.stringify(updates)}`);
+    this.server.to(`user:${userId}`).emit('user_profile_updated', {
+      event: 'user_profile_updated',
+      data: { userId, updates },
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  emitSettingsChanged(userId: string, key?: string) {
+    this.logger.log(`Pushing settings_changed to user:${userId} — key: ${key}`);
+    this.server.to(`user:${userId}`).emit('settings_changed', {
+      event: 'settings_changed',
+      data: { userId, key },
+      timestamp: new Date().toISOString(),
+    });
+  }
+
   // Get connected users count
   getConnectedUsersCount(): number {
     return this.connectedUsers.size;

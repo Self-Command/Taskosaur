@@ -97,6 +97,8 @@ export class AuthService {
         lastName: user.lastName,
         username: user.username || undefined,
         role: user.role,
+        language: user.language || undefined,
+        timezone: user.timezone || undefined,
         avatar: user.avatar || undefined,
         bio: user.bio || undefined,
         mobileNumber: user.mobileNumber || undefined,

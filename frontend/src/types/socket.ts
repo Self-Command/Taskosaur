@@ -35,6 +35,8 @@ export enum SocketEvents {
   NOTIFICATION = "notification",
   USER_TYPING = "user:typing",
   USER_STOPPED_TYPING = "user:stopped_typing",
+  USER_PROFILE_UPDATED = "user_profile_updated",
+  SETTINGS_CHANGED = "settings_changed",
   ERROR = "error",
 }
 

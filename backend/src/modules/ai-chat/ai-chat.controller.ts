@@ -142,6 +142,41 @@ export class AiChatController {
     }
   }
 
+  @Get('conversations/:conversationId/messages/:messageId/watch')
+  @ApiOperation({ summary: 'Watch a message for real-time tool execution updates via SSE' })
+  @ApiResponse({ status: 200 })
+  async watchMessage(
+    @CurrentUser() user: User,
+    @Param('conversationId') conversationId: string,
+    @Param('messageId') messageId: string,
+    @Res() res: Response,
+  ) {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+
+    try {
+      for await (const event of this.aiChatService.watchMessage(
+        conversationId,
+        messageId,
+        user.id,
+      )) {
+        if (event.type === 'heartbeat') {
+          res.write(`:heartbeat\n\n`);
+          continue;
+        }
+        res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+      }
+      res.end();
+    } catch (error) {
+      res.write(
+        `event: error\ndata: ${JSON.stringify({ type: 'error', error: (error as Error).message })}\n\n`,
+      );
+      res.end();
+    }
+  }
+
   @Post('test-connection')
   @ApiOperation({ summary: 'Test AI provider connection without requiring AI to be enabled' })
   @ApiResponse({ status: 200, type: TestConnectionResponseDto })

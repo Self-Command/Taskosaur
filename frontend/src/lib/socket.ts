@@ -80,6 +80,16 @@ class SocketService {
       this.dispatchCustomEvent(SocketEvents.USER_OFFLINE, data);
     });
 
+    this.socket.on(SocketEvents.USER_PROFILE_UPDATED, (data) => {
+      console.log("[SocketService] User profile updated:", data);
+      this.dispatchCustomEvent(SocketEvents.USER_PROFILE_UPDATED, data);
+    });
+
+    this.socket.on(SocketEvents.SETTINGS_CHANGED, (data) => {
+      console.log("[SocketService] Settings changed:", data);
+      this.dispatchCustomEvent(SocketEvents.SETTINGS_CHANGED, data);
+    });
+
     this.socket.on(SocketEvents.CONNECTED, (data) => {
       console.log("[SocketService] Connected acknowledgement received:", data);
     });
