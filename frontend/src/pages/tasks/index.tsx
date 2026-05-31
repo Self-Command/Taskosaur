@@ -1151,7 +1151,7 @@ function TasksPageContent() {
     <div className="dashboard-container flex flex-col">
       <SEO title={t("title")} />
       {/* Unified Sticky Header */}
-      <div className="sticky top-0 z-50 bg-[var(--background)]/95 backdrop-blur supports-[backdrop-filter]:bg-[var(--background)]/80 border-b border-[var(--border)]/10 -mx-4 px-4 pb-0 pt-4">
+      <div className="sticky top-0 z-30 bg-[var(--background)]/95 backdrop-blur supports-[backdrop-filter]:bg-[var(--background)]/80 border-b border-[var(--border)]/10 -mx-4 px-4 pb-0 pt-4">
         {/* PageHeader */}
         <div className="pb-2">
           <PageHeader
