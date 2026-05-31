@@ -17,6 +17,7 @@ export interface Workspace {
   slug: string;
   description?: string;
   color?: string;
+  avatar?: string;
   organizationId: string;
   parentWorkspaceId?: string;
   path?: string;

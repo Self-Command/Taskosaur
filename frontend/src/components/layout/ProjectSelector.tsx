@@ -11,7 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/DropdownMenu";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { HiChevronDown, HiCheck } from "react-icons/hi2";
 import { Project } from "@/types";
 
@@ -103,7 +103,11 @@ export default function ProjectSelector({
             className="layout-project-selector-icon"
             style={{ backgroundColor: currentProject?.color || "var(--sidebar-primary)" }}
           >
-            {currentProject ? getProjectKey(currentProject) : "P"}
+            {currentProject?.avatar ? (
+              <img src={currentProject.avatar} alt="" className="w-full h-full object-cover rounded-md" />
+            ) : (
+              currentProject ? getProjectKey(currentProject) : "P"
+            )}
           </div>
 
           <div className="layout-project-selector-content">
@@ -133,6 +137,7 @@ export default function ProjectSelector({
               }`}
           >
             <Avatar className="layout-project-selector-item-avatar">
+              {project.avatar && <AvatarImage src={project.avatar} alt={project.name} />}
               <AvatarFallback
                 className="layout-project-selector-item-avatar-fallback"
                 style={{ backgroundColor: project.color || "var(--primary)" }}

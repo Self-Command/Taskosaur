@@ -14,7 +14,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/DropdownMenu";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface Workspace {
   id: string;
@@ -106,7 +106,11 @@ export default function WorkspaceSelector({ currentWorkspaceSlug }: WorkspaceSel
       <DropdownMenuTrigger asChild>
         <div className="layout-workspace-selector-trigger">
           <div className="layout-workspace-selector-icon">
-            {currentWorkspace ? getInitials(currentWorkspace.name) : "W"}
+            {(currentWorkspace as any)?.avatar ? (
+              <img src={(currentWorkspace as any).avatar} alt="" className="w-full h-full object-cover rounded-md" />
+            ) : (
+              currentWorkspace ? getInitials(currentWorkspace.name) : "W"
+            )}
           </div>
 
           <div className="layout-workspace-selector-content">
@@ -136,6 +140,7 @@ export default function WorkspaceSelector({ currentWorkspaceSlug }: WorkspaceSel
               }`}
           >
             <Avatar className="layout-workspace-selector-item-avatar">
+              {(workspace as any).avatar && <AvatarImage src={(workspace as any).avatar} alt={workspace.name} />}
               <AvatarFallback className="layout-workspace-selector-item-avatar-fallback">
                 {getInitials(workspace.name)}
               </AvatarFallback>
