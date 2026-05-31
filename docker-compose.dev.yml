@@ -15,8 +15,6 @@ services:
       retries: 5
     networks:
       - taskosaur-network
-    ports:
-      - "5435:5432"
 
   # Redis for Bull Queue
   redis:
@@ -30,8 +28,6 @@ services:
       retries: 5
     networks:
       - taskosaur-network
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
 
   # Application (Backend + Frontend)
   app:
@@ -42,14 +38,12 @@ services:
     env_file:
       - .env
     environment:
-      # Override for Docker (uses service names instead of localhost)
       DATABASE_URL: postgresql://taskosaur:taskosaur@postgres:5432/taskosaur
       REDIS_HOST: redis
-      # Frontend environment variable for API connection
       NEXT_PUBLIC_API_BASE_URL: http://localhost:3000/api
     ports:
-      - "3000:3000" # Backend
-      - "3001:3001" # Frontend
+      - "3000:3000"
+      - "3001:3001"
     volumes:
       - .:/app
       - /app/node_modules
