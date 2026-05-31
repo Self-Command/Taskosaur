@@ -25,23 +25,25 @@ interface QualityMetricsChartProps {
 
 export function QualityMetricsChart({ data }: QualityMetricsChartProps) {
   const { t } = useTranslation("workspace-home");
-  if (!data) return null;
+  const rate = data.bugResolutionRate ?? 0;
+  const resolved = data.resolvedBugs ?? 0;
+  const total = data.totalBugs ?? 0;
   // Determine color based on resolution rate
-  const getResolvedColor = (rate: number) => {
-    if (rate > 80) return chartConfig.high.color;
-    if (rate > 60) return chartConfig.medium.color;
+  const getResolvedColor = (r: number) => {
+    if (r > 80) return chartConfig.high.color;
+    if (r > 60) return chartConfig.medium.color;
     return chartConfig.low.color;
   };
 
   const gaugeData = [
     {
       name: t(chartConfig.resolved.label),
-      value: data.bugResolutionRate,
-      fill: getResolvedColor(data.bugResolutionRate),
+      value: rate,
+      fill: getResolvedColor(rate),
     },
     {
       name: t(chartConfig.remaining.label),
-      value: 100 - data.bugResolutionRate,
+      value: 100 - rate,
       fill: chartConfig.remaining.color,
     },
   ];
@@ -50,9 +52,9 @@ export function QualityMetricsChart({ data }: QualityMetricsChartProps) {
     <ChartWrapper
       title={t("widgets.quality_metrics")}
       description={t("charts.quality_metrics_description_with_count", {
-        resolved: data.resolvedBugs,
-        total: data.totalBugs,
-        rate: data.bugResolutionRate.toFixed(1),
+        resolved,
+        total,
+        rate: rate.toFixed(1),
       })}
       config={chartConfig}
       className="border-[var(--border)]"
@@ -77,7 +79,7 @@ export function QualityMetricsChart({ data }: QualityMetricsChartProps) {
         </PieChart>
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="text-center">
-            <div className="text-2xl font-bold">{data.bugResolutionRate.toFixed(1)}%</div>
+            <div className="text-2xl font-bold">{rate.toFixed(1)}%</div>
             <div className="text-sm text-muted-foreground">{t("quality.resolution_rate")}</div>
           </div>
         </div>

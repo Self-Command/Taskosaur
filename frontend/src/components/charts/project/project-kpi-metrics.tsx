@@ -179,7 +179,7 @@ export function ProjectKPIMetrics({ data, taskStatus }: ProjectKPIMetricsProps) 
             id,
             title: t("kpi.on_time_completion.title"),
             label: t("kpi.on_time_completion.label"),
-            value: `${data?.onTimeCompletionRate.toFixed(1)}%`,
+            value: `${(data?.onTimeCompletionRate ?? 0).toFixed(1)}%`,
             description: t("kpi.on_time_completion.description"),
             icon:
               data?.onTimeCompletionRate > 75 ? (
@@ -194,7 +194,7 @@ export function ProjectKPIMetrics({ data, taskStatus }: ProjectKPIMetricsProps) 
             id,
             title: t("kpi.task_completion.title"),
             label: t("kpi.task_completion.label"),
-            value: `${data?.completionRate.toFixed(1)}%`,
+            value: `${(data?.completionRate ?? 0).toFixed(1)}%`,
             description: t("kpi.task_completion.description"),
             icon:
               data?.completionRate > 75 ? (
