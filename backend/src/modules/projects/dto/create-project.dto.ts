@@ -25,15 +25,11 @@ export class CreateProjectDto {
   @ApiProperty({
     description: 'The unique slug identifier for the project (used in URLs)',
     example: 'e-commerce-platform-redesign',
-    pattern: '^[a-z0-9-]+$',
     minLength: 1,
     maxLength: 100,
   })
   @IsString()
   @IsNotEmpty()
-  @Matches(/^[a-z0-9-]+$/, {
-    message: 'Slug can only contain lowercase letters, numbers, and hyphens',
-  })
   slug: string;
 
   @ApiProperty({

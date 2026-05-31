@@ -5,7 +5,7 @@ import {
   HiMoon,
 } from "react-icons/hi2";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetHeader, SheetDescription, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetDescription, SheetTrigger } from "@/components/ui/sheet";
 import { useChatContext } from "@/contexts/chat-context";
 import { useTheme } from "next-themes";
 import { useTranslation } from "react-i18next";
@@ -113,16 +113,17 @@ export default function HeaderView({
           <HiBars3 style={{ width: 20, height: 20 }} />
         </Button>
       </SheetTrigger>
-      <SheetContent side="top" style={{
+      <SheetContent side="top" aria-describedby="mobile-menu-desc" style={{
         width: "100%", maxHeight: "85vh", padding: 0,
         display: "flex", flexDirection: "column" as const,
         backgroundColor: bg, borderBottom: `1px solid ${borderB}`,
         borderBottomLeftRadius: 16, borderBottomRightRadius: 16,
         boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)",
+        zIndex: 9999,
       } as any}>
+        <SheetDescription id="mobile-menu-desc" className="sr-only">{t("menu")}</SheetDescription>
         <div style={{ padding: "16px 20px", borderBottom: `1px solid ${border}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <span style={{ fontSize: 16, fontWeight: 600, color: textTitle }}>{t("menu")}</span>
-          <SheetDescription style={{ display: "none" }}>{t("menu")}</SheetDescription>
         </div>
         <div style={{ flex: 1, overflowY: "auto" as const, padding: "12px 12px 16px" }}>
           <button style={row}
