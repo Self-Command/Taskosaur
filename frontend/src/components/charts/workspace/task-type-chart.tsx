@@ -39,7 +39,6 @@ export function TaskTypeChart({ data, workspaceId }: TaskTypeChartProps) {
     if (
       slug &&
       typeof slug === "string" &&
-      /^[a-zA-Z0-9-]+$/.test(slug) &&
       entry?.id
     ) {
       router.push({

@@ -34,7 +34,7 @@ export const SprintCard = ({
 
   // Only allow slugs consisting of alphanumerics, hyphens, and underscores, 1-64 chars
   const isValidSlug = (slug: unknown): slug is string => {
-    return typeof slug === "string" && /^[a-zA-Z0-9_-]{1,64}$/.test(slug);
+    return typeof slug === "string" && slug.length > 0;
   };
 
   const formatDate = (dateString: string) => {

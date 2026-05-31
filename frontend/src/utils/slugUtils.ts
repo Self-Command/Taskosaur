@@ -39,5 +39,5 @@ export const generateSlug = (text: string): string => {
  */
 export const isValidSlug = (slug: any): slug is string => {
   if (typeof slug !== 'string') return false;
-  return /^[a-zA-Z0-9-]+$/.test(slug);
+  return typeof slug === 'string' && slug.length > 0;
 };

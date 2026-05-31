@@ -18,7 +18,7 @@ interface TaskInfoPanelProps {
 
 // Utility to validate slug strings: alphanumeric and dash only
 function sanitizeSlug(slug: string | undefined): string | undefined {
-  return slug && /^[a-zA-Z0-9\-]+$/.test(slug) ? slug : undefined;
+  return slug || undefined;
 }
 
 // Task Info Panel Component

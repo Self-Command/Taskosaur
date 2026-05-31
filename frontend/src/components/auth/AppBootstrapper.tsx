@@ -16,6 +16,9 @@ interface AppBootstrapperProps {
 
 type InitPhase = "SYSTEM_CHECK" | "AUTH_CHECK" | "READY";
 
+// Session cache — avoid redundant DB queries on every page navigation
+let cachedUsersExist: boolean | null = null;
+
 export default function AppBootstrapper({ children }: AppBootstrapperProps) {
   const router = useRouter();
   const {
@@ -56,8 +59,12 @@ export default function AppBootstrapper({ children }: AppBootstrapperProps) {
     }
 
     try {
-      const { exists } = await authApi.checkUsersExist();
-      if (!exists) {
+      // Use cached result to avoid hitting DB on every navigation
+      if (cachedUsersExist === null) {
+        const { exists } = await authApi.checkUsersExist();
+        cachedUsersExist = exists;
+      }
+      if (!cachedUsersExist) {
         setIsRedirecting(true);
         router.replace("/setup");
         return false;

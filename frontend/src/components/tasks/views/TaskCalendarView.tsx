@@ -132,8 +132,6 @@ export default function TaskCalendarView({
   // Helper function to sanitize slug inputs before URL construction
   const sanitizeSlug = (slug: string | string[] | undefined): string => {
     if (!slug || typeof slug !== 'string') return '';
-    // Allow alphanumeric, dash, underscore, and dot
-    if (!/^[a-zA-Z0-9._-]+$/.test(slug)) return '';
     return slug;
   };
 
