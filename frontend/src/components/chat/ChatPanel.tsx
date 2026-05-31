@@ -460,7 +460,7 @@ export default function ChatPanel() {
                   {/* Text content */}
                   {m.content ? (
                     <div className="text-sm leading-relaxed text-gray-800 dark:text-gray-200 prose prose-sm dark:prose-invert max-w-none">
-                      <ChatMarkdown content={m.content} />
+                      <ChatMarkdown key={m.id} content={m.content} />
                     </div>
                   ) : m.streaming ? (
                     <div className="flex items-center gap-2 py-1.5">

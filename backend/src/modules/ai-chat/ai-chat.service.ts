@@ -390,10 +390,17 @@ export class AiChatService {
       let finalResponse = '';
 
       for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
-        const llmResponse = await this.callLlmWithTools(messages, userId, provider, apiUrl, apiKey, {
-          enableWebSearch: chatRequest.enableWebSearch,
-          enableThinking: chatRequest.enableThinking,
-        });
+        const llmResponse = await this.callLlmWithTools(
+          messages,
+          userId,
+          provider,
+          apiUrl,
+          apiKey,
+          {
+            enableWebSearch: chatRequest.enableWebSearch,
+            enableThinking: chatRequest.enableThinking,
+          },
+        );
 
         if (llmResponse.toolCalls && llmResponse.toolCalls.length > 0) {
           const assistantMsg: any = {
@@ -511,13 +518,15 @@ export class AiChatService {
       messages.splice(1, 0, ...historyEntries);
 
       // ── Web Search (DuckDuckGo HTML, free, no API key) ──
-      let searchResults: any[] = [];
+      const searchResults: any[] = [];
       if (chatRequest.enableWebSearch) {
         yield { t: 'ss', q: chatRequest.message };
         try {
           const q = encodeURIComponent(chatRequest.message);
           const ddgRes = await fetch(`https://html.duckduckgo.com/html/?q=${q}`, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            },
             signal: AbortSignal.timeout(10000),
           });
           const html = await ddgRes.text();
@@ -526,20 +535,38 @@ export class AiChatService {
             const b = blocks[i];
             const tm = b.match(/class="result__a"[^>]*href="([^"]*)"[^>]*>([^<]*)<\//);
             const sm = b.match(/class="result__snippet"[^>]*>([\s\S]*?)<\/a>/);
-            if (tm) searchResults.push({ title: tm[2].replace(/<[^>]*>/g, '').trim(), url: tm[1], snippet: sm ? sm[1].replace(/<[^>]*>/g, '').trim() : '' });
+            if (tm)
+              searchResults.push({
+                title: tm[2].replace(/<[^>]*>/g, '').trim(),
+                url: tm[1],
+                snippet: sm ? sm[1].replace(/<[^>]*>/g, '').trim() : '',
+              });
           }
           if (searchResults.length > 0) {
             yield { t: 'sr', r: searchResults };
-            messages.push({ role: 'system', content: 'Web results:\n' + searchResults.map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.snippet}`).join('\n\n') });
+            messages.push({
+              role: 'system',
+              content:
+                'Web results:\n' +
+                searchResults
+                  .map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.snippet}`)
+                  .join('\n\n'),
+            });
           }
-        } catch (e) { console.error('[SEARCH]', e); }
+        } catch (e) {
+          console.error('[SEARCH]', e);
+        }
         yield { t: 'se', n: searchResults.length };
       }
 
       // Kick off title generation
       let titlePromise: Promise<void> | null = null;
       if (conversation.title === 'New Chat') {
-        titlePromise = this.generateConversationTitle(conversation.id, chatRequest.message, userId).catch(() => {});
+        titlePromise = this.generateConversationTitle(
+          conversation.id,
+          chatRequest.message,
+          userId,
+        ).catch(() => {});
       }
 
       // ── Tool loop with NDJSON streaming ──
@@ -553,24 +580,55 @@ export class AiChatService {
         let done = false;
         let llmResult: any = null;
 
-        const push = (e: any) => { evQ.push(e); if (wake) { wake(); wake = null; } };
-        const opts = { enableWebSearch: chatRequest.enableWebSearch, enableThinking: chatRequest.enableThinking };
+        const push = (e: any) => {
+          evQ.push(e);
+          if (wake) {
+            wake();
+            wake = null;
+          }
+        };
+        const opts = {
+          enableWebSearch: chatRequest.enableWebSearch,
+          enableThinking: chatRequest.enableThinking,
+        };
         const sp = this.callLlmWithToolsStreaming(
-          messages, userId, provider, apiUrl, apiKey,
+          messages,
+          userId,
+          provider,
+          apiUrl,
+          apiKey,
           async (tok) => push({ t: 'tx', d: tok }),
           chatRequest.enableThinking ? async (tok: string) => push({ t: 'th', d: tok }) : undefined,
           opts,
-        ).then((r) => { llmResult = r; done = true; if (wake) { wake(); wake = null; } });
+        ).then((r) => {
+          llmResult = r;
+          done = true;
+          if (wake) {
+            wake();
+            wake = null;
+          }
+        });
 
         while (true) {
           if (evQ.length > 0) yield evQ.shift();
           else if (done) break;
-          else await new Promise<void>((r) => { wake = r; });
+          else
+            await new Promise<void>((r) => {
+              wake = r;
+            });
         }
 
         if (llmResult?.toolCalls?.length) {
           const tc = llmResult.toolCalls;
-          messages.push({ role: 'assistant', content: llmResult.content || null, tool_calls: tc.map((c: any) => ({ id: c.id, type: 'function', function: { name: c.name, arguments: JSON.stringify(c.arguments) } })) } as any);
+          messages.push({
+            role: 'assistant',
+            content: llmResult.content || null,
+            tool_calls: tc.map((c: any) => ({
+              id: c.id,
+              type: 'function',
+              function: { name: c.name, arguments: JSON.stringify(c.arguments) },
+            })),
+          } as any);
           for (const c of tc) {
             yield { t: 'ts', tool: c.name, p: c.arguments };
             const r = await executeTool(c.name, c.arguments, userId);
@@ -586,17 +644,40 @@ export class AiChatService {
         }
       }
 
-      if (!finalResponse) finalResponse = toolExecutions.length > 0 ? buildFallbackMessage(toolExecutions) : 'No response.';
+      if (!finalResponse)
+        finalResponse =
+          toolExecutions.length > 0 ? buildFallbackMessage(toolExecutions) : 'No response.';
 
       // Save
       if (conversation) {
-        await this.prisma.chatMessage.create({ data: { conversationId: conversation.id, role: 'user', content: chatRequest.message } }).catch(() => {});
-        await this.prisma.chatMessage.create({ data: { conversationId: conversation.id, role: 'assistant', content: finalResponse, toolExecutions: toolExecutions.length > 0 ? toolExecutions : undefined } }).catch(() => {});
-        await this.prisma.conversation.update({ where: { id: conversation.id }, data: { updatedAt: new Date() } }).catch(() => {});
+        await this.prisma.chatMessage
+          .create({
+            data: { conversationId: conversation.id, role: 'user', content: chatRequest.message },
+          })
+          .catch(() => {});
+        await this.prisma.chatMessage
+          .create({
+            data: {
+              conversationId: conversation.id,
+              role: 'assistant',
+              content: finalResponse,
+              toolExecutions: toolExecutions.length > 0 ? toolExecutions : undefined,
+            },
+          })
+          .catch(() => {});
+        await this.prisma.conversation
+          .update({ where: { id: conversation.id }, data: { updatedAt: new Date() } })
+          .catch(() => {});
         if (titlePromise) await titlePromise;
       }
 
-      yield { t: 'msg', m: finalResponse, e: toolExecutions, c: conversation?.id, title: conversation?.title };
+      yield {
+        t: 'msg',
+        m: finalResponse,
+        e: toolExecutions,
+        c: conversation?.id,
+        title: conversation?.title,
+      };
     } catch (error: any) {
       console.error('[CHAT STREAM]', error);
       yield { t: 'err', e: error?.message || String(error) };
@@ -800,7 +881,10 @@ export class AiChatService {
           async (thinkingToken) => {
             streamedThinking += thinkingToken;
           },
-          { enableWebSearch: chatRequest.enableWebSearch, enableThinking: chatRequest.enableThinking },
+          {
+            enableWebSearch: chatRequest.enableWebSearch,
+            enableThinking: chatRequest.enableThinking,
+          },
         );
 
         if (llmResponse.toolCalls && llmResponse.toolCalls.length > 0) {
@@ -928,7 +1012,14 @@ export class AiChatService {
 
     // For Anthropic/Google: fall back to non-streaming (streaming format differs)
     if (provider === 'anthropic' || provider === 'google') {
-      const result = await this.callLlmWithTools(messages, userId, provider, apiUrl, apiKey, options);
+      const result = await this.callLlmWithTools(
+        messages,
+        userId,
+        provider,
+        apiUrl,
+        apiKey,
+        options,
+      );
       if (result.content) await onToken(result.content);
       return result;
     }
@@ -1079,7 +1170,14 @@ export class AiChatService {
         } catch {}
       }
     }
-    console.log('[LLM STREAM] Done. thinking:', thinkingTotal, 'text:', textTotal, 'tools:', toolAcc.size);
+    console.log(
+      '[LLM STREAM] Done. thinking:',
+      thinkingTotal,
+      'text:',
+      textTotal,
+      'tools:',
+      toolAcc.size,
+    );
 
     if (toolAcc.size > 0) {
       const toolCalls = Array.from(toolAcc.values())
@@ -1237,7 +1335,18 @@ export class AiChatService {
 
     // Debug: verify webSearch/thinking params reach the API
     if (webSearch || thinking) {
-      console.log('[AI-CHAT] Features:', JSON.stringify({ webSearch, thinking, model, provider, plugins: requestBody.plugins, thinkCfg: requestBody.thinking, reasonEffort: requestBody.reasoning_effort }));
+      console.log(
+        '[AI-CHAT] Features:',
+        JSON.stringify({
+          webSearch,
+          thinking,
+          model,
+          provider,
+          plugins: requestBody.plugins,
+          thinkCfg: requestBody.thinking,
+          reasonEffort: requestBody.reasoning_effort,
+        }),
+      );
     }
 
     const response = await this.fetchWithTimeout(

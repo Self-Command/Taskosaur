@@ -3,10 +3,18 @@ export function getMCPSystemPrompt(timezone?: string): string {
   let dateStr: string;
   try {
     dateStr = new Intl.DateTimeFormat('zh-CN', {
-      timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
-      weekday: 'long', hour: '2-digit', minute: '2-digit', second: '2-digit',
+      timeZone: tz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      weekday: 'long',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
     }).format(new Date());
-  } catch { dateStr = new Date().toISOString(); }
+  } catch {
+    dateStr = new Date().toISOString();
+  }
 
   return `Today is ${dateStr} (user timezone: ${tz}).
 
@@ -27,10 +35,18 @@ export function getMCPSystemPromptChinese(timezone?: string): string {
   let dateStr: string;
   try {
     dateStr = new Intl.DateTimeFormat('zh-CN', {
-      timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
-      weekday: 'long', hour: '2-digit', minute: '2-digit', second: '2-digit',
+      timeZone: tz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      weekday: 'long',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
     }).format(new Date());
-  } catch { dateStr = new Date().toISOString(); }
+  } catch {
+    dateStr = new Date().toISOString();
+  }
 
   return `今天是 ${dateStr}（用户时区: ${tz}）。
 
