@@ -36,7 +36,7 @@ async function bootstrap() {
   // Auto-run database migrations on startup
   try {
     logger.log('Running database migrations...');
-    execSync('npx prisma migrate deploy', {
+    execSync('node node_modules/prisma/build/index.js migrate deploy', {
       stdio: 'pipe',
       env: { ...process.env, PRISMA_HIDE_UPDATE_PROMPT: 'true' },
     });
