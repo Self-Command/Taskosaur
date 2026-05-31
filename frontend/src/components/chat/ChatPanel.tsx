@@ -2,16 +2,18 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import {
   HiXMark, HiPaperAirplane, HiSparkles, HiPlus, HiTrash,
   HiPencil, HiBars3, HiChatBubbleLeft, HiStop, HiArrowPath,
-  HiUserCircle,
+  HiUserCircle, HiGlobeAlt, HiLightBulb,
 } from "react-icons/hi2";
 import { useChatContext } from "@/contexts/chat-context";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
 import ChatMarkdown from "@/components/chat/ChatMarkdown";
+import ThinkingBlock from "@/components/chat/ThinkingBlock";
+import SearchBlock from "@/components/chat/SearchBlock";
 import api from "@/lib/api";
 
 type ToolExec = { tool: string; params: any; result: any; pending: boolean };
-type Message = { id: string; role: "user" | "assistant"; content: string; toolExecs: ToolExec[]; streaming: boolean };
+type Message = { id: string; role: "user" | "assistant"; content: string; thinking: string; toolExecs: ToolExec[]; streaming: boolean };
 
 /* ── Tool card badge ── */
 function ToolBadge({ tool }: { tool: string }) {
@@ -133,6 +135,13 @@ export default function ChatPanel() {
   const [editing, setEditing] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [width, setWidth] = useState(440);
+  const [webSearch, setWebSearch] = useState(false);
+  const [thinking, setThinking] = useState(false);
+  const [thinkingStart, setThinkingStart] = useState<number>(0);
+  const [isAIThinking, setIsAIThinking] = useState(false);
+  const thinkingRef = useRef(false);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const resizing = useRef(false);
@@ -168,10 +177,15 @@ export default function ChatPanel() {
   /* ── Send message via direct SSE streaming (no polling) ── */
   const send = async () => {
     const text = input.trim(); if (!text || loading || !user) return;
-    const um: Message = { id: "" + Date.now(), role: "user", content: text, toolExecs: [], streaming: false };
+    const um: Message = { id: "" + Date.now(), role: "user", content: text, thinking: "", toolExecs: [], streaming: false };
     setMessages((p) => [...p, um]); setInput(""); setLoading(true);
     const aid = "" + (Date.now() + 1);
-    setMessages((p) => [...p, { id: aid, role: "assistant", content: "", toolExecs: [], streaming: true }]);
+    setMessages((p) => [...p, { id: aid, role: "assistant", content: "", thinking: "", toolExecs: [], streaming: true }]);
+    setIsAIThinking(false);
+    thinkingRef.current = false;
+    setThinkingStart(0);
+    setSearchResults([]);
+    setSearchQuery("");
     try {
       const parts = pathname.split("/").filter(Boolean);
       const sid = sessionId || "s" + Date.now();
@@ -182,6 +196,8 @@ export default function ChatPanel() {
         projectId: parts[1] || undefined,
         sessionId: sid,
         currentOrganizationId: localStorage.getItem("currentOrganizationId"),
+        enableWebSearch: webSearch,
+        enableThinking: thinking,
       };
       const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3000/api";
       const token = localStorage.getItem("access_token");
@@ -198,6 +214,8 @@ export default function ChatPanel() {
         const errData = await response.json().catch(() => ({}));
         throw new Error((errData as any).error || `HTTP ${response.status}`);
       }
+      // ── NDJSON stream reader ──
+      // Format: one JSON object per line, {"t":"tx","d":"text"}, {"t":"th","d":"thinking"}, etc.
       const reader = response.body!.getReader();
       const decoder = new TextDecoder();
       let buf = "";
@@ -208,30 +226,45 @@ export default function ChatPanel() {
         const lines = buf.split("\n");
         buf = lines.pop() || "";
         for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
+          if (!line.trim()) continue;
           try {
-            const data = JSON.parse(line.slice(6));
-            switch (data.type) {
-              case "text_delta":
-                setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") c[c.length - 1] = { ...last, content: (last.content || "") + data.delta, streaming: true }; return c; });
+            const d = JSON.parse(line);
+            switch (d.t) {
+              case "ss": // search start
+                setSearchQuery(d.q || "");
+                setSearchResults([]);
                 break;
-              case "tool_start":
-                setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") c[c.length - 1] = { ...last, toolExecs: [...(last.toolExecs || []), { tool: data.tool, params: data.params, result: {}, pending: true }], streaming: true }; return c; });
+              case "sr": // search results
+                setSearchResults(d.r || []);
                 break;
-              case "tool_result":
-                setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") { const execs = (last.toolExecs || []).map((t: any) => t.tool === data.tool && t.pending ? { ...t, result: data.result, pending: false } : t); c[c.length - 1] = { ...last, toolExecs: execs, streaming: true }; } return c; });
+              case "se": break; // search end
+              case "th": // thinking token
+                if (!thinkingRef.current) { thinkingRef.current = true; setIsAIThinking(true); setThinkingStart(Date.now()); }
+                setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") c[c.length - 1] = { ...last, thinking: (last.thinking || "") + (d.d || ""), streaming: true }; return c; });
                 break;
-              case "navigate":
-                if (data.path) router.push(data.path);
+              case "tx": // text token
+                if (thinkingRef.current) { thinkingRef.current = false; setIsAIThinking(false); }
+                setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") c[c.length - 1] = { ...last, content: (last.content || "") + (d.d || ""), streaming: true }; return c; });
                 break;
-              case "message":
-                setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") c[c.length - 1] = { ...last, content: data.message || data.content, toolExecs: (data.toolExecutions || []).map((t: any) => ({ tool: t.tool, params: t.params, result: t.result, pending: false })), streaming: false }; return c; });
+              case "ts": // tool start
+                if (thinkingRef.current) { thinkingRef.current = false; setIsAIThinking(false); }
+                setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") c[c.length - 1] = { ...last, toolExecs: [...(last.toolExecs || []), { tool: d.tool, params: d.p || {}, result: {}, pending: true }], streaming: true }; return c; });
+                break;
+              case "tr": // tool result
+                setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") { const execs = (last.toolExecs || []).map((t: any) => t.tool === d.tool && t.pending ? { ...t, result: d.r || {}, pending: false } : t); c[c.length - 1] = { ...last, toolExecs: execs, streaming: true }; } return c; });
+                break;
+              case "nav": // navigate
+                if (d.p) router.push(d.p);
+                break;
+              case "msg": // final message
+                if (thinkingRef.current) { thinkingRef.current = false; setIsAIThinking(false); }
+                setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") c[c.length - 1] = { ...last, content: d.m || last.content, toolExecs: (d.e || []).map((t: any) => ({ tool: t.tool, params: t.params, result: t.result, pending: false })), streaming: false }; return c; });
                 setLoading(false);
-                if (data.conversationId) setConvId(data.conversationId);
+                if (d.c) setConvId(d.c);
                 loadConvs();
                 break;
-              case "error":
-                setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") c[c.length - 1] = { ...last, content: "错误: " + data.error, streaming: false }; return c; });
+              case "err": // error
+                setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") c[c.length - 1] = { ...last, content: "错误: " + (d.e || ""), streaming: false }; return c; });
                 setLoading(false);
                 break;
             }
@@ -412,6 +445,18 @@ export default function ChatPanel() {
                       {m.toolExecs.map((t, i) => <ToolCard key={i} t={t} />)}
                     </div>
                   )}
+                  {/* Web Search results block */}
+                  {searchResults.length > 0 && (
+                    <SearchBlock results={searchResults} query={searchQuery} />
+                  )}
+                  {/* Thinking/reasoning block */}
+                  {(m.thinking || (m.streaming && isAIThinking)) && (
+                    <ThinkingBlock
+                      content={m.thinking || ""}
+                      isThinking={!!(m.streaming && isAIThinking)}
+                      startTime={thinkingStart}
+                    />
+                  )}
                   {/* Text content */}
                   {m.content ? (
                     <div className="text-sm leading-relaxed text-gray-800 dark:text-gray-200 prose prose-sm dark:prose-invert max-w-none">
@@ -456,6 +501,18 @@ export default function ChatPanel() {
             className="flex-1 px-1 py-1.5 bg-transparent border-0 resize-none text-sm placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none disabled:opacity-50 text-gray-800 dark:text-gray-200"
             style={{ minHeight: "28px", maxHeight: "120px" }}
           />
+          <div className="flex items-center gap-0.5 shrink-0">
+            <button type="button" onClick={() => setWebSearch(!webSearch)}
+              className={`p-1.5 rounded-lg transition-colors ${webSearch ? "bg-blue-100 dark:bg-blue-900/40 text-blue-600" : "text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"}`}
+              title={webSearch ? "已开启联网搜索" : "联网搜索"}>
+              <HiGlobeAlt className="w-4 h-4" />
+            </button>
+            <button type="button" onClick={() => setThinking(!thinking)}
+              className={`p-1.5 rounded-lg transition-colors ${thinking ? "bg-amber-100 dark:bg-amber-900/40 text-amber-600" : "text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"}`}
+              title={thinking ? "已开启深度思考" : "深度思考"}>
+              <HiLightBulb className="w-4 h-4" />
+            </button>
+          </div>
           {loading ? (
             <button onClick={stop} className="p-2 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-xl shrink-0 transition-all hover:scale-105 active:scale-95 shadow-sm" title="停止">
               <HiStop className="w-4 h-4" />

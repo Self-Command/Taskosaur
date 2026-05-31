@@ -18,6 +18,7 @@ interface TaskDistributionChartProps {
 
 export function TaskDistributionChart({ data }: TaskDistributionChartProps) {
   const { t } = useTranslation("workspace-home");
+  if (!data || !Array.isArray(data)) return null;
   const chartData = data
     .map((item) => ({
       priority: t(chartConfig[item.priority]?.label) || item.priority,

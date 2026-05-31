@@ -47,12 +47,13 @@ export function TeamUtilizationChart({ data: initialData }: TeamUtilizationChart
   }, [currentOrganization?.id]);
 
   useEffect(() => {
-    const mappedData = initialData?.map((item) => ({
+    if (!initialData || !Array.isArray(initialData)) { setChartData([]); return; }
+    const mappedData = initialData.map((item) => ({
       role: t(chartConfig[item.role as keyof typeof chartConfig]?.label) || item.role,
       count: item._count.role,
       fill: chartConfig[item.role as keyof typeof chartConfig]?.color || "#8B5CF6",
     }));
-    setChartData(mappedData || []);
+    setChartData(mappedData);
   }, [initialData, t]);
 
   const handleWorkspaceChange = async (workspaceId: string) => {

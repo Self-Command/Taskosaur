@@ -17,6 +17,7 @@ interface MonthlyTaskCompletionChartProps {
 }
 
 export function MonthlyTaskCompletionChart({ data }: MonthlyTaskCompletionChartProps) {
+  if (!data || !Array.isArray(data)) return null;
   const chartData = data
     ?.map((item) => ({
       month: formatDateForDisplay(new Date(item.month + "-01"), {

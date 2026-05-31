@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import { useEffect } from "react";
 import "@/styles/globals.css";
 import "@/styles/components/splash-screen.css";
+import "katex/dist/katex.min.css";
 import "@/lib/i18n";
 
 import { ThemeProvider } from "@/components/theme-provider";

@@ -245,6 +245,7 @@ export function OrganizationKPIMetrics({
       .filter((card): card is NonNullable<typeof card> => card !== null);
   }, [orderedIds, data, t, doneStatusIds, visibleCards]);
 
+  if (!data) return null;
   const visibleCount = displayCards.length;
 
   return (

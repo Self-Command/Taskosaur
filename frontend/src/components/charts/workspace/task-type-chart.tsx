@@ -25,6 +25,7 @@ interface TaskTypeChartProps {
 export function TaskTypeChart({ data, workspaceId }: TaskTypeChartProps) {
   const router = useRouter();
   const { workspaceSlug } = router.query;
+  if (!data || !Array.isArray(data)) return null;
 
   const chartData = data?.map((item) => ({
     name: chartConfig[item.type as keyof typeof chartConfig]?.label || item.type,

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   HiArrowLeft, HiPaperAirplane, HiSparkles, HiPlus, HiTrash,
-  HiPencil, HiChatBubbleLeft, HiStop, HiXMark,
+  HiPencil, HiChatBubbleLeft, HiStop, HiXMark, HiGlobeAlt, HiLightBulb,
 } from "react-icons/hi2";
 import { useRouter } from "next/router";
 import { useAuth } from "@/contexts/auth-context";
@@ -117,6 +117,8 @@ export default function ChatPage() {
   const [sessionId, setSessionId] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
+  const [webSearch, setWebSearch] = useState(false);
+  const [thinking, setThinking] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -140,7 +142,7 @@ export default function ChatPage() {
     try {
       const sid = sessionId || "s" + Date.now();
       if (!sessionId) setSessionId(sid);
-      const body: any = { message: text, sessionId: sid, currentOrganizationId: localStorage.getItem("currentOrganizationId") };
+      const body: any = { message: text, sessionId: sid, currentOrganizationId: localStorage.getItem("currentOrganizationId"), enableWebSearch: webSearch, enableThinking: thinking };
       const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3000/api";
       const token = localStorage.getItem("access_token");
       const controller = new AbortController();
@@ -316,6 +318,12 @@ export default function ChatPage() {
           )}
           <button onClick={async () => { setHistOpen(true); await loadConvs(); }} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 transition-colors" title="历史记录">
             <HiChatBubbleLeft className="w-4 h-4" />
+          </button>
+          <button onClick={() => setWebSearch(!webSearch)} className={`p-2 rounded-xl transition-colors ${webSearch ? "bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400" : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400"}`} title={webSearch ? "已开启网络搜索" : "开启网络搜索"}>
+            <HiGlobeAlt className="w-4 h-4" />
+          </button>
+          <button onClick={() => setThinking(!thinking)} className={`p-2 rounded-xl transition-colors ${thinking ? "bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400" : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400"}`} title={thinking ? "已开启深度思考" : "开启深度思考"}>
+            <HiLightBulb className="w-4 h-4" />
           </button>
         </div>
       </div>

@@ -66,6 +66,18 @@ export class ChatRequestDto {
   @IsOptional()
   @IsString()
   currentOrganizationId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Enable web search for this chat request',
+  })
+  @IsOptional()
+  enableWebSearch?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Enable AI thinking/reasoning mode for this chat request',
+  })
+  @IsOptional()
+  enableThinking?: boolean;
 }
 
 export class ToolExecutionDto {

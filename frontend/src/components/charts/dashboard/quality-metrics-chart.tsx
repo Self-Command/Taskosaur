@@ -25,6 +25,7 @@ interface QualityMetricsChartProps {
 
 export function QualityMetricsChart({ data }: QualityMetricsChartProps) {
   const { t } = useTranslation("workspace-home");
+  if (!data) return null;
   // Determine color based on resolution rate
   const getResolvedColor = (rate: number) => {
     if (rate > 80) return chartConfig.high.color;

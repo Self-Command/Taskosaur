@@ -27,6 +27,7 @@ export function TaskStatusChart({ data }: TaskStatusChartProps) {
   const { t } = useTranslation(["analytics"]);
   const router = useRouter();
   const { workspaceSlug, projectSlug } = router.query;
+  if (!data || !Array.isArray(data)) return null;
 
   // Sort data by status position for better visualization
   const safeData = Array.isArray(data) ? data : [];

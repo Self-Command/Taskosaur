@@ -51,6 +51,7 @@ const CustomTooltip = ({ active, payload, t }: any) => {
 
 export function MemberWorkloadChart({ data }: MemberWorkloadChartProps) {
   const { t } = useTranslation("workspace-home");
+  if (!data || !Array.isArray(data)) return null;
   // Sort data by active tasks (descending) and filter out inactive members
   const sortedData = [...data]
     .sort((a, b) => b.activeTasks - a.activeTasks)

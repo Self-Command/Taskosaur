@@ -3,6 +3,10 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 import { UsersService } from '../users/users.service';
 import { InvitationsService } from '../invitations/invitations.service';
+import { OrganizationsService } from '../organizations/organizations.service';
+import { OrganizationMembersService } from '../organization-members/organization-members.service';
+import { WorkspaceMembersService } from '../workspace-members/workspace-members.service';
+import { ProjectMembersService } from '../project-members/project-members.service';
 import { McpLoggerService } from './mcp-logger.service';
 import { EventsGateway } from '../../gateway/events.gateway';
 import { TaskType } from '@prisma/client';
@@ -71,6 +75,10 @@ export class ToolExecutor {
     private settingsService: SettingsService,
     private usersService: UsersService,
     private invitationsService: InvitationsService,
+    private organizationsService: OrganizationsService,
+    private organizationMembersService: OrganizationMembersService,
+    private workspaceMembersService: WorkspaceMembersService,
+    private projectMembersService: ProjectMembersService,
     private mcpLogger: McpLoggerService,
     private eventsGateway: EventsGateway,
   ) {}
@@ -323,10 +331,20 @@ export class ToolExecutor {
       // Organization
       case 'get_organization':
         return trimForLLM(await this.getOrganization(params, userId));
+      case 'create_organization':
+        return trimForLLM(await this.createOrganization(params, userId));
       case 'update_organization':
         return trimForLLM(await this.updateOrganization(params, userId));
+      case 'delete_organization':
+        return await this.deleteOrganization(params, userId);
       case 'list_organization_members':
         return trimForLLM(await this.listOrganizationMembers(params, userId));
+      case 'add_organization_member':
+        return trimForLLM(await this.addOrganizationMember(params, userId));
+      case 'remove_organization_member':
+        return await this.removeOrganizationMember(params, userId);
+      case 'update_organization_member_role':
+        return trimForLLM(await this.updateOrganizationMemberRole(params, userId));
       // Workspace Member
       case 'update_workspace_member_role':
         return trimForLLM(await this.updateWorkspaceMemberRole(params, userId));
@@ -459,6 +477,7 @@ export class ToolExecutor {
         slug,
         description: params.description || `Workspace for ${params.name}`,
         color: params.color || '#3B82F6',
+        avatar: this.safeNullable(params.avatar),
         organizationId: params.organizationId,
         parentWorkspaceId: this.safeNullable(params.parentWorkspaceId),
         createdBy: userId,
@@ -602,6 +621,7 @@ export class ToolExecutor {
         slug,
         description: params.description || '',
         color: params.color || '#3498db',
+        avatar: this.safeNullable(params.avatar) || '',
         taskPrefix,
         status: params.status || 'PLANNING',
         priority: params.priority || 'MEDIUM',
@@ -632,6 +652,7 @@ export class ToolExecutor {
       'name',
       'description',
       'color',
+      'avatar',
       'status',
       'priority',
       'visibility',
@@ -2060,6 +2081,36 @@ export class ToolExecutor {
     return { success: true, organization: org };
   }
 
+  private async createOrganization(params: Record<string, any>, userId: string) {
+    const nameErr = this.requireString(params.name, 'name');
+    if (nameErr) return { success: false, error: nameErr };
+    try {
+      const dto = {
+        name: params.name,
+        slug: params.slug || slugify(params.name, { lower: true, strict: true }),
+        description: params.description,
+        website: params.website,
+        avatar: params.avatar,
+        ownerId: userId,
+      };
+      const org = await this.organizationsService.create(dto as any, userId);
+      return {
+        success: true,
+        organization: {
+          id: org.id,
+          name: org.name,
+          slug: org.slug,
+          description: org.description,
+          website: org.website,
+          avatar: org.avatar,
+        },
+        message: `Organization "${org.name}" created. You are the owner.`,
+      };
+    } catch (error: any) {
+      return { success: false, error: error.message || 'Failed to create organization' };
+    }
+  }
+
   private async updateOrganization(params: Record<string, any>, userId: string) {
     const err = this.requireUUID(params.organizationId, 'organizationId');
     if (err) return { success: false, error: err };
@@ -2068,6 +2119,8 @@ export class ToolExecutor {
     if (data.name !== undefined) updateData.name = data.name;
     if (data.description !== undefined) updateData.description = data.description;
     if (data.website !== undefined) updateData.website = data.website;
+    if (data.avatar !== undefined) updateData.avatar = data.avatar;
+    if (data.slug !== undefined) updateData.slug = data.slug;
     const org = await this.prisma.organization.update({
       where: { id: organizationId },
       data: updateData,
@@ -2080,16 +2133,61 @@ export class ToolExecutor {
         slug: org.slug,
         description: org.description,
         website: org.website,
+        avatar: org.avatar,
       },
       message: `Organization "${org.name}" updated`,
     };
   }
 
+  private async deleteOrganization(params: Record<string, any>, userId: string) {
+    const err = this.requireUUID(params.organizationId, 'organizationId');
+    if (err) return { success: false, error: err };
+    if (!params.confirmation) {
+      return {
+        success: false,
+        error:
+          'confirmation is required. Set it to the EXACT organization name to confirm deletion.',
+      };
+    }
+    const org = await this.prisma.organization.findUnique({
+      where: { id: params.organizationId },
+      select: { id: true, name: true },
+    });
+    if (!org) return { success: false, error: 'Organization not found.' };
+    if (params.confirmation !== org.name) {
+      return {
+        success: false,
+        error: `Confirmation "${params.confirmation}" does not match organization name "${org.name}". Deletion aborted.`,
+      };
+    }
+    try {
+      await this.organizationsService.remove(org.id, userId);
+      return {
+        success: true,
+        message: `Organization "${org.name}" and ALL its data permanently deleted`,
+      };
+    } catch (error: any) {
+      return { success: false, error: error.message || 'Failed to delete organization' };
+    }
+  }
+
+  // ========== ORGANIZATION MEMBER ==========
+
   private async listOrganizationMembers(params: Record<string, any>, userId: string) {
     const err = this.requireUUID(params.organizationId, 'organizationId');
     if (err) return { success: false, error: err };
+    const where: any = { organizationId: params.organizationId };
+    if (params.search) {
+      where.user = {
+        OR: [
+          { firstName: { contains: params.search, mode: 'insensitive' as const } },
+          { lastName: { contains: params.search, mode: 'insensitive' as const } },
+          { email: { contains: params.search, mode: 'insensitive' as const } },
+        ],
+      };
+    }
     const members = await this.prisma.organizationMember.findMany({
-      where: { organizationId: params.organizationId },
+      where,
       orderBy: { joinedAt: 'asc' },
       select: {
         id: true,
@@ -2100,6 +2198,134 @@ export class ToolExecutor {
       },
     });
     return { success: true, count: members.length, members };
+  }
+
+  private async addOrganizationMember(params: Record<string, any>, userId: string) {
+    const err =
+      this.requireUUID(params.organizationId, 'organizationId') ||
+      this.requireUUID(params.userId, 'userId');
+    if (err) return { success: false, error: err };
+
+    const org = await this.prisma.organization.findUnique({
+      where: { id: params.organizationId },
+      select: { id: true, name: true },
+    });
+    if (!org) return { success: false, error: 'Organization not found.' };
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: params.userId },
+      select: { id: true, firstName: true, lastName: true },
+    });
+    if (!user)
+      return { success: false, error: 'User not found. Use list_users to find valid user IDs.' };
+
+    // Check if already a member
+    const existing = await this.prisma.organizationMember.findUnique({
+      where: {
+        userId_organizationId: { userId: params.userId, organizationId: params.organizationId },
+      },
+    });
+    if (existing) {
+      return { success: false, error: 'User is already a member of this organization.' };
+    }
+
+    const role = params.role || 'MEMBER';
+    const valid = ['OWNER', 'MANAGER', 'MEMBER', 'VIEWER'];
+    if (!valid.includes(role)) {
+      return {
+        success: false,
+        error: `Invalid role "${role}". Must be one of: ${valid.join(', ')}.`,
+      };
+    }
+
+    try {
+      const member = await this.organizationMembersService.create(
+        { userId: params.userId, organizationId: params.organizationId, role },
+        userId,
+      );
+      return {
+        success: true,
+        member: {
+          id: member.id,
+          role: member.role,
+          user: { id: user.id, firstName: user.firstName, lastName: user.lastName },
+        },
+        message: `${user.firstName} ${user.lastName} added to organization "${org.name}" as ${role}`,
+      };
+    } catch (error: any) {
+      return { success: false, error: error.message || 'Failed to add organization member' };
+    }
+  }
+
+  private async removeOrganizationMember(params: Record<string, any>, userId: string) {
+    const err =
+      this.requireUUID(params.organizationId, 'organizationId') ||
+      this.requireUUID(params.userId, 'userId');
+    if (err) return { success: false, error: err };
+
+    const member = await this.prisma.organizationMember.findUnique({
+      where: {
+        userId_organizationId: { userId: params.userId, organizationId: params.organizationId },
+      },
+      select: { id: true, role: true, user: { select: { firstName: true, lastName: true } } },
+    });
+    if (!member) return { success: false, error: 'User is not a member of this organization.' };
+
+    try {
+      await this.organizationMembersService.remove(member.id, userId);
+      return {
+        success: true,
+        message: `${member.user.firstName} ${member.user.lastName} removed from organization`,
+      };
+    } catch (error: any) {
+      return { success: false, error: error.message || 'Failed to remove organization member' };
+    }
+  }
+
+  private async updateOrganizationMemberRole(params: Record<string, any>, userId: string) {
+    const err =
+      this.requireUUID(params.organizationId, 'organizationId') ||
+      this.requireUUID(params.userId, 'userId') ||
+      this.requireString(params.role, 'role');
+    if (err) return { success: false, error: err };
+
+    const valid = ['OWNER', 'MANAGER', 'MEMBER', 'VIEWER'];
+    if (!valid.includes(params.role)) {
+      return {
+        success: false,
+        error: `Invalid role "${params.role}". Must be one of: ${valid.join(', ')}.`,
+      };
+    }
+
+    const member = await this.prisma.organizationMember.findUnique({
+      where: {
+        userId_organizationId: { userId: params.userId, organizationId: params.organizationId },
+      },
+      select: { id: true, user: { select: { firstName: true, lastName: true } } },
+    });
+    if (!member) return { success: false, error: 'User is not a member of this organization.' };
+
+    try {
+      const updated = await this.organizationMembersService.update(
+        member.id,
+        { role: params.role, isDefault: false },
+        userId,
+      );
+      return {
+        success: true,
+        member: {
+          id: (updated as any).id,
+          role: (updated as any).role,
+          user: member.user,
+        },
+        message: `${member.user.firstName} ${member.user.lastName}'s organization role → ${params.role}`,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Failed to update organization member role',
+      };
+    }
   }
 
   // ========== WORKSPACE MEMBER EXTENDED ==========

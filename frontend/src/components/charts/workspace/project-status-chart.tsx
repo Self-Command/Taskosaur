@@ -21,6 +21,7 @@ export function ProjectStatusChart({ data }: ProjectStatusChartProps) {
   const { t } = useTranslation(["workspace-home", "projects"]);
   const router = useRouter();
   const { workspaceSlug } = router.query;
+  if (!data || !Array.isArray(data)) return null;
 
   const chartData = data?.map((item) => ({
     name: t(`projects:status.${item.status.toLowerCase()}`, chartConfig[item.status as keyof typeof chartConfig]?.label || item.status),

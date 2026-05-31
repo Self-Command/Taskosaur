@@ -27,6 +27,7 @@ interface TaskTypeChartProps {
 
 export function TaskTypeChart({ data }: TaskTypeChartProps) {
   const { t } = useTranslation("workspace-home");
+  if (!data || !Array.isArray(data)) return null;
   const chartData = data?.map((item) => ({
     name: t(chartConfig[item.type]?.label) || item.type,
     value: item._count.type,

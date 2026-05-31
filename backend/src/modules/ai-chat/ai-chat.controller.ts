@@ -103,17 +103,18 @@ export class AiChatController {
     @Body() chatRequest: ChatRequestDto,
     @Res() res: Response,
   ) {
-    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Content-Type', 'application/x-ndjson');
     res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
 
     try {
       for await (const event of this.aiChatService.chatStreamPost(chatRequest, user.id)) {
-        res.write(`data: ${JSON.stringify(event)}\n\n`);
+        res.write(JSON.stringify(event) + '\n');
       }
       res.end();
     } catch (error) {
-      res.write(`data: ${JSON.stringify({ type: 'error', error: error.message })}\n\n`);
+      res.write(JSON.stringify({ t: 'error', e: error.message }) + '\n');
       res.end();
     }
   }

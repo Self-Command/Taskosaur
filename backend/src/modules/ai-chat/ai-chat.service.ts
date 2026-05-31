@@ -20,7 +20,7 @@ import { Conversation } from '@prisma/client';
 const MAX_TOOL_ITERATIONS = 10;
 const FETCH_TIMEOUT_MS = 60000; // 60s for LLM API calls
 const FETCH_TIMEOUT_SIMPLE_MS = 30000; // 30s for simple calls (title gen, test)
-const SSE_READ_TIMEOUT_MS = 30000; // 30s max between SSE chunks
+const STREAM_READ_TIMEOUT_MS = 120000; // 2 min max between chunks
 
 // ── Inline guard: the three tool-loop methods below replace
 //    `this.mcpToolsService.executeTool(name, params, userId)`
@@ -137,11 +137,14 @@ export class AiChatService {
    * including tool_calls and tool result messages from stored toolExecutions JSON.
    */
   private async loadHistoryMessages(conversationId: string): Promise<any[]> {
+    // Load the MOST RECENT messages first (desc), then reverse to chronological order.
+    // Previously 'asc' + take:20 loaded the OLDEST 20 messages, causing complete context loss.
     const historyMsgs = await this.prisma.chatMessage.findMany({
       where: { conversationId },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: 'desc' },
       take: 20,
     });
+    historyMsgs.reverse(); // Put back in chronological order for LLM context
     const entries: any[] = [];
     for (const m of historyMsgs) {
       if (m.role === 'user') {
@@ -213,7 +216,7 @@ export class AiChatService {
             reject(
               new BadRequestException('AI response stream timed out — no data received for 30s.'),
             ),
-          SSE_READ_TIMEOUT_MS,
+          STREAM_READ_TIMEOUT_MS,
         ),
       ),
     ]);
@@ -318,25 +321,28 @@ export class AiChatService {
     messages.push({ role: 'system', content: getMCPSystemPrompt(tz) });
 
     let userMessage = chatRequest.message;
-    if (chatRequest.workspaceId || chatRequest.projectId) {
-      const contextParts: string[] = [];
-      if (chatRequest.currentOrganizationId)
-        contextParts.push(`organizationId: ${chatRequest.currentOrganizationId}`);
-      if (chatRequest.workspaceId) {
-        contextParts.push(
-          this.isUUID(chatRequest.workspaceId)
-            ? `workspaceId: ${chatRequest.workspaceId}`
-            : `workspaceSlug: ${chatRequest.workspaceId}`,
-        );
-      }
-      if (chatRequest.projectId) {
-        contextParts.push(
-          this.isUUID(chatRequest.projectId)
-            ? `projectId: ${chatRequest.projectId}`
-            : `projectSlug: ${chatRequest.projectId}`,
-        );
-      }
-      userMessage = `[Context: ${contextParts.join(', ')}]\n\n${userMessage}`;
+    // Always build context info so the AI knows where the user is, but make it
+    // crystal clear that this is PAGE context — NOT a scope constraint.
+    const contextParts: string[] = [];
+    if (chatRequest.currentOrganizationId) {
+      contextParts.push(`organizationId: ${chatRequest.currentOrganizationId}`);
+    }
+    if (chatRequest.workspaceId) {
+      contextParts.push(
+        this.isUUID(chatRequest.workspaceId)
+          ? `workspaceId: ${chatRequest.workspaceId}`
+          : `workspaceSlug: ${chatRequest.workspaceId}`,
+      );
+    }
+    if (chatRequest.projectId) {
+      contextParts.push(
+        this.isUUID(chatRequest.projectId)
+          ? `projectId: ${chatRequest.projectId}`
+          : `projectSlug: ${chatRequest.projectId}`,
+      );
+    }
+    if (contextParts.length > 0) {
+      userMessage = `[Current page: ${contextParts.join(', ')}]\n\nIMPORTANT: This is just the page you are viewing. The user's request may be at ANY scope level (organization/workspace/project). Check the SCOPE HIERARCHY in the system prompt to determine the correct scope. Do NOT assume the request is workspace-scoped just because of the page context.\n\n${userMessage}`;
     }
 
     messages.push({ role: 'user', content: userMessage });
@@ -384,7 +390,10 @@ export class AiChatService {
       let finalResponse = '';
 
       for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
-        const llmResponse = await this.callLlmWithTools(messages, userId, provider, apiUrl, apiKey);
+        const llmResponse = await this.callLlmWithTools(messages, userId, provider, apiUrl, apiKey, {
+          enableWebSearch: chatRequest.enableWebSearch,
+          enableThinking: chatRequest.enableThinking,
+        });
 
         if (llmResponse.toolCalls && llmResponse.toolCalls.length > 0) {
           const assistantMsg: any = {
@@ -463,6 +472,10 @@ export class AiChatService {
             data: { conversationId: conversation.id, role: 'assistant', content: finalResponse },
           })
           .catch(() => {});
+        // Bump updatedAt so conversation moves to top of sorted list
+        await this.prisma.conversation
+          .update({ where: { id: conversation.id }, data: { updatedAt: new Date() } })
+          .catch(() => {});
         if (titlePromise) await titlePromise;
       }
 
@@ -497,149 +510,96 @@ export class AiChatService {
       const historyEntries = await this.loadHistoryMessages(conversation.id);
       messages.splice(1, 0, ...historyEntries);
 
-      // Kick off title generation early so it runs in parallel
-      let titlePromise: Promise<void> | null = null;
-      if (conversation.title === 'New Chat') {
-        titlePromise = this.generateConversationTitle(
-          conversation.id,
-          chatRequest.message,
-          userId,
-        ).catch(() => {});
+      // ── Web Search (DuckDuckGo HTML, free, no API key) ──
+      let searchResults: any[] = [];
+      if (chatRequest.enableWebSearch) {
+        yield { t: 'ss', q: chatRequest.message };
+        try {
+          const q = encodeURIComponent(chatRequest.message);
+          const ddgRes = await fetch(`https://html.duckduckgo.com/html/?q=${q}`, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+            signal: AbortSignal.timeout(10000),
+          });
+          const html = await ddgRes.text();
+          const blocks = html.split('class="result__body"');
+          for (let i = 1; i < blocks.length && searchResults.length < 5; i++) {
+            const b = blocks[i];
+            const tm = b.match(/class="result__a"[^>]*href="([^"]*)"[^>]*>([^<]*)<\//);
+            const sm = b.match(/class="result__snippet"[^>]*>([\s\S]*?)<\/a>/);
+            if (tm) searchResults.push({ title: tm[2].replace(/<[^>]*>/g, '').trim(), url: tm[1], snippet: sm ? sm[1].replace(/<[^>]*>/g, '').trim() : '' });
+          }
+          if (searchResults.length > 0) {
+            yield { t: 'sr', r: searchResults };
+            messages.push({ role: 'system', content: 'Web results:\n' + searchResults.map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.snippet}`).join('\n\n') });
+          }
+        } catch (e) { console.error('[SEARCH]', e); }
+        yield { t: 'se', n: searchResults.length };
       }
 
-      // Tool-calling loop with real-time text streaming
+      // Kick off title generation
+      let titlePromise: Promise<void> | null = null;
+      if (conversation.title === 'New Chat') {
+        titlePromise = this.generateConversationTitle(conversation.id, chatRequest.message, userId).catch(() => {});
+      }
+
+      // ── Tool loop with NDJSON streaming ──
       let finalResponse = '';
       const toolExecutions: ToolExec[] = [];
       const executeTool = makeGuardedExecutor(this.mcpToolsService, toolExecutions);
 
       for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
-        // Promise-push pattern: each token triggers an immediate yield, no polling
-        const tokenQueue: string[] = [];
-        let pushResolve: (() => void) | null = null;
-        let streamDone = false;
-        let streamResult: {
-          content: string | null;
-          toolCalls: Array<{ id: string; name: string; arguments: any }> | null;
-        } | null = null;
+        const evQ: any[] = [];
+        let wake: (() => void) | null = null;
+        let done = false;
+        let llmResult: any = null;
 
-        const streamPromise = this.callLlmWithToolsStreaming(
-          messages,
-          userId,
-          provider,
-          apiUrl,
-          apiKey,
-          async (token) => {
-            tokenQueue.push(token);
-            if (pushResolve) {
-              pushResolve();
-              pushResolve = null;
-            }
-          },
-        ).then((r) => {
-          streamResult = r;
-          streamDone = true;
-          if (pushResolve) {
-            pushResolve();
-            pushResolve = null;
-          }
-          return r;
-        });
+        const push = (e: any) => { evQ.push(e); if (wake) { wake(); wake = null; } };
+        const opts = { enableWebSearch: chatRequest.enableWebSearch, enableThinking: chatRequest.enableThinking };
+        const sp = this.callLlmWithToolsStreaming(
+          messages, userId, provider, apiUrl, apiKey,
+          async (tok) => push({ t: 'tx', d: tok }),
+          chatRequest.enableThinking ? async (tok: string) => push({ t: 'th', d: tok }) : undefined,
+          opts,
+        ).then((r) => { llmResult = r; done = true; if (wake) { wake(); wake = null; } });
 
-        // Yield tokens as they arrive — zero delay
         while (true) {
-          if (tokenQueue.length > 0) {
-            yield { type: 'text_delta', delta: tokenQueue.shift()! };
-          } else if (streamDone) {
-            break;
-          } else {
-            await new Promise<void>((r) => {
-              pushResolve = r;
-            });
-          }
+          if (evQ.length > 0) yield evQ.shift();
+          else if (done) break;
+          else await new Promise<void>((r) => { wake = r; });
         }
 
-        const llmResponse = streamResult!;
-
-        if (llmResponse.toolCalls && llmResponse.toolCalls.length > 0) {
-          const assistantMsg: any = {
-            role: 'assistant',
-            content: llmResponse.content || null,
-            tool_calls: llmResponse.toolCalls.map((tc) => ({
-              id: tc.id,
-              type: 'function',
-              function: { name: tc.name, arguments: JSON.stringify(tc.arguments) },
-            })),
-          };
-          messages.push(assistantMsg);
-
-          for (const toolCall of llmResponse.toolCalls) {
-            const toolName = toolCall.name;
-            const toolParams = toolCall.arguments;
-            const toolCallId = toolCall.id;
-
-            // Emit tool start event
-            yield { type: 'tool_start', tool: toolName, params: toolParams };
-
-            const toolResult = await executeTool(toolName, toolParams, userId);
-            toolExecutions.push({ tool: toolName, params: toolParams, result: toolResult });
-
-            // Emit tool result event
-            yield { type: 'tool_result', tool: toolName, params: toolParams, result: toolResult };
-            if (toolName === 'navigate' && toolResult?.path) {
-              yield { type: 'navigate', path: toolResult.path };
-            }
-
-            messages.push({
-              role: 'tool',
-              content: JSON.stringify(toolResult),
-              tool_call_id: toolCallId,
-            } as any);
+        if (llmResult?.toolCalls?.length) {
+          const tc = llmResult.toolCalls;
+          messages.push({ role: 'assistant', content: llmResult.content || null, tool_calls: tc.map((c: any) => ({ id: c.id, type: 'function', function: { name: c.name, arguments: JSON.stringify(c.arguments) } })) } as any);
+          for (const c of tc) {
+            yield { t: 'ts', tool: c.name, p: c.arguments };
+            const r = await executeTool(c.name, c.arguments, userId);
+            toolExecutions.push({ tool: c.name, params: c.arguments, result: r });
+            yield { t: 'tr', tool: c.name, r };
+            if (c.name === 'navigate' && r?.path) yield { t: 'nav', p: r.path };
+            messages.push({ role: 'tool', content: JSON.stringify(r), tool_call_id: c.id } as any);
           }
         } else {
-          finalResponse = llmResponse.content || 'Done.';
-          if (llmResponse.content) {
-            messages.push({ role: 'assistant', content: llmResponse.content });
-          }
+          finalResponse = llmResult?.content || 'Done.';
+          if (llmResult?.content) messages.push({ role: 'assistant', content: llmResult.content });
           break;
         }
       }
 
-      if (!finalResponse && toolExecutions.length > 0) {
-        finalResponse = buildFallbackMessage(toolExecutions);
-      } else if (!finalResponse) {
-        finalResponse =
-          'No response from AI. The service may be experiencing issues — please try again.';
-      }
+      if (!finalResponse) finalResponse = toolExecutions.length > 0 ? buildFallbackMessage(toolExecutions) : 'No response.';
 
-      // Save conversation messages
+      // Save
       if (conversation) {
-        await this.prisma.chatMessage.create({
-          data: { conversationId: conversation.id, role: 'user', content: chatRequest.message },
-        });
-        await this.prisma.chatMessage.create({
-          data: {
-            conversationId: conversation.id,
-            role: 'assistant',
-            content: finalResponse,
-            toolExecutions: toolExecutions.length > 0 ? toolExecutions : undefined,
-          },
-        });
-
+        await this.prisma.chatMessage.create({ data: { conversationId: conversation.id, role: 'user', content: chatRequest.message } }).catch(() => {});
+        await this.prisma.chatMessage.create({ data: { conversationId: conversation.id, role: 'assistant', content: finalResponse, toolExecutions: toolExecutions.length > 0 ? toolExecutions : undefined } }).catch(() => {});
+        await this.prisma.conversation.update({ where: { id: conversation.id }, data: { updatedAt: new Date() } }).catch(() => {});
         if (titlePromise) await titlePromise;
       }
 
-      // Emit final response with conversation info
-      yield {
-        type: 'message',
-        message: finalResponse,
-        toolExecutions,
-        conversationId: conversation.id,
-        title: conversation?.title || 'New Chat',
-      };
+      yield { t: 'msg', m: finalResponse, e: toolExecutions, c: conversation?.id, title: conversation?.title };
     } catch (error: any) {
-      console.error(error);
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      yield { type: 'error', error: errorMessage };
+      console.error('[CHAT STREAM]', error);
+      yield { t: 'err', e: error?.message || String(error) };
     }
   }
 
@@ -653,7 +613,7 @@ export class AiChatService {
 
       // Find or create conversation
       let conversation: Conversation | null = null;
-      let dbHistory: ChatMessageDto[] = [];
+      let dbHistory: any[] = [];
 
       if (chatRequest.sessionId) {
         conversation = await this.prisma.conversation.findUnique({
@@ -669,15 +629,43 @@ export class AiChatService {
             },
           });
         } else {
+          // Load MOST RECENT messages (desc) then reverse to chronological order
           const historyMsgs = await this.prisma.chatMessage.findMany({
             where: { conversationId: conversation.id },
-            orderBy: { createdAt: 'asc' },
+            orderBy: { createdAt: 'desc' },
             take: 40,
           });
-          dbHistory = historyMsgs.map((m) => ({
-            role: m.role as 'system' | 'user' | 'assistant',
-            content: m.content,
-          }));
+          historyMsgs.reverse();
+          // Reconstruct tool_calls and tool results from stored toolExecutions JSON
+          dbHistory = [];
+          for (const m of historyMsgs) {
+            if (m.role === 'user') {
+              dbHistory.push({ role: m.role as 'user', content: m.content });
+            } else if (m.role === 'assistant') {
+              const toolExecs: any[] = (m as any).toolExecutions || [];
+              if (toolExecs.length > 0) {
+                const tool_calls = toolExecs.map((te: any, i: number) => ({
+                  id: `hist_${m.id}_${i}`,
+                  type: 'function' as const,
+                  function: { name: te.tool, arguments: JSON.stringify(te.params) },
+                }));
+                dbHistory.push({
+                  role: 'assistant' as const,
+                  content: m.content || null,
+                  tool_calls,
+                });
+                for (let i = 0; i < toolExecs.length; i++) {
+                  dbHistory.push({
+                    role: 'tool' as const,
+                    content: JSON.stringify(toolExecs[i].result),
+                    tool_call_id: `hist_${m.id}_${i}`,
+                  });
+                }
+              } else {
+                dbHistory.push({ role: 'assistant' as const, content: m.content });
+              }
+            }
+          }
         }
       }
 
@@ -791,6 +779,7 @@ export class AiChatService {
       const toolExecutions: ToolExec[] = [];
       const executeTool = makeGuardedExecutor(this.mcpToolsService, toolExecutions);
 
+      let streamedThinking = '';
       for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
         let streamedContent = '';
         const llmResponse = await this.callLlmWithToolsStreaming(
@@ -808,6 +797,10 @@ export class AiChatService {
               })
               .catch(() => {});
           },
+          async (thinkingToken) => {
+            streamedThinking += thinkingToken;
+          },
+          { enableWebSearch: chatRequest.enableWebSearch, enableThinking: chatRequest.enableThinking },
         );
 
         if (llmResponse.toolCalls && llmResponse.toolCalls.length > 0) {
@@ -922,6 +915,8 @@ export class AiChatService {
     apiUrl: string,
     apiKey: string | null,
     onToken: (text: string) => Promise<void>,
+    onThinking?: (text: string) => Promise<void>,
+    options?: { enableWebSearch?: boolean; enableThinking?: boolean },
   ): Promise<{
     content: string | null;
     toolCalls: Array<{ id: string; name: string; arguments: any }> | null;
@@ -933,7 +928,7 @@ export class AiChatService {
 
     // For Anthropic/Google: fall back to non-streaming (streaming format differs)
     if (provider === 'anthropic' || provider === 'google') {
-      const result = await this.callLlmWithTools(messages, userId, provider, apiUrl, apiKey);
+      const result = await this.callLlmWithTools(messages, userId, provider, apiUrl, apiKey, options);
       if (result.content) await onToken(result.content);
       return result;
     }
@@ -956,8 +951,14 @@ export class AiChatService {
           tools: this.mcpToolsService.getOpenAITools(),
           tool_choice: 'auto',
           stream: true,
+          temperature: 0.1,
         };
-        requestBody.temperature = 0.1;
+        if (options?.enableWebSearch) {
+          requestBody.plugins = [{ id: 'web', max_results: 3 }];
+        }
+        if (options?.enableThinking) {
+          requestBody.reasoning_effort = 'medium';
+        }
         break;
 
       case 'openai':
@@ -971,6 +972,9 @@ export class AiChatService {
           max_completion_tokens: 2000,
         };
         if (!isGpt5Model) requestBody.temperature = 0.1;
+        if (options?.enableThinking) {
+          requestBody.reasoning_effort = 'medium';
+        }
         break;
 
       case 'ollama':
@@ -1013,12 +1017,15 @@ export class AiChatService {
       throw new BadRequestException(this.translateLlmError(response.status, errorData));
     }
 
-    // Parse SSE stream
+    // ── Parse API response stream ──
     const reader = response.body!.getReader();
     const decoder = new TextDecoder();
     let buf = '';
     let fullContent = '';
+    let thinkingTotal = 0;
+    let textTotal = 0;
     const toolAcc: Map<number, { id: string; name: string; args: string }> = new Map();
+    let firstChunk = true;
 
     while (true) {
       const { done, value } = await this.readSSEChunk(reader);
@@ -1039,11 +1046,26 @@ export class AiChatService {
           const delta = chunk?.choices?.[0]?.delta;
           if (!delta) continue;
 
-          if (delta.content) {
-            fullContent += delta.content;
-            await onToken(delta.content);
+          if (firstChunk) {
+            console.log('[LLM STREAM] First delta keys:', Object.keys(delta).join(', '));
+            firstChunk = false;
           }
 
+          // Native reasoning tokens
+          const reasoning = delta.reasoning_content || delta.reasoning || delta.thinking || '';
+          if (reasoning) {
+            thinkingTotal += reasoning.length;
+            if (onThinking) await onThinking(reasoning);
+          }
+
+          // Content tokens
+          if (delta.content) {
+            textTotal += delta.content.length;
+            fullContent += delta.content;
+            if (onToken) await onToken(delta.content);
+          }
+
+          // Tool calls
           if (delta.tool_calls) {
             for (const tc of delta.tool_calls) {
               const idx = tc.index ?? 0;
@@ -1057,6 +1079,7 @@ export class AiChatService {
         } catch {}
       }
     }
+    console.log('[LLM STREAM] Done. thinking:', thinkingTotal, 'text:', textTotal, 'tools:', toolAcc.size);
 
     if (toolAcc.size > 0) {
       const toolCalls = Array.from(toolAcc.values())
@@ -1087,6 +1110,7 @@ export class AiChatService {
     provider: string,
     apiUrl: string,
     apiKey: string | null,
+    options?: { enableWebSearch?: boolean; enableThinking?: boolean },
   ): Promise<{
     content: string | null;
     toolCalls: Array<{ id: string; name: string; arguments: any }> | null;
@@ -1096,6 +1120,9 @@ export class AiChatService {
 
     const isGpt5Model = typeof model === 'string' && model.startsWith('gpt-5');
     const toolDefs = this.mcpToolsService.getToolDefinitions();
+
+    const webSearch = options?.enableWebSearch ?? false;
+    const thinking = options?.enableThinking ?? false;
 
     let requestUrl = apiUrl;
     const requestHeaders: any = {
@@ -1124,6 +1151,12 @@ export class AiChatService {
         } else if (provider === 'openrouter') {
           requestHeaders['HTTP-Referer'] = process.env.APP_URL || 'http://localhost:3000';
           requestHeaders['X-Title'] = 'Taskosaur AI Assistant';
+          if (webSearch) {
+            requestBody.plugins = [{ id: 'web', max_results: 3 }];
+          }
+        }
+        if (thinking) {
+          requestBody.reasoning_effort = 'medium';
         }
         break;
       }
@@ -1147,6 +1180,9 @@ export class AiChatService {
           max_tokens: 2000,
           temperature: 0.1,
         };
+        if (thinking) {
+          requestBody.thinking = { type: 'enabled', budget_tokens: 2000 };
+        }
         break;
       }
 
@@ -1197,6 +1233,11 @@ export class AiChatService {
           stream: false,
         };
       }
+    }
+
+    // Debug: verify webSearch/thinking params reach the API
+    if (webSearch || thinking) {
+      console.log('[AI-CHAT] Features:', JSON.stringify({ webSearch, thinking, model, provider, plugins: requestBody.plugins, thinkCfg: requestBody.thinking, reasonEffort: requestBody.reasoning_effort }));
     }
 
     const response = await this.fetchWithTimeout(

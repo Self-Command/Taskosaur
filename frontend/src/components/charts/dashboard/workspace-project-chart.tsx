@@ -21,6 +21,7 @@ interface WorkspaceProjectChartProps {
 
 export function WorkspaceProjectChart({ data }: WorkspaceProjectChartProps) {
   const { t } = useTranslation("workspace-home");
+  if (!data || !Array.isArray(data)) return null;
   const chartData = data?.map((item) => ({
     workspace:
       item.workspaceName.length > 15

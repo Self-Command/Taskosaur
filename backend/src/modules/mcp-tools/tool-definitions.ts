@@ -1,171 +1,360 @@
 import { TaskType } from '@prisma/client';
 
+export type MCPToolScope = 'organization' | 'workspace' | 'project' | 'cross';
+
 export interface MCPToolDefinition {
   name: string;
   description: string;
   input_schema: Record<string, any>;
+  scope: MCPToolScope;
 }
 
 const TASK_TYPES = Object.values(TaskType);
 const TASK_TYPES_STR = TASK_TYPES.join(',');
 
 export const MCP_TOOL_DEFINITIONS: MCPToolDefinition[] = [
-  // ========== WORKSPACE TOOLS ==========
+  // ================================================================
+  // ORGANIZATION TOOLS (scope: organization)
+  // ================================================================
   {
-    name: 'list_workspaces',
+    name: 'list_organizations',
     description:
-      'List all workspaces in an organization. Use this to find workspace IDs and names. / 列出组织中所有工作区。用于查找工作区 ID 和名称。',
+      'List all organizations the user belongs to. ORGANIZATION-level operation. / 列出用户所属的所有组织。组织级别操作。',
+    input_schema: { type: 'object', properties: {} },
+    scope: 'organization',
+  },
+  {
+    name: 'get_organization',
+    description:
+      'Get organization details by ID. ORGANIZATION-level operation — use this for organization info, NOT workspace or project tools. / 根据ID获取组织详情。组织级别操作——不要用工作区或项目工具。',
     input_schema: {
       type: 'object',
       properties: {
-        organizationId: {
-          type: 'string',
-          description: 'Organization ID (UUID) / 组织 ID',
-        },
-        search: {
-          type: 'string',
-          description: 'Search by workspace name / 按名称搜索',
-        },
+        organizationId: { type: 'string', description: 'Organization ID (UUID) / 组织 ID' },
       },
       required: ['organizationId'],
     },
+    scope: 'organization',
+  },
+  {
+    name: 'create_organization',
+    description:
+      'Create a new organization. ORGANIZATION-level operation. The creator becomes OWNER. A default workflow and workspace are automatically created. / 创建新组织。组织级别操作。创建者成为所有者。自动创建默认工作流和工作区。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Organization name / 组织名称' },
+        slug: {
+          type: 'string',
+          description: 'URL-friendly slug (auto-generated if omitted) / URL slug（留空自动生成）',
+        },
+        description: { type: 'string', description: 'Organization description / 组织描述' },
+        website: { type: 'string', description: 'Organization website URL / 组织网站' },
+        avatar: { type: 'string', description: 'Avatar URL / 头像 URL' },
+      },
+      required: ['name'],
+    },
+    scope: 'organization',
+  },
+  {
+    name: 'update_organization',
+    description:
+      'Update an organization name, description, website, avatar, or slug. ORGANIZATION-level operation. / 更新组织名称、描述、网站、头像或 slug。组织级别操作。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        organizationId: { type: 'string', description: 'Organization ID (UUID) / 组织 ID' },
+        name: { type: 'string', description: 'New name / 新名称' },
+        description: { type: 'string', description: 'New description / 新描述' },
+        website: { type: 'string', description: 'New website URL / 新网站 URL' },
+        avatar: { type: 'string', description: 'New avatar URL / 新头像 URL' },
+        slug: { type: 'string', description: 'New slug / 新 slug' },
+      },
+      required: ['organizationId'],
+    },
+    scope: 'organization',
+  },
+  {
+    name: 'delete_organization',
+    description:
+      '⚠️ DESTRUCTIVE: Permanently delete an entire organization and ALL its workspaces, projects, tasks, and data. Cannot be undone. Must confirm with organization name. ORGANIZATION-level operation. / ⚠️ 危险操作：永久删除整个组织及其所有工作区、项目、任务和数据。不可撤销。必须确认组织名称。组织级别操作。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        organizationId: { type: 'string', description: 'Organization ID (UUID) / 组织 ID' },
+        confirmation: {
+          type: 'string',
+          description:
+            'Type the EXACT organization name to confirm deletion / 输入精确的组织名称以确认删除',
+        },
+      },
+      required: ['organizationId', 'confirmation'],
+    },
+    scope: 'organization',
+  },
+
+  // ================================================================
+  // ORGANIZATION MEMBER TOOLS (scope: organization)
+  //   THESE are for managing team members at the org level.
+  //   When user says "list team members" / "列出团队成员" → use THESE.
+  //   Do NOT use workspace_member or project_member tools for org members.
+  // ================================================================
+  {
+    name: 'list_organization_members',
+    description:
+      'List ALL members of an organization. This is an ORGANIZATION-level operation — use this when the user asks about "team members" or "团队成员". Do NOT use workspace or project member tools for organization-wide member queries. / 列出组织所有成员。组织级别操作——当用户询问"团队成员"时使用此工具，不要使用工作区/项目成员工具。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        organizationId: { type: 'string', description: 'Organization ID (UUID) / 组织 ID' },
+        search: { type: 'string', description: 'Search by name or email / 按名称或邮箱搜索' },
+      },
+      required: ['organizationId'],
+    },
+    scope: 'organization',
+  },
+  {
+    name: 'add_organization_member',
+    description:
+      'Add a user to an organization with a role. ORGANIZATION-level operation. The user must already exist in the system. Use list_users to find user IDs. / 将用户添加到组织。组织级别操作。用户必须已存在于系统中。使用 list_users 查找用户 ID。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        organizationId: { type: 'string', description: 'Organization ID (UUID) / 组织 ID' },
+        userId: { type: 'string', description: 'User ID (UUID) / 用户 ID' },
+        role: {
+          type: 'string',
+          enum: ['OWNER', 'MANAGER', 'MEMBER', 'VIEWER'],
+          description: 'Role to assign (default MEMBER) / 分配的角色（默认 MEMBER）',
+        },
+      },
+      required: ['organizationId', 'userId'],
+    },
+    scope: 'organization',
+  },
+  {
+    name: 'remove_organization_member',
+    description:
+      'Remove a user from an organization. ORGANIZATION-level operation. This also removes them from all workspaces and projects within the org. / 从组织移除用户。组织级别操作。这将同时从组织内的所有工作区和项目中移除该用户。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        organizationId: { type: 'string', description: 'Organization ID (UUID) / 组织 ID' },
+        userId: { type: 'string', description: 'User ID (UUID) to remove / 要移除的用户 ID' },
+      },
+      required: ['organizationId', 'userId'],
+    },
+    scope: 'organization',
+  },
+  {
+    name: 'update_organization_member_role',
+    description:
+      'Change a member role within an organization. ORGANIZATION-level operation. Valid roles: OWNER, MANAGER, MEMBER, VIEWER. / 更改组织成员角色。组织级别操作。有效角色：OWNER, MANAGER, MEMBER, VIEWER。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        organizationId: { type: 'string', description: 'Organization ID (UUID) / 组织 ID' },
+        userId: { type: 'string', description: 'User ID (UUID) / 用户 ID' },
+        role: {
+          type: 'string',
+          enum: ['OWNER', 'MANAGER', 'MEMBER', 'VIEWER'],
+          description: 'New role / 新角色',
+        },
+      },
+      required: ['organizationId', 'userId', 'role'],
+    },
+    scope: 'organization',
+  },
+
+  // ================================================================
+  // WORKSPACE TOOLS (scope: workspace)
+  // ================================================================
+  {
+    name: 'list_workspaces',
+    description:
+      'List all workspaces in an organization. WORKSPACE-level operation. Use this to find workspace IDs and names. / 列出组织中所有工作区。工作区级别操作。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        organizationId: { type: 'string', description: 'Organization ID (UUID) / 组织 ID' },
+        search: { type: 'string', description: 'Search by workspace name / 按名称搜索' },
+      },
+      required: ['organizationId'],
+    },
+    scope: 'workspace',
   },
   {
     name: 'get_workspace',
     description:
-      'Get details of a specific workspace by ID or slug. / 通过 ID 或 slug 获取工作区详情。',
+      'Get details of a specific workspace by ID or slug. WORKSPACE-level operation. / 通过 ID 或 slug 获取工作区详情。工作区级别操作。',
     input_schema: {
       type: 'object',
       properties: {
-        workspaceId: {
-          type: 'string',
-          description: 'Workspace ID (UUID) / 工作区 ID',
-        },
+        workspaceId: { type: 'string', description: 'Workspace ID (UUID) / 工作区 ID' },
         organizationId: {
           type: 'string',
-          description: 'Organization ID (required if using slug) / 组织 ID（使用 slug 时必填）',
+          description: 'Organization ID (required if using slug) / 组织 ID',
         },
-        slug: {
-          type: 'string',
-          description: 'Workspace slug (alternative to ID) / 工作区 slug',
-        },
+        slug: { type: 'string', description: 'Workspace slug (alternative to ID) / 工作区 slug' },
       },
     },
+    scope: 'workspace',
   },
   {
     name: 'create_workspace',
     description:
-      'Create a new workspace. Name, slug, and organizationId are required. / 创建新工作区。名称、slug 和组织 ID 为必填。',
+      'Create a new workspace. WORKSPACE-level operation. Name, slug, and organizationId are required. / 创建新工作区。工作区级别操作。',
     input_schema: {
       type: 'object',
       properties: {
-        name: {
-          type: 'string',
-          description: 'Workspace name / 工作区名称',
-        },
-        slug: {
-          type: 'string',
-          description: 'URL-friendly slug (lowercase, hyphens) / URL 友好的 slug',
-        },
-        description: {
-          type: 'string',
-          description: 'Workspace description / 工作区描述',
-        },
-        color: {
-          type: 'string',
-          description: 'Hex color code, e.g. #3B82F6 / 十六进制颜色代码',
-        },
-        organizationId: {
-          type: 'string',
-          description: 'Organization ID (UUID) / 组织 ID',
-        },
-        parentWorkspaceId: {
-          type: 'string',
-          description: 'Parent workspace ID for nesting / 父工作区 ID',
-        },
+        name: { type: 'string', description: 'Workspace name / 工作区名称' },
+        slug: { type: 'string', description: 'URL-friendly slug / URL slug' },
+        description: { type: 'string', description: 'Description / 描述' },
+        color: { type: 'string', description: 'Hex color, e.g. #3B82F6 / 颜色' },
+        avatar: { type: 'string', description: 'Avatar URL / 头像 URL' },
+        organizationId: { type: 'string', description: 'Organization ID (UUID) / 组织 ID' },
+        parentWorkspaceId: { type: 'string', description: 'Parent workspace ID / 父工作区 ID' },
       },
       required: ['name', 'slug', 'organizationId'],
     },
+    scope: 'workspace',
   },
   {
     name: 'update_workspace',
     description:
-      'Update an existing workspace. Provide workspaceId and the fields to change. / 更新工作区。提供工作区 ID 和要修改的字段。',
+      'Update an existing workspace. WORKSPACE-level operation. / 更新工作区。工作区级别操作。',
     input_schema: {
       type: 'object',
       properties: {
-        workspaceId: {
-          type: 'string',
-          description: 'Workspace ID (UUID) / 工作区 ID',
-        },
+        workspaceId: { type: 'string', description: 'Workspace ID (UUID) / 工作区 ID' },
         name: { type: 'string', description: 'New name / 新名称' },
         description: { type: 'string', description: 'New description / 新描述' },
-        color: { type: 'string', description: 'New hex color / 新颜色' },
+        color: { type: 'string', description: 'New color / 新颜色' },
         avatar: { type: 'string', description: 'Avatar URL / 头像 URL' },
       },
       required: ['workspaceId'],
     },
+    scope: 'workspace',
   },
   {
     name: 'delete_workspace',
     description:
-      'Delete a workspace permanently. This cannot be undone. / 永久删除工作区，此操作不可撤销。',
+      'Delete a workspace permanently. This cannot be undone. WORKSPACE-level operation. / 永久删除工作区。工作区级别操作。',
     input_schema: {
       type: 'object',
       properties: {
-        workspaceId: {
-          type: 'string',
-          description: 'Workspace ID (UUID) / 工作区 ID',
-        },
+        workspaceId: { type: 'string', description: 'Workspace ID (UUID) / 工作区 ID' },
       },
       required: ['workspaceId'],
     },
+    scope: 'workspace',
   },
 
-  // ========== PROJECT TOOLS ==========
+  // ================================================================
+  // WORKSPACE MEMBER TOOLS (scope: workspace)
+  //   Use these ONLY when the user specifically asks about
+  //   "workspace members" / "工作区成员". Not for "team members".
+  // ================================================================
   {
-    name: 'list_projects',
+    name: 'list_workspace_members',
     description:
-      'List all projects in a workspace or organization. / 列出工作区或组织中的所有项目。',
+      'List members of a specific WORKSPACE. WORKSPACE-level operation — use ONLY when user asks about workspace-specific members ("工作区成员"). For organization-wide team members, use list_organization_members instead. / 列出特定工作区成员。工作区级别操作——仅在用户明确询问工作区成员时使用。',
     input_schema: {
       type: 'object',
       properties: {
-        workspaceId: {
+        workspaceId: { type: 'string', description: 'Workspace ID (UUID) / 工作区 ID' },
+      },
+      required: ['workspaceId'],
+    },
+    scope: 'workspace',
+  },
+  {
+    name: 'add_workspace_member',
+    description:
+      'Add a user to a workspace with a role. WORKSPACE-level operation. / 将用户添加到工作区。工作区级别操作。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        workspaceId: { type: 'string', description: 'Workspace ID (UUID) / 工作区 ID' },
+        userId: { type: 'string', description: 'User ID (UUID) / 用户 ID' },
+        role: {
           type: 'string',
-          description: 'Filter by workspace ID / 按工作区 ID 筛选',
-        },
-        organizationId: {
-          type: 'string',
-          description: 'Organization ID / 组织 ID',
-        },
-        search: {
-          type: 'string',
-          description: 'Search by project name / 按名称搜索',
+          enum: ['OWNER', 'MANAGER', 'MEMBER', 'VIEWER'],
+          description: 'Role / 角色',
         },
       },
+      required: ['workspaceId', 'userId'],
     },
+    scope: 'workspace',
+  },
+  {
+    name: 'remove_workspace_member',
+    description:
+      'Remove a user from a workspace. WORKSPACE-level operation. / 从工作区移除用户。工作区级别操作。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        workspaceId: { type: 'string', description: 'Workspace ID (UUID) / 工作区 ID' },
+        userId: { type: 'string', description: 'User ID (UUID) / 用户 ID' },
+      },
+      required: ['workspaceId', 'userId'],
+    },
+    scope: 'workspace',
+  },
+  {
+    name: 'update_workspace_member_role',
+    description:
+      'Change a workspace member role. WORKSPACE-level operation. / 更改工作区成员角色。工作区级别操作。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        workspaceId: { type: 'string', description: 'Workspace ID (UUID) / 工作区 ID' },
+        userId: { type: 'string', description: 'User ID (UUID) / 用户 ID' },
+        role: {
+          type: 'string',
+          enum: ['OWNER', 'MANAGER', 'MEMBER', 'VIEWER'],
+          description: 'New role / 新角色',
+        },
+      },
+      required: ['workspaceId', 'userId', 'role'],
+    },
+    scope: 'workspace',
+  },
+
+  // ================================================================
+  // PROJECT TOOLS (scope: project)
+  // ================================================================
+  {
+    name: 'list_projects',
+    description:
+      'List all projects in a workspace or organization. PROJECT-level operation. / 列出工作区或组织中的项目。项目级别操作。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        workspaceId: { type: 'string', description: 'Filter by workspace ID / 按工作区筛选' },
+        organizationId: { type: 'string', description: 'Organization ID / 组织 ID' },
+        search: { type: 'string', description: 'Search by project name / 按名称搜索' },
+      },
+    },
+    scope: 'project',
   },
   {
     name: 'get_project',
     description:
-      'Get details of a specific project by ID or slug. / 通过 ID 或 slug 获取项目详情。',
+      'Get details of a specific project by ID or slug. PROJECT-level operation. / 通过 ID 或 slug 获取项目详情。项目级别操作。',
     input_schema: {
       type: 'object',
       properties: {
-        projectId: {
-          type: 'string',
-          description: 'Project ID (UUID) / 项目 ID',
-        },
-        slug: {
-          type: 'string',
-          description: 'Project slug / 项目 slug',
-        },
+        projectId: { type: 'string', description: 'Project ID (UUID) / 项目 ID' },
+        slug: { type: 'string', description: 'Project slug / 项目 slug' },
       },
     },
+    scope: 'project',
   },
   {
     name: 'create_project',
-    description: 'Create a new project in a workspace. / 在工作区中创建新项目。',
+    description:
+      'Create a new project in a workspace. PROJECT-level operation. / 在工作区中创建新项目。项目级别操作。',
     input_schema: {
       type: 'object',
       properties: {
@@ -179,17 +368,17 @@ export const MCP_TOOL_DEFINITIONS: MCPToolDefinition[] = [
         status: {
           type: 'string',
           enum: ['PLANNING', 'ACTIVE', 'ON_HOLD', 'COMPLETED', 'CANCELLED'],
-          description: 'Project status / 项目状态',
+          description: 'Project status / 状态',
         },
         priority: {
           type: 'string',
           enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'],
-          description: 'Project priority / 项目优先级',
+          description: 'Priority / 优先级',
         },
         visibility: {
           type: 'string',
           enum: ['PRIVATE', 'INTERNAL', 'PUBLIC'],
-          description: 'Visibility level / 可见性',
+          description: 'Visibility / 可见性',
         },
         startDate: { type: 'string', description: 'Start date (ISO 8601) / 开始日期' },
         endDate: { type: 'string', description: 'End date (ISO 8601) / 结束日期' },
@@ -197,10 +386,11 @@ export const MCP_TOOL_DEFINITIONS: MCPToolDefinition[] = [
       },
       required: ['name', 'slug', 'workspaceId'],
     },
+    scope: 'project',
   },
   {
     name: 'update_project',
-    description: 'Update an existing project. Provide projectId and fields to change. / 更新项目。',
+    description: 'Update an existing project. PROJECT-level operation. / 更新项目。项目级别操作。',
     input_schema: {
       type: 'object',
       properties: {
@@ -208,69 +398,133 @@ export const MCP_TOOL_DEFINITIONS: MCPToolDefinition[] = [
         name: { type: 'string', description: 'New name / 新名称' },
         description: { type: 'string', description: 'New description / 新描述' },
         color: { type: 'string', description: 'New color / 新颜色' },
+        avatar: { type: 'string', description: 'New avatar URL / 新头像 URL' },
         status: {
           type: 'string',
           enum: ['PLANNING', 'ACTIVE', 'ON_HOLD', 'COMPLETED', 'CANCELLED'],
         },
-        priority: {
-          type: 'string',
-          enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'],
-        },
-        visibility: {
-          type: 'string',
-          enum: ['PRIVATE', 'INTERNAL', 'PUBLIC'],
-        },
+        priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] },
+        visibility: { type: 'string', enum: ['PRIVATE', 'INTERNAL', 'PUBLIC'] },
         startDate: { type: 'string' },
         endDate: { type: 'string' },
       },
       required: ['projectId'],
     },
+    scope: 'project',
   },
   {
     name: 'delete_project',
-    description: 'Delete a project permanently. / 永久删除项目。',
+    description:
+      'Delete a project permanently. PROJECT-level operation. / 永久删除项目。项目级别操作。',
+    input_schema: {
+      type: 'object',
+      properties: { projectId: { type: 'string', description: 'Project ID (UUID) / 项目 ID' } },
+      required: ['projectId'],
+    },
+    scope: 'project',
+  },
+
+  // ================================================================
+  // PROJECT MEMBER TOOLS (scope: project)
+  //   Use ONLY for project-specific member queries.
+  // ================================================================
+  {
+    name: 'list_project_members',
+    description:
+      'List members of a specific PROJECT. PROJECT-level operation — use when assigning tasks or checking project access. For organization-wide team members, use list_organization_members. / 列出特定项目成员。项目级别操作——用于分配任务或检查项目访问权限。',
+    input_schema: {
+      type: 'object',
+      properties: { projectId: { type: 'string', description: 'Project ID (UUID) / 项目 ID' } },
+      required: ['projectId'],
+    },
+    scope: 'project',
+  },
+  {
+    name: 'add_project_member',
+    description:
+      'Add a user to a project with a role. PROJECT-level operation. / 将用户添加到项目。项目级别操作。',
     input_schema: {
       type: 'object',
       properties: {
         projectId: { type: 'string', description: 'Project ID (UUID) / 项目 ID' },
+        userId: { type: 'string', description: 'User ID (UUID) / 用户 ID' },
+        role: {
+          type: 'string',
+          enum: ['OWNER', 'MANAGER', 'MEMBER', 'VIEWER'],
+          description: 'Role / 角色',
+        },
       },
-      required: ['projectId'],
+      required: ['projectId', 'userId'],
     },
+    scope: 'project',
+  },
+  {
+    name: 'remove_project_member',
+    description:
+      'Remove a user from a project. PROJECT-level operation. / 从项目移除用户。项目级别操作。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project ID (UUID) / 项目 ID' },
+        userId: { type: 'string', description: 'User ID (UUID) / 用户 ID' },
+      },
+      required: ['projectId', 'userId'],
+    },
+    scope: 'project',
+  },
+  {
+    name: 'update_project_member_role',
+    description:
+      'Change a project member role. PROJECT-level operation. / 更改项目成员角色。项目级别操作。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: 'Project ID (UUID) / 项目 ID' },
+        userId: { type: 'string', description: 'User ID (UUID) / 用户 ID' },
+        role: {
+          type: 'string',
+          enum: ['OWNER', 'MANAGER', 'MEMBER', 'VIEWER'],
+          description: 'New role / 新角色',
+        },
+      },
+      required: ['projectId', 'userId', 'role'],
+    },
+    scope: 'project',
   },
 
-  // ========== TASK TOOLS ==========
+  // ================================================================
+  // TASK TOOLS (scope: project)
+  // ================================================================
   {
     name: 'list_tasks',
     description:
-      'List tasks with filters (project, workspace, priority, status, type, search). Supports pagination. / 带筛选条件的任务列表。',
+      'List tasks with filters (project, workspace, priority, status, type, search). PROJECT-level operation. Requires organizationId. / 带筛选的任务列表。项目级别操作。',
     input_schema: {
       type: 'object',
       properties: {
         organizationId: { type: 'string', description: 'Organization ID (required) / 组织 ID' },
-        projectId: { type: 'string', description: 'Filter by project ID / 按项目 ID 筛选' },
-        workspaceId: { type: 'string', description: 'Filter by workspace ID / 按工作区 ID 筛选' },
+        projectId: { type: 'string', description: 'Filter by project ID / 按项目筛选' },
+        workspaceId: { type: 'string', description: 'Filter by workspace ID / 按工作区筛选' },
         priorities: {
           type: 'string',
-          description: 'Comma-separated: LOWEST,LOW,MEDIUM,HIGH,HIGHEST / 优先级',
+          description: 'Comma-separated: LOWEST,LOW,MEDIUM,HIGH,HIGHEST',
         },
-        statuses: { type: 'string', description: 'Comma-separated status IDs / 状态 ID' },
-        types: {
-          type: 'string',
-          description: `Comma-separated: ${TASK_TYPES_STR} / 任务类型`,
-        },
-        search: { type: 'string', description: 'Search in title/description / 搜索标题/描述' },
-        page: { type: 'number', description: 'Page number (default 1) / 页码' },
-        limit: { type: 'number', description: 'Items per page (default 20) / 每页条数' },
-        sortBy: { type: 'string', description: 'Sort field / 排序字段' },
-        sortOrder: { type: 'string', enum: ['asc', 'desc'], description: 'Sort order / 排序方式' },
+        statuses: { type: 'string', description: 'Comma-separated status IDs' },
+        types: { type: 'string', description: `Comma-separated: ${TASK_TYPES_STR}` },
+        search: { type: 'string', description: 'Search in title/description' },
+        page: { type: 'number', description: 'Page number (default 1)' },
+        limit: { type: 'number', description: 'Items per page (default 20)' },
+        sortBy: { type: 'string', description: 'Sort field' },
+        sortOrder: { type: 'string', enum: ['asc', 'desc'], description: 'Sort order' },
       },
       required: ['organizationId'],
     },
+    scope: 'project',
   },
   {
     name: 'get_task',
     description:
-      'Get full details of a specific task including assignees, status, sprint, labels, comments. / 获取任务完整详情。',
+      'Get full details of a task. PROJECT-level operation. / 获取任务完整详情。项目级别操作。',
     input_schema: {
       type: 'object',
       properties: {
@@ -278,60 +532,44 @@ export const MCP_TOOL_DEFINITIONS: MCPToolDefinition[] = [
         slug: { type: 'string', description: 'Task slug (e.g. PROJ-123) / 任务 slug' },
       },
     },
+    scope: 'project',
   },
   {
     name: 'create_task',
     description:
-      'Create a new task in a project. Title, projectId, and statusId are required. / 创建新任务。',
+      'Create a new task in a project. PROJECT-level operation. Title, projectId, and statusId are required. / 创建新任务。项目级别操作。',
     input_schema: {
       type: 'object',
       properties: {
         title: { type: 'string', description: 'Task title / 任务标题' },
-        description: { type: 'string', description: 'Task description (Markdown) / 任务描述' },
+        description: { type: 'string', description: 'Description (Markdown) / 描述' },
         projectId: { type: 'string', description: 'Project ID (UUID) / 项目 ID' },
         statusId: { type: 'string', description: 'Status ID (UUID) / 状态 ID' },
-        type: {
-          type: 'string',
-          enum: TASK_TYPES,
-          description: 'Task type / 任务类型',
-        },
+        type: { type: 'string', enum: TASK_TYPES, description: 'Task type / 任务类型' },
         priority: {
           type: 'string',
           enum: ['LOWEST', 'LOW', 'MEDIUM', 'HIGH', 'HIGHEST'],
-          description: 'Priority / 优先级',
+          description: 'Priority',
         },
-        startDate: { type: 'string', description: 'Start date (ISO 8601) / 开始日期' },
-        dueDate: { type: 'string', description: 'Due date (ISO 8601) / 截止日期' },
-        storyPoints: { type: 'number', description: 'Story points / 故事点' },
-        originalEstimate: {
-          type: 'number',
-          description: 'Time estimate in minutes / 时间估计(分钟)',
-        },
-        remainingEstimate: {
-          type: 'number',
-          description: 'Remaining estimate in minutes / 剩余估计',
-        },
-        sprintId: { type: 'string', description: 'Sprint ID (UUID) / 迭代 ID' },
-        parentTaskId: { type: 'string', description: 'Parent task ID for subtasks / 父任务 ID' },
-        assigneeIds: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Assignee user IDs / 指派用户 ID',
-        },
-        reporterIds: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Reporter user IDs / 报告人 ID',
-        },
-        customFields: { type: 'object', description: 'Custom fields JSON / 自定义字段' },
+        startDate: { type: 'string', description: 'Start date (ISO 8601)' },
+        dueDate: { type: 'string', description: 'Due date (ISO 8601)' },
+        storyPoints: { type: 'number', description: 'Story points' },
+        originalEstimate: { type: 'number', description: 'Time estimate in minutes' },
+        remainingEstimate: { type: 'number', description: 'Remaining estimate in minutes' },
+        sprintId: { type: 'string', description: 'Sprint ID (UUID)' },
+        parentTaskId: { type: 'string', description: 'Parent task ID for subtasks' },
+        assigneeIds: { type: 'array', items: { type: 'string' }, description: 'Assignee user IDs' },
+        reporterIds: { type: 'array', items: { type: 'string' }, description: 'Reporter user IDs' },
+        customFields: { type: 'object', description: 'Custom fields JSON' },
       },
       required: ['title', 'projectId', 'statusId'],
     },
+    scope: 'project',
   },
   {
     name: 'update_task',
     description:
-      'Update any field of an existing task. Provide taskId and the fields to change. / 更新任务任意字段。',
+      'Update any field of an existing task. PROJECT-level operation. / 更新任务。项目级别操作。',
     input_schema: {
       type: 'object',
       properties: {
@@ -357,7 +595,7 @@ export const MCP_TOOL_DEFINITIONS: MCPToolDefinition[] = [
         statusId: { type: 'string', description: 'New status ID / 新状态 ID' },
         startDate: { type: 'string' },
         dueDate: { type: 'string' },
-        completedAt: { type: 'string', description: 'Set to mark as done / 设置为完成时间' },
+        completedAt: { type: 'string', description: 'Set to mark as done' },
         storyPoints: { type: 'number' },
         originalEstimate: { type: 'number' },
         remainingEstimate: { type: 'number' },
@@ -368,469 +606,482 @@ export const MCP_TOOL_DEFINITIONS: MCPToolDefinition[] = [
         labelIds: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Label IDs to set (replaces all existing labels) / 要设置的标签 ID',
+          description: 'Label IDs to set (replaces all)',
         },
         customFields: { type: 'object' },
       },
       required: ['taskId'],
     },
+    scope: 'project',
   },
   {
     name: 'delete_task',
-    description: 'Delete a task permanently. / 永久删除任务。',
+    description:
+      'Delete a task permanently. PROJECT-level operation. / 永久删除任务。项目级别操作。',
     input_schema: {
       type: 'object',
-      properties: {
-        taskId: { type: 'string', description: 'Task ID (UUID) / 任务 ID' },
-      },
+      properties: { taskId: { type: 'string', description: 'Task ID (UUID) / 任务 ID' } },
       required: ['taskId'],
     },
+    scope: 'project',
   },
   {
     name: 'update_task_status',
-    description: 'Change a task status. Requires taskId and statusId. / 更新任务状态。',
+    description: 'Change a task status. PROJECT-level operation. / 更新任务状态。项目级别操作。',
     input_schema: {
       type: 'object',
       properties: {
-        taskId: { type: 'string', description: 'Task ID (UUID) / 任务 ID' },
-        statusId: { type: 'string', description: 'New status ID (UUID) / 新状态 ID' },
+        taskId: { type: 'string', description: 'Task ID (UUID)' },
+        statusId: { type: 'string', description: 'New status ID (UUID)' },
       },
       required: ['taskId', 'statusId'],
     },
+    scope: 'project',
   },
   {
     name: 'update_task_priority',
-    description: 'Change a task priority. / 更新任务优先级。',
+    description:
+      'Change a task priority. PROJECT-level operation. / 更新任务优先级。项目级别操作。',
     input_schema: {
       type: 'object',
       properties: {
-        taskId: { type: 'string', description: 'Task ID (UUID) / 任务 ID' },
+        taskId: { type: 'string', description: 'Task ID (UUID)' },
         priority: {
           type: 'string',
           enum: ['LOWEST', 'LOW', 'MEDIUM', 'HIGH', 'HIGHEST'],
-          description: 'New priority / 新优先级',
+          description: 'New priority',
         },
       },
       required: ['taskId', 'priority'],
     },
+    scope: 'project',
   },
 
-  // ========== TASK COMMENT TOOLS ==========
+  // ================================================================
+  // TASK COMMENT TOOLS (scope: project)
+  // ================================================================
   {
     name: 'list_task_comments',
-    description: 'List comments for a task, newest first. / 列出任务评论，按最新排序。',
+    description:
+      'List comments for a task. PROJECT-level operation. / 列出任务评论。项目级别操作。',
     input_schema: {
       type: 'object',
       properties: {
-        taskId: { type: 'string', description: 'Task ID (UUID) / 任务 ID' },
-        page: { type: 'number', description: 'Page number (default 1) / 页码' },
-        limit: { type: 'number', description: 'Items per page (default 20) / 每页条数' },
+        taskId: { type: 'string', description: 'Task ID (UUID)' },
+        page: { type: 'number', description: 'Page number (default 1)' },
+        limit: { type: 'number', description: 'Items per page (default 20)' },
       },
       required: ['taskId'],
     },
+    scope: 'project',
   },
   {
     name: 'create_task_comment',
     description:
-      'Add a comment to a task. Optionally reply to an existing comment. / 为任务添加评论。可选择回复已有评论。',
+      'Add a comment to a task. PROJECT-level operation. / 为任务添加评论。项目级别操作。',
     input_schema: {
       type: 'object',
       properties: {
-        taskId: { type: 'string', description: 'Task ID (UUID) / 任务 ID' },
-        content: { type: 'string', description: 'Comment content (Markdown) / 评论内容' },
-        parentCommentId: {
-          type: 'string',
-          description: 'Parent comment ID for threaded replies / 父评论 ID（用于回复）',
-        },
+        taskId: { type: 'string', description: 'Task ID (UUID)' },
+        content: { type: 'string', description: 'Comment content (Markdown)' },
+        parentCommentId: { type: 'string', description: 'Parent comment ID for replies' },
       },
       required: ['taskId', 'content'],
     },
+    scope: 'project',
   },
 
-  // ========== TASK DEPENDENCY TOOLS ==========
+  // ================================================================
+  // TASK DEPENDENCY TOOLS (scope: project)
+  // ================================================================
   {
     name: 'list_task_dependencies',
-    description:
-      'List all dependencies for a task (both blocking and blocked-by). / 列出任务的所有依赖关系。',
+    description: 'List all dependencies for a task. PROJECT-level operation. / 列出任务依赖关系。',
     input_schema: {
       type: 'object',
-      properties: {
-        taskId: { type: 'string', description: 'Task ID (UUID) / 任务 ID' },
-      },
+      properties: { taskId: { type: 'string', description: 'Task ID (UUID)' } },
       required: ['taskId'],
     },
+    scope: 'project',
   },
   {
     name: 'add_task_dependency',
-    description: 'Create a dependency between two tasks (A blocks B). / 创建任务间的依赖关系。',
+    description: 'Create a dependency between two tasks. PROJECT-level operation. / 创建任务依赖。',
     input_schema: {
       type: 'object',
       properties: {
-        dependentTaskId: {
-          type: 'string',
-          description: 'The task being blocked (UUID) / 被阻塞的任务 ID',
-        },
-        blockingTaskId: {
-          type: 'string',
-          description: 'The task that blocks it (UUID) / 阻塞任务 ID',
-        },
+        dependentTaskId: { type: 'string', description: 'The task being blocked (UUID)' },
+        blockingTaskId: { type: 'string', description: 'The task that blocks it (UUID)' },
         type: {
           type: 'string',
           enum: ['BLOCKS', 'FINISH_START', 'START_START', 'FINISH_FINISH', 'START_FINISH'],
-          description: 'Dependency type (default BLOCKS) / 依赖类型',
+          description: 'Dependency type',
         },
       },
       required: ['dependentTaskId', 'blockingTaskId'],
     },
+    scope: 'project',
   },
   {
     name: 'remove_task_dependency',
-    description: 'Remove a dependency between two tasks. / 移除任务间的依赖关系。',
+    description: 'Remove a dependency between tasks. PROJECT-level operation. / 移除任务依赖。',
     input_schema: {
       type: 'object',
       properties: {
-        dependentTaskId: {
-          type: 'string',
-          description: 'The blocked task ID (UUID) / 被阻塞的任务 ID',
-        },
-        blockingTaskId: {
-          type: 'string',
-          description: 'The blocking task ID (UUID) / 阻塞任务 ID',
-        },
+        dependentTaskId: { type: 'string', description: 'The blocked task ID' },
+        blockingTaskId: { type: 'string', description: 'The blocking task ID' },
       },
       required: ['dependentTaskId', 'blockingTaskId'],
     },
+    scope: 'project',
   },
 
-  // ========== SPRINT TOOLS ==========
+  // ================================================================
+  // SPRINT TOOLS (scope: project)
+  // ================================================================
   {
     name: 'list_sprints',
-    description: 'List sprints for a project. / 列出项目的迭代。',
+    description: 'List sprints for a project. PROJECT-level operation. / 列出项目迭代。',
     input_schema: {
       type: 'object',
-      properties: {
-        projectId: { type: 'string', description: 'Project ID (UUID) / 项目 ID' },
-      },
+      properties: { projectId: { type: 'string', description: 'Project ID (UUID)' } },
       required: ['projectId'],
     },
+    scope: 'project',
   },
   {
     name: 'create_sprint',
-    description: 'Create a new sprint in a project. / 在项目中创建新迭代。',
+    description: 'Create a new sprint in a project. PROJECT-level operation. / 创建迭代。',
     input_schema: {
       type: 'object',
       properties: {
-        name: { type: 'string', description: 'Sprint name / 迭代名称' },
-        goal: { type: 'string', description: 'Sprint goal / 迭代目标' },
-        startDate: { type: 'string', description: 'Start date (ISO 8601) / 开始日期' },
-        endDate: { type: 'string', description: 'End date (ISO 8601) / 结束日期' },
-        projectId: { type: 'string', description: 'Project ID (UUID) / 项目 ID' },
+        name: { type: 'string', description: 'Sprint name' },
+        goal: { type: 'string', description: 'Sprint goal' },
+        startDate: { type: 'string', description: 'Start date (ISO 8601)' },
+        endDate: { type: 'string', description: 'End date (ISO 8601)' },
+        projectId: { type: 'string', description: 'Project ID (UUID)' },
       },
       required: ['name', 'projectId'],
     },
+    scope: 'project',
   },
   {
     name: 'update_sprint',
-    description: 'Update an existing sprint. / 更新迭代。',
+    description: 'Update an existing sprint. PROJECT-level operation. / 更新迭代。',
     input_schema: {
       type: 'object',
       properties: {
-        sprintId: { type: 'string', description: 'Sprint ID (UUID) / 迭代 ID' },
-        name: { type: 'string', description: 'New name / 新名称' },
-        goal: { type: 'string', description: 'New goal / 新目标' },
-        status: {
-          type: 'string',
-          enum: ['PLANNING', 'ACTIVE', 'COMPLETED', 'CANCELLED'],
-          description: 'Sprint status / 迭代状态',
-        },
-        startDate: { type: 'string', description: 'Start date / 开始日期' },
-        endDate: { type: 'string', description: 'End date / 结束日期' },
+        sprintId: { type: 'string', description: 'Sprint ID (UUID)' },
+        name: { type: 'string' },
+        goal: { type: 'string' },
+        status: { type: 'string', enum: ['PLANNING', 'ACTIVE', 'COMPLETED', 'CANCELLED'] },
+        startDate: { type: 'string' },
+        endDate: { type: 'string' },
       },
       required: ['sprintId'],
     },
+    scope: 'project',
   },
   {
     name: 'delete_sprint',
-    description: 'Delete a sprint permanently. / 永久删除迭代。',
+    description: 'Delete a sprint permanently. PROJECT-level operation. / 永久删除迭代。',
     input_schema: {
       type: 'object',
-      properties: {
-        sprintId: { type: 'string', description: 'Sprint ID (UUID) / 迭代 ID' },
-      },
+      properties: { sprintId: { type: 'string', description: 'Sprint ID (UUID)' } },
       required: ['sprintId'],
     },
+    scope: 'project',
   },
 
-  // ========== LABEL TOOLS ==========
+  // ================================================================
+  // LABEL TOOLS (scope: project)
+  // ================================================================
   {
     name: 'list_labels',
-    description: 'List labels for a project. / 列出项目的标签。',
+    description: 'List labels for a project. PROJECT-level operation. / 列出项目标签。',
     input_schema: {
       type: 'object',
-      properties: {
-        projectId: { type: 'string', description: 'Project ID (UUID) / 项目 ID' },
-      },
+      properties: { projectId: { type: 'string', description: 'Project ID (UUID)' } },
       required: ['projectId'],
     },
+    scope: 'project',
   },
   {
     name: 'create_label',
-    description: 'Create a new label in a project. / 在项目中创建新标签。',
+    description: 'Create a new label in a project. PROJECT-level operation. / 创建标签。',
     input_schema: {
       type: 'object',
       properties: {
-        name: { type: 'string', description: 'Label name / 标签名称' },
-        color: { type: 'string', description: 'Hex color, e.g. #EF4444 / 十六进制颜色' },
-        description: { type: 'string', description: 'Label description / 标签描述' },
-        projectId: { type: 'string', description: 'Project ID (UUID) / 项目 ID' },
+        name: { type: 'string', description: 'Label name' },
+        color: { type: 'string', description: 'Hex color, e.g. #EF4444' },
+        description: { type: 'string', description: 'Label description' },
+        projectId: { type: 'string', description: 'Project ID (UUID)' },
       },
       required: ['name', 'color', 'projectId'],
     },
+    scope: 'project',
   },
   {
     name: 'update_label',
-    description: 'Update an existing label. / 更新标签。',
+    description: 'Update an existing label. PROJECT-level operation. / 更新标签。',
     input_schema: {
       type: 'object',
       properties: {
-        labelId: { type: 'string', description: 'Label ID (UUID) / 标签 ID' },
-        name: { type: 'string', description: 'New name / 新名称' },
-        color: { type: 'string', description: 'New color / 新颜色' },
-        description: { type: 'string', description: 'New description / 新描述' },
+        labelId: { type: 'string', description: 'Label ID (UUID)' },
+        name: { type: 'string' },
+        color: { type: 'string' },
+        description: { type: 'string' },
       },
       required: ['labelId'],
     },
+    scope: 'project',
   },
   {
     name: 'delete_label',
-    description: 'Delete a label permanently. / 永久删除标签。',
+    description: 'Delete a label permanently. PROJECT-level operation. / 永久删除标签。',
     input_schema: {
       type: 'object',
-      properties: {
-        labelId: { type: 'string', description: 'Label ID (UUID) / 标签 ID' },
-      },
+      properties: { labelId: { type: 'string', description: 'Label ID (UUID)' } },
       required: ['labelId'],
     },
+    scope: 'project',
   },
 
-  // ========== WORKFLOW TOOLS ==========
+  // ================================================================
+  // WORKFLOW TOOLS (scope: cross — referenced by project but defined at org level)
+  // ================================================================
   {
     name: 'list_workflows',
     description: 'List all workflows in an organization. / 列出组织中所有工作流。',
     input_schema: {
       type: 'object',
-      properties: {
-        organizationId: { type: 'string', description: 'Organization ID (UUID) / 组织 ID' },
-      },
+      properties: { organizationId: { type: 'string', description: 'Organization ID (UUID)' } },
       required: ['organizationId'],
     },
+    scope: 'cross',
   },
   {
     name: 'get_workflow',
     description: 'Get workflow details including its statuses. / 获取工作流详情（含状态列表）。',
     input_schema: {
       type: 'object',
-      properties: {
-        workflowId: { type: 'string', description: 'Workflow ID (UUID) / 工作流 ID' },
-      },
+      properties: { workflowId: { type: 'string', description: 'Workflow ID (UUID)' } },
       required: ['workflowId'],
     },
+    scope: 'cross',
   },
   {
     name: 'list_status_transitions',
     description: 'List allowed status transitions in a workflow. / 列出工作流中允许的状态转换。',
     input_schema: {
       type: 'object',
-      properties: {
-        workflowId: { type: 'string', description: 'Workflow ID (UUID) / 工作流 ID' },
-      },
+      properties: { workflowId: { type: 'string', description: 'Workflow ID (UUID)' } },
       required: ['workflowId'],
     },
+    scope: 'cross',
   },
-
-  // ========== STATUS TOOLS ==========
   {
     name: 'list_task_statuses',
     description: 'List available task statuses for a workflow. / 列出工作流中可用的任务状态。',
     input_schema: {
       type: 'object',
-      properties: {
-        workflowId: { type: 'string', description: 'Workflow ID (UUID) / 工作流 ID' },
-      },
+      properties: { workflowId: { type: 'string', description: 'Workflow ID (UUID)' } },
       required: ['workflowId'],
     },
+    scope: 'cross',
   },
 
-  // ========== USER TOOLS ==========
-  {
-    name: 'list_project_members',
-    description:
-      'List members of a project (for assigning tasks). / 列出项目成员（用于指派任务）。',
-    input_schema: {
-      type: 'object',
-      properties: {
-        projectId: { type: 'string', description: 'Project ID (UUID) / 项目 ID' },
-      },
-      required: ['projectId'],
-    },
-  },
-  {
-    name: 'list_workspace_members',
-    description: 'List members of a workspace. / 列出工作区成员。',
-    input_schema: {
-      type: 'object',
-      properties: {
-        workspaceId: { type: 'string', description: 'Workspace ID (UUID) / 工作区 ID' },
-      },
-      required: ['workspaceId'],
-    },
-  },
-  {
-    name: 'add_workspace_member',
-    description: 'Add a user to a workspace with a role. / 将用户添加到工作区。',
-    input_schema: {
-      type: 'object',
-      properties: {
-        workspaceId: { type: 'string', description: 'Workspace ID (UUID) / 工作区 ID' },
-        userId: { type: 'string', description: 'User ID (UUID) / 用户 ID' },
-        role: {
-          type: 'string',
-          enum: ['OWNER', 'MANAGER', 'MEMBER', 'VIEWER'],
-          description: 'Role / 角色',
-        },
-      },
-      required: ['workspaceId', 'userId'],
-    },
-  },
-  {
-    name: 'remove_workspace_member',
-    description: 'Remove a user from a workspace. / 从工作区移除用户。',
-    input_schema: {
-      type: 'object',
-      properties: {
-        workspaceId: { type: 'string', description: 'Workspace ID (UUID) / 工作区 ID' },
-        userId: { type: 'string', description: 'User ID (UUID) / 用户 ID' },
-      },
-      required: ['workspaceId', 'userId'],
-    },
-  },
-  {
-    name: 'add_project_member',
-    description: 'Add a user to a project with a role. / 将用户添加到项目。',
-    input_schema: {
-      type: 'object',
-      properties: {
-        projectId: { type: 'string', description: 'Project ID (UUID) / 项目 ID' },
-        userId: { type: 'string', description: 'User ID (UUID) / 用户 ID' },
-        role: {
-          type: 'string',
-          enum: ['OWNER', 'MANAGER', 'MEMBER', 'VIEWER'],
-          description: 'Role (default MEMBER) / 角色',
-        },
-      },
-      required: ['projectId', 'userId'],
-    },
-  },
-  {
-    name: 'remove_project_member',
-    description: 'Remove a user from a project. / 从项目移除用户。',
-    input_schema: {
-      type: 'object',
-      properties: {
-        projectId: { type: 'string', description: 'Project ID (UUID) / 项目 ID' },
-        userId: { type: 'string', description: 'User ID (UUID) / 用户 ID' },
-      },
-      required: ['projectId', 'userId'],
-    },
-  },
-  {
-    name: 'update_project_member_role',
-    description: 'Change a project member role. / 更改项目成员角色。',
-    input_schema: {
-      type: 'object',
-      properties: {
-        projectId: { type: 'string', description: 'Project ID (UUID) / 项目 ID' },
-        userId: { type: 'string', description: 'User ID (UUID) / 用户 ID' },
-        role: {
-          type: 'string',
-          enum: ['OWNER', 'MANAGER', 'MEMBER', 'VIEWER'],
-          description: 'New role / 新角色',
-        },
-      },
-      required: ['projectId', 'userId', 'role'],
-    },
-  },
-
-  // ========== CUSTOM FIELD TOOLS ==========
+  // ================================================================
+  // CUSTOM FIELD TOOLS (scope: organization)
+  // ================================================================
   {
     name: 'list_custom_fields',
-    description: 'List custom fields defined for an organization. / 列出组织定义的自定义字段。',
+    description:
+      'List custom fields defined for an organization. ORGANIZATION-level operation. / 列出组织定义的自定义字段。',
     input_schema: {
       type: 'object',
-      properties: {
-        organizationId: { type: 'string', description: 'Organization ID (UUID) / 组织 ID' },
-      },
+      properties: { organizationId: { type: 'string', description: 'Organization ID (UUID)' } },
       required: ['organizationId'],
     },
+    scope: 'organization',
   },
   {
     name: 'get_custom_field',
-    description: 'Get details of a specific custom field. / 获取特定自定义字段的详细信息。',
+    description: 'Get details of a specific custom field. / 获取自定义字段详情。',
     input_schema: {
       type: 'object',
-      properties: {
-        customFieldId: { type: 'string', description: 'Custom Field ID (UUID) / 自定义字段 ID' },
-      },
+      properties: { customFieldId: { type: 'string', description: 'Custom Field ID (UUID)' } },
       required: ['customFieldId'],
     },
+    scope: 'organization',
   },
 
-  // ========== TIME ENTRY TOOLS ==========
+  // ================================================================
+  // TIME ENTRY TOOLS (scope: project)
+  // ================================================================
   {
     name: 'list_time_entries',
-    description: 'List time entries for a task or user. / 列出任务或用户的时间记录。',
+    description:
+      'List time entries for a task or project. PROJECT-level operation. / 列出时间记录。',
     input_schema: {
       type: 'object',
       properties: {
-        taskId: { type: 'string', description: 'Filter by task ID (UUID) / 按任务 ID 筛选' },
-        projectId: {
-          type: 'string',
-          description: 'Filter tasks by project ID (UUID) / 按项目筛选所有任务',
-        },
-        page: { type: 'number', description: 'Page number (default 1) / 页码' },
-        limit: { type: 'number', description: 'Items per page (default 20) / 每页条数' },
+        taskId: { type: 'string', description: 'Filter by task ID (UUID)' },
+        projectId: { type: 'string', description: 'Filter by project ID' },
+        page: { type: 'number' },
+        limit: { type: 'number' },
       },
     },
+    scope: 'project',
   },
   {
     name: 'create_time_entry',
-    description: 'Log time spent on a task (in minutes). / 记录任务耗时（分钟）。',
+    description: 'Log time spent on a task (in minutes). PROJECT-level operation. / 记录任务耗时。',
     input_schema: {
       type: 'object',
       properties: {
-        taskId: { type: 'string', description: 'Task ID (UUID) / 任务 ID' },
-        description: { type: 'string', description: 'Work description / 工作描述' },
-        timeSpent: { type: 'number', description: 'Time spent in minutes / 耗时（分钟）' },
-        startTime: { type: 'string', description: 'Start time (ISO 8601) / 开始时间' },
-        endTime: { type: 'string', description: 'End time (ISO 8601) / 结束时间' },
-        date: { type: 'string', description: 'Date of work (default today) / 工作日期' },
+        taskId: { type: 'string', description: 'Task ID (UUID)' },
+        description: { type: 'string', description: 'Work description' },
+        timeSpent: { type: 'number', description: 'Time spent in minutes' },
+        startTime: { type: 'string', description: 'Start time (ISO 8601)' },
+        endTime: { type: 'string', description: 'End time (ISO 8601)' },
+        date: { type: 'string', description: 'Date of work (default today)' },
       },
       required: ['taskId', 'timeSpent'],
     },
+    scope: 'project',
   },
   {
     name: 'delete_time_entry',
     description: 'Delete a time entry permanently. / 永久删除时间记录。',
     input_schema: {
       type: 'object',
-      properties: {
-        timeEntryId: { type: 'string', description: 'Time Entry ID (UUID) / 时间记录 ID' },
-      },
+      properties: { timeEntryId: { type: 'string', description: 'Time Entry ID (UUID)' } },
       required: ['timeEntryId'],
     },
+    scope: 'project',
   },
 
-  // ========== INVITATION TOOLS ==========
+  // ================================================================
+  // RECURRING TASK TOOLS (scope: project)
+  // ================================================================
+  {
+    name: 'get_task_recurrence',
+    description: 'Get recurrence configuration for a task. / 获取任务重复配置。',
+    input_schema: {
+      type: 'object',
+      properties: { taskId: { type: 'string', description: 'Task ID (UUID)' } },
+      required: ['taskId'],
+    },
+    scope: 'project',
+  },
+  {
+    name: 'create_task_recurrence',
+    description: 'Set a task to recur (daily, weekly, monthly, yearly). / 设置任务重复规则。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'Task ID (UUID)' },
+        recurrenceType: {
+          type: 'string',
+          enum: ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'],
+          description: 'DAILY/WEEKLY/MONTHLY/YEARLY',
+        },
+        interval: { type: 'number', description: 'Interval (default 1). 2=every other' },
+        daysOfWeek: {
+          type: 'array',
+          items: { type: 'number' },
+          description: 'For WEEKLY: 0=Sun...6=Sat',
+        },
+        endDate: { type: 'string', description: 'End date (ISO 8601)' },
+      },
+      required: ['taskId', 'recurrenceType'],
+    },
+    scope: 'project',
+  },
+  {
+    name: 'disable_task_recurrence',
+    description: 'Stop a task from recurring. / 停止任务重复。',
+    input_schema: {
+      type: 'object',
+      properties: { taskId: { type: 'string', description: 'Task ID (UUID)' } },
+      required: ['taskId'],
+    },
+    scope: 'project',
+  },
+  {
+    name: 'update_task_recurrence',
+    description: 'Update an existing recurrence configuration. / 更新任务重复配置。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string' },
+        recurrenceType: { type: 'string', enum: ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'] },
+        interval: { type: 'number' },
+        daysOfWeek: { type: 'array', items: { type: 'number' } },
+        endDate: { type: 'string' },
+      },
+      required: ['taskId'],
+    },
+    scope: 'project',
+  },
+
+  // ================================================================
+  // PUBLIC TASK SHARE TOOLS (scope: project)
+  // ================================================================
+  {
+    name: 'list_task_shares',
+    description: 'List public share links for a task. / 列出任务公开分享链接。',
+    input_schema: {
+      type: 'object',
+      properties: { taskId: { type: 'string', description: 'Task ID (UUID)' } },
+      required: ['taskId'],
+    },
+    scope: 'project',
+  },
+  {
+    name: 'share_task_publicly',
+    description: 'Create a public share link for a task. / 创建任务公开分享链接。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'Task ID (UUID)' },
+        expiresAt: { type: 'string', description: 'Expiration date (ISO 8601, default 30 days)' },
+      },
+      required: ['taskId'],
+    },
+    scope: 'project',
+  },
+  {
+    name: 'revoke_task_share',
+    description: 'Revoke a public task share link. / 撤销公开任务分享链接。',
+    input_schema: {
+      type: 'object',
+      properties: { shareId: { type: 'string', description: 'Share ID (UUID)' } },
+      required: ['shareId'],
+    },
+    scope: 'project',
+  },
+
+  // ================================================================
+  // TASK ATTACHMENT TOOLS (scope: project)
+  // ================================================================
+  {
+    name: 'list_task_attachments',
+    description: 'List file attachments for a task. / 列出任务文件附件。',
+    input_schema: {
+      type: 'object',
+      properties: { taskId: { type: 'string', description: 'Task ID (UUID)' } },
+      required: ['taskId'],
+    },
+    scope: 'project',
+  },
+
+  // ================================================================
+  // CROSS-SCOPE TOOLS (scope: cross)
+  //   Invitations, notifications, settings, users, activity logs,
+  //   automation rules, inbox, navigation.
+  // ================================================================
   {
     name: 'list_invitations',
     description:
@@ -838,200 +1089,58 @@ export const MCP_TOOL_DEFINITIONS: MCPToolDefinition[] = [
     input_schema: {
       type: 'object',
       properties: {
-        organizationId: { type: 'string', description: 'Filter by organization ID / 按组织筛选' },
-        workspaceId: { type: 'string', description: 'Filter by workspace ID / 按工作区筛选' },
-        projectId: { type: 'string', description: 'Filter by project ID / 按项目筛选' },
+        organizationId: { type: 'string', description: 'Filter by organization' },
+        workspaceId: { type: 'string', description: 'Filter by workspace' },
+        projectId: { type: 'string', description: 'Filter by project' },
         status: {
           type: 'string',
           enum: ['PENDING', 'ACCEPTED', 'DECLINED', 'EXPIRED'],
-          description: 'Filter by status / 按状态筛选',
+          description: 'Filter by status',
         },
       },
     },
+    scope: 'cross',
   },
   {
     name: 'create_invitation',
     description:
-      'Invite a user by email to an organization, workspace, or project. / 通过电子邮件邀请用户加入组织、工作区或项目。',
+      'Invite a user by email to an organization, workspace, or project. / 通过电子邮件邀请用户。',
     input_schema: {
       type: 'object',
       properties: {
-        inviteeEmail: { type: 'string', description: 'Email to invite / 被邀请人邮箱' },
-        role: { type: 'string', description: 'Role to assign / 分配的角色' },
-        organizationId: { type: 'string', description: 'Organization ID (UUID) / 组织 ID' },
-        workspaceId: { type: 'string', description: 'Workspace ID (UUID) / 工作区 ID' },
-        projectId: { type: 'string', description: 'Project ID (UUID) / 项目 ID' },
+        inviteeEmail: { type: 'string', description: 'Email to invite' },
+        role: { type: 'string', description: 'Role to assign' },
+        organizationId: { type: 'string', description: 'Organization ID (UUID)' },
+        workspaceId: { type: 'string', description: 'Workspace ID (UUID)' },
+        projectId: { type: 'string', description: 'Project ID (UUID)' },
       },
       required: ['inviteeEmail', 'role'],
     },
+    scope: 'cross',
   },
-
-  // ========== NOTIFICATION TOOLS ==========
   {
     name: 'list_notifications',
     description: 'List notifications for the current user. / 列出当前用户的通知。',
     input_schema: {
       type: 'object',
       properties: {
-        isRead: { type: 'boolean', description: 'Filter read/unread / 筛选已读/未读' },
-        page: { type: 'number', description: 'Page number (default 1) / 页码' },
-        limit: { type: 'number', description: 'Items per page (default 20) / 每页条数' },
+        isRead: { type: 'boolean', description: 'Filter read/unread' },
+        page: { type: 'number' },
+        limit: { type: 'number' },
       },
     },
+    scope: 'cross',
   },
   {
     name: 'mark_notification_read',
     description: 'Mark a notification as read. / 将通知标记为已读。',
     input_schema: {
       type: 'object',
-      properties: {
-        notificationId: { type: 'string', description: 'Notification ID (UUID) / 通知 ID' },
-      },
+      properties: { notificationId: { type: 'string', description: 'Notification ID (UUID)' } },
       required: ['notificationId'],
     },
+    scope: 'cross',
   },
-
-  // ========== RECURRING TASK TOOLS ==========
-  {
-    name: 'get_task_recurrence',
-    description: 'Get the recurrence configuration for a recurring task. / 获取任务重复配置。',
-    input_schema: {
-      type: 'object',
-      properties: {
-        taskId: { type: 'string', description: 'Task ID (UUID) / 任务 ID' },
-      },
-      required: ['taskId'],
-    },
-  },
-  {
-    name: 'create_task_recurrence',
-    description:
-      'Set a task to recur on a schedule (daily, weekly, monthly, yearly). Use when user says "repeat every X", "recurring", "each week", etc. / 设置任务重复规则。当用户说"每周重复"、"每天一次"等时使用。',
-    input_schema: {
-      type: 'object',
-      properties: {
-        taskId: { type: 'string', description: 'Task ID (UUID) / 任务 ID' },
-        recurrenceType: {
-          type: 'string',
-          enum: ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'],
-          description:
-            'Recurrence type / 重复类型: DAILY(每天), WEEKLY(每周), MONTHLY(每月), YEARLY(每年)',
-        },
-        interval: {
-          type: 'number',
-          description:
-            'Interval between recurrences (default 1). 2 = every other, 3 = every third / 间隔（默认1）。2=每隔一次，3=每隔两次',
-        },
-        daysOfWeek: {
-          type: 'array',
-          items: { type: 'number' },
-          description:
-            'Days of week for WEEKLY (0=Sunday...6=Saturday). e.g. [1,3,5] = Mon/Wed/Fri / 每周的哪几天（0=周日...6=周六）',
-        },
-        endDate: {
-          type: 'string',
-          description: 'Date when recurrence ends (ISO 8601). / 重复结束日期',
-        },
-      },
-      required: ['taskId', 'recurrenceType'],
-    },
-  },
-  {
-    name: 'disable_task_recurrence',
-    description: 'Stop a task from recurring. / 停止任务重复。',
-    input_schema: {
-      type: 'object',
-      properties: {
-        taskId: { type: 'string', description: 'Task ID (UUID) / 任务 ID' },
-      },
-      required: ['taskId'],
-    },
-  },
-  {
-    name: 'update_task_recurrence',
-    description:
-      'Update an existing recurrence configuration. Change type (DAILY/WEEKLY/MONTHLY/YEARLY), interval, days, or end date. Also re-enables a disabled recurrence. / 更新已有重复配置。修改类型、间隔、日期或结束日期。同时重新启用已禁用的重复。',
-    input_schema: {
-      type: 'object',
-      properties: {
-        taskId: { type: 'string', description: 'Task ID (UUID) / 任务 ID' },
-        recurrenceType: {
-          type: 'string',
-          enum: ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'],
-          description: 'New recurrence type / 新的重复类型',
-        },
-        interval: {
-          type: 'number',
-          description: 'New interval between recurrences / 新的重复间隔',
-        },
-        daysOfWeek: {
-          type: 'array',
-          items: { type: 'number' },
-          description:
-            'Days of week for WEEKLY (0=Sunday...6=Saturday) / 每周的哪几天（0=周日...6=周六）',
-        },
-        endDate: {
-          type: 'string',
-          description: 'Date when recurrence ends (ISO 8601). / 重复结束日期',
-        },
-      },
-      required: ['taskId'],
-    },
-  },
-
-  // ========== PUBLIC TASK SHARE TOOLS ==========
-  {
-    name: 'list_task_shares',
-    description: 'List public share links for a task. / 列出任务的公开分享链接。',
-    input_schema: {
-      type: 'object',
-      properties: {
-        taskId: { type: 'string', description: 'Task ID (UUID) / 任务 ID' },
-      },
-      required: ['taskId'],
-    },
-  },
-  {
-    name: 'share_task_publicly',
-    description: 'Create a public share link for a task. / 创建任务的公开分享链接。',
-    input_schema: {
-      type: 'object',
-      properties: {
-        taskId: { type: 'string', description: 'Task ID (UUID) / 任务 ID' },
-        expiresAt: {
-          type: 'string',
-          description: 'Expiration date (ISO 8601, default 30 days) / 过期时间',
-        },
-      },
-      required: ['taskId'],
-    },
-  },
-  {
-    name: 'revoke_task_share',
-    description: 'Revoke a public task share link. / 撤销公开任务分享链接。',
-    input_schema: {
-      type: 'object',
-      properties: {
-        shareId: { type: 'string', description: 'Share ID (UUID) / 分享 ID' },
-      },
-      required: ['shareId'],
-    },
-  },
-
-  // ========== TASK ATTACHMENT TOOLS ==========
-  {
-    name: 'list_task_attachments',
-    description: 'List file attachments for a task. / 列出任务的文件附件。',
-    input_schema: {
-      type: 'object',
-      properties: {
-        taskId: { type: 'string', description: 'Task ID (UUID) / 任务 ID' },
-      },
-      required: ['taskId'],
-    },
-  },
-
-  // ========== AUTOMATION RULE TOOLS ==========
   {
     name: 'list_automation_rules',
     description:
@@ -1039,227 +1148,20 @@ export const MCP_TOOL_DEFINITIONS: MCPToolDefinition[] = [
     input_schema: {
       type: 'object',
       properties: {
-        projectId: { type: 'string', description: 'Filter by project ID / 按项目筛选' },
-        workspaceId: { type: 'string', description: 'Filter by workspace ID / 按工作区筛选' },
-        organizationId: { type: 'string', description: 'Filter by organization ID / 按组织筛选' },
+        projectId: { type: 'string' },
+        workspaceId: { type: 'string' },
+        organizationId: { type: 'string' },
       },
     },
+    scope: 'cross',
   },
-
-  // ========== NAVIGATION ==========
-  {
-    name: 'navigate',
-    description:
-      'Tell the frontend to navigate to a specific page. Use structured params to build correct URLs — do NOT guess URL patterns. / 让前端导航到特定页面。使用结构化参数构建正确 URL——不要猜测 URL 模式。',
-    input_schema: {
-      type: 'object',
-      properties: {
-        path: {
-          type: 'string',
-          description:
-            'DEPRECATED. Raw URL path. Prefer structured params below. / 原始 URL 路径。推荐使用下面的结构化参数。',
-        },
-        workspaceSlug: {
-          type: 'string',
-          description:
-            'Workspace slug from get_workspace / list_workspaces result. / 工作区 slug。',
-        },
-        projectSlug: {
-          type: 'string',
-          description:
-            'Project slug from get_project / list_projects result. Requires workspaceSlug. / 项目 slug。需要 workspaceSlug。',
-        },
-        taskSlug: {
-          type: 'string',
-          description:
-            'Task slug (NOT task number or ID) from get_task / list_tasks result. Requires projectSlug + workspaceSlug. / 任务 slug（非编号或 ID）。需要 projectSlug + workspaceSlug。',
-        },
-      },
-      required: [],
-    },
-  },
-
-  // ========== ORGANIZATION TOOLS ==========
-  {
-    name: 'list_organizations',
-    description: 'List all organizations the user belongs to. / 列出用户属于的所有组织。',
-    input_schema: {
-      type: 'object',
-      properties: {},
-    },
-  },
-  {
-    name: 'get_organization',
-    description: 'Get organization details by ID. / 根据ID获取组织详情。',
-    input_schema: {
-      type: 'object',
-      properties: {
-        organizationId: { type: 'string', description: 'Organization ID (UUID) / 组织 ID' },
-      },
-      required: ['organizationId'],
-    },
-  },
-  {
-    name: 'update_organization',
-    description:
-      'Update an organization name, description, or website. / 更新组织名称、描述或网站。',
-    input_schema: {
-      type: 'object',
-      properties: {
-        organizationId: { type: 'string', description: 'Organization ID (UUID) / 组织 ID' },
-        name: { type: 'string', description: 'New name / 新名称' },
-        description: { type: 'string', description: 'New description / 新描述' },
-        website: { type: 'string', description: 'New website URL / 新网站 URL' },
-      },
-      required: ['organizationId'],
-    },
-  },
-  {
-    name: 'list_organization_members',
-    description: 'List all members of an organization. / 列出组织所有成员。',
-    input_schema: {
-      type: 'object',
-      properties: {
-        organizationId: { type: 'string', description: 'Organization ID (UUID) / 组织 ID' },
-      },
-      required: ['organizationId'],
-    },
-  },
-
-  // ========== WORKSPACE MEMBER EXTENDED ==========
-  {
-    name: 'update_workspace_member_role',
-    description: 'Change a workspace member role. / 更改工作区成员角色。',
-    input_schema: {
-      type: 'object',
-      properties: {
-        workspaceId: { type: 'string', description: 'Workspace ID (UUID) / 工作区 ID' },
-        userId: { type: 'string', description: 'User ID (UUID) / 用户 ID' },
-        role: {
-          type: 'string',
-          enum: ['OWNER', 'MANAGER', 'MEMBER', 'VIEWER'],
-          description: 'New role / 新角色',
-        },
-      },
-      required: ['workspaceId', 'userId', 'role'],
-    },
-  },
-
-  // ========== SETTINGS TOOLS ==========
-  {
-    name: 'list_settings',
-    description: 'List settings, optionally filtered by category. / 列出系统设置。',
-    input_schema: {
-      type: 'object',
-      properties: {
-        category: {
-          type: 'string',
-          description: 'Filter by category, e.g. "general", "ai", "email" / 按类别筛选',
-        },
-      },
-    },
-  },
-  {
-    name: 'get_setting',
-    description: 'Get a specific setting value by key. / 通过键获取设置值。',
-    input_schema: {
-      type: 'object',
-      properties: {
-        key: { type: 'string', description: 'Setting key / 设置键名' },
-      },
-      required: ['key'],
-    },
-  },
-  {
-    name: 'update_setting',
-    description:
-      'Update a setting value by key. Cannot update encrypted settings. / 更新设置值（不能更新加密设置）。',
-    input_schema: {
-      type: 'object',
-      properties: {
-        key: { type: 'string', description: 'Setting key / 设置键名' },
-        value: { type: 'string', description: 'New value / 新值' },
-      },
-      required: ['key', 'value'],
-    },
-  },
-
-  // ========== USER TOOLS EXTENDED ==========
-  {
-    name: 'list_users',
-    description: 'List users in an organization or workspace. / 列出组织或工作区中的用户。',
-    input_schema: {
-      type: 'object',
-      properties: {
-        organizationId: { type: 'string', description: 'Organization ID (UUID) / 组织 ID' },
-        workspaceId: { type: 'string', description: 'Workspace ID (UUID) / 工作区 ID' },
-        search: { type: 'string', description: 'Search by name or email / 按名称或邮箱搜索' },
-      },
-    },
-  },
-  {
-    name: 'get_user',
-    description: 'Get basic user profile by ID. / 通过 ID 获取用户基本信息。',
-    input_schema: {
-      type: 'object',
-      properties: {
-        userId: { type: 'string', description: 'User ID (UUID) / 用户 ID' },
-      },
-      required: ['userId'],
-    },
-  },
-
-  // ========== INBOX TOOLS ==========
-  {
-    name: 'get_project_inbox',
-    description: 'Get the inbox configuration for a project. / 获取项目收件箱配置。',
-    input_schema: {
-      type: 'object',
-      properties: {
-        projectId: { type: 'string', description: 'Project ID (UUID) / 项目 ID' },
-      },
-      required: ['projectId'],
-    },
-  },
-  {
-    name: 'list_inbox_rules',
-    description: 'List inbox processing rules for a project inbox. / 列出项目收件箱的处理规则。',
-    input_schema: {
-      type: 'object',
-      properties: {
-        projectInboxId: { type: 'string', description: 'Project Inbox ID (UUID) / 收件箱 ID' },
-      },
-      required: ['projectInboxId'],
-    },
-  },
-  {
-    name: 'list_inbox_messages',
-    description:
-      'List incoming email messages for a project inbox (read-only). / 列出项目收件箱的邮件（只读）。',
-    input_schema: {
-      type: 'object',
-      properties: {
-        projectInboxId: { type: 'string', description: 'Project Inbox ID (UUID) / 收件箱 ID' },
-        status: {
-          type: 'string',
-          enum: ['PENDING', 'PROCESSING', 'CONVERTED', 'IGNORED', 'FAILED'],
-          description: 'Filter by status / 按状态筛选',
-        },
-        page: { type: 'number', description: 'Page number / 页码' },
-        limit: { type: 'number', description: 'Items per page / 每页条数' },
-      },
-      required: ['projectInboxId'],
-    },
-  },
-
-  // ========== AUTOMATION RULE EXTENDED ==========
   {
     name: 'create_automation_rule',
-    description: 'Create a new automation rule. / 创建新的自动化规则。',
+    description: 'Create a new automation rule. / 创建自动化规则。',
     input_schema: {
       type: 'object',
       properties: {
-        name: { type: 'string', description: 'Rule name / 规则名称' },
+        name: { type: 'string', description: 'Rule name' },
         triggerType: {
           type: 'string',
           enum: [
@@ -1274,7 +1176,6 @@ export const MCP_TOOL_DEFINITIONS: MCPToolDefinition[] = [
             'PROJECT_CREATED',
             'COMMENT_ADDED',
           ],
-          description: 'Trigger event / 触发事件',
         },
         actionType: {
           type: 'string',
@@ -1290,16 +1191,16 @@ export const MCP_TOOL_DEFINITIONS: MCPToolDefinition[] = [
             'MOVE_TO_SPRINT',
             'CHANGE_PRIORITY',
           ],
-          description: 'Action to perform / 执行动作',
         },
-        projectId: { type: 'string', description: 'Project ID (UUID) / 项目 ID' },
-        workspaceId: { type: 'string', description: 'Workspace ID (UUID) / 工作区 ID' },
-        organizationId: { type: 'string', description: 'Organization ID (UUID) / 组织 ID' },
-        triggerConfig: { type: 'object', description: 'Trigger config JSON / 触发器配置' },
-        actionConfig: { type: 'object', description: 'Action config JSON / 动作配置' },
+        projectId: { type: 'string' },
+        workspaceId: { type: 'string' },
+        organizationId: { type: 'string' },
+        triggerConfig: { type: 'object' },
+        actionConfig: { type: 'object' },
       },
       required: ['name', 'triggerType', 'actionType'],
     },
+    scope: 'cross',
   },
   {
     name: 'toggle_automation_rule',
@@ -1307,61 +1208,161 @@ export const MCP_TOOL_DEFINITIONS: MCPToolDefinition[] = [
     input_schema: {
       type: 'object',
       properties: {
-        ruleId: { type: 'string', description: 'Rule ID (UUID) / 规则 ID' },
-        enabled: { type: 'boolean', description: 'true = enable, false = disable / 启用或禁用' },
+        ruleId: { type: 'string', description: 'Rule ID (UUID)' },
+        enabled: { type: 'boolean', description: 'true=enable, false=disable' },
       },
       required: ['ruleId', 'enabled'],
     },
+    scope: 'cross',
   },
-
-  // ========== USER PROFILE TOOLS ==========
+  {
+    name: 'list_settings',
+    description: 'List system settings. / 列出系统设置。',
+    input_schema: {
+      type: 'object',
+      properties: { category: { type: 'string', description: 'Filter by category' } },
+    },
+    scope: 'cross',
+  },
+  {
+    name: 'get_setting',
+    description: 'Get a specific setting value by key. / 通过键获取设置值。',
+    input_schema: {
+      type: 'object',
+      properties: { key: { type: 'string', description: 'Setting key' } },
+      required: ['key'],
+    },
+    scope: 'cross',
+  },
+  {
+    name: 'update_setting',
+    description: 'Update a setting value by key. / 更新设置值。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        key: { type: 'string', description: 'Setting key' },
+        value: { type: 'string', description: 'New value' },
+      },
+      required: ['key', 'value'],
+    },
+    scope: 'cross',
+  },
+  {
+    name: 'list_users',
+    description: 'List users in an organization or workspace. / 列出组织或工作区中的用户。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        organizationId: { type: 'string' },
+        workspaceId: { type: 'string' },
+        search: { type: 'string', description: 'Search by name or email' },
+      },
+    },
+    scope: 'cross',
+  },
+  {
+    name: 'get_user',
+    description: 'Get basic user profile by ID. / 获取用户基本信息。',
+    input_schema: {
+      type: 'object',
+      properties: { userId: { type: 'string', description: 'User ID (UUID)' } },
+      required: ['userId'],
+    },
+    scope: 'cross',
+  },
   {
     name: 'update_user_profile',
-    description:
-      'Update the current user profile fields (language, timezone). Use this when the user asks to change their language or timezone. / 更新当前用户资料（语言、时区等）。当用户要求修改语言或时区时使用。',
+    description: 'Update the current user profile (language, timezone). / 更新当前用户资料。',
     input_schema: {
       type: 'object',
       properties: {
         language: {
           type: 'string',
           enum: ['en', 'zh', 'es', 'fr', 'pt'],
-          description: 'Language code: en/zh/es/fr/pt / 语言代码',
+          description: 'Language code',
         },
-        timezone: {
-          type: 'string',
-          description: 'Timezone string, e.g. "Asia/Shanghai", "UTC" / 时区',
-        },
+        timezone: { type: 'string', description: 'Timezone, e.g. "Asia/Shanghai"' },
       },
     },
+    scope: 'cross',
   },
   {
     name: 'get_user_profile',
-    description:
-      'Get the current user profile including language, timezone, and preferences. / 获取当前用户资料。',
+    description: 'Get the current user profile. / 获取当前用户资料。',
+    input_schema: { type: 'object', properties: {} },
+    scope: 'cross',
+  },
+  {
+    name: 'get_project_inbox',
+    description: 'Get the inbox configuration for a project. / 获取项目收件箱配置。',
     input_schema: {
       type: 'object',
-      properties: {},
+      properties: { projectId: { type: 'string', description: 'Project ID (UUID)' } },
+      required: ['projectId'],
     },
+    scope: 'cross',
   },
-
-  // ========== ACTIVITY LOG TOOLS ==========
   {
-    name: 'list_activity_logs',
-    description:
-      'List activity/audit logs with optional filters. Read-only. / 列出活动日志（只读）。',
+    name: 'list_inbox_rules',
+    description: 'List inbox processing rules. / 列出收件箱处理规则。',
+    input_schema: {
+      type: 'object',
+      properties: { projectInboxId: { type: 'string', description: 'Project Inbox ID (UUID)' } },
+      required: ['projectInboxId'],
+    },
+    scope: 'cross',
+  },
+  {
+    name: 'list_inbox_messages',
+    description: 'List incoming email messages for a project inbox. / 列出收件箱邮件。',
     input_schema: {
       type: 'object',
       properties: {
-        organizationId: { type: 'string', description: 'Filter by organization / 按组织筛选' },
-        projectId: { type: 'string', description: 'Filter by project / 按项目筛选' },
-        entityType: {
+        projectInboxId: { type: 'string', description: 'Project Inbox ID (UUID)' },
+        status: {
           type: 'string',
-          description: 'Filter by entity type (Task, Project, etc.) / 按实体类型筛选',
+          enum: ['PENDING', 'PROCESSING', 'CONVERTED', 'IGNORED', 'FAILED'],
         },
-        page: { type: 'number', description: 'Page number (default 1) / 页码' },
-        limit: { type: 'number', description: 'Items per page (default 20) / 每页条数' },
+        page: { type: 'number' },
+        limit: { type: 'number' },
+      },
+      required: ['projectInboxId'],
+    },
+    scope: 'cross',
+  },
+  {
+    name: 'list_activity_logs',
+    description: 'List activity/audit logs. Read-only. / 列出活动日志（只读）。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        organizationId: { type: 'string' },
+        projectId: { type: 'string' },
+        entityType: { type: 'string', description: 'Filter by entity type' },
+        page: { type: 'number' },
+        limit: { type: 'number' },
       },
     },
+    scope: 'cross',
+  },
+  {
+    name: 'navigate',
+    description:
+      'Tell the frontend to navigate to a page. Use structured params — do NOT guess URL patterns. / 前端导航。使用结构化参数。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'DEPRECATED. Raw URL path.' },
+        workspaceSlug: { type: 'string', description: 'Workspace slug' },
+        projectSlug: { type: 'string', description: 'Project slug (requires workspaceSlug)' },
+        taskSlug: {
+          type: 'string',
+          description: 'Task slug (requires projectSlug + workspaceSlug)',
+        },
+      },
+      required: [],
+    },
+    scope: 'cross',
   },
 ];
 

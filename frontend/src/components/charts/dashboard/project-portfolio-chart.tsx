@@ -17,6 +17,7 @@ interface ProjectPortfolioChartProps {
 
 export function ProjectPortfolioChart({ data }: ProjectPortfolioChartProps) {
   const { t } = useTranslation("workspace-home");
+  if (!data || !Array.isArray(data)) return null;
   const chartData = data?.map((item) => ({
     name: t(chartConfig[item.status]?.label) || item.status,
     value: item._count.status,

@@ -17,6 +17,7 @@ interface SprintMetricsChartProps {
 
 export function SprintMetricsChart({ data }: SprintMetricsChartProps) {
   const { t } = useTranslation("workspace-home");
+  if (!data || !Array.isArray(data)) return null;
   const chartData = data?.map((item) => ({
     status: t(chartConfig[item.status]?.label) || item.status,
     count: item._count.status,

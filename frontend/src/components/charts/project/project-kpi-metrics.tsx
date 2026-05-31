@@ -225,6 +225,7 @@ export function ProjectKPIMetrics({ data, taskStatus }: ProjectKPIMetricsProps) 
     }).filter((c): c is NonNullable<typeof c> => c !== null);
   }, [orderedIds, data, workspaceSlug, projectSlug, doneStatusIds]);
 
+  if (!data) return null;
 
   if (!router.isReady) {
     return null;

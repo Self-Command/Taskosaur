@@ -47,6 +47,7 @@ const renderCustomizedLabel = ({
 
 export function TaskPriorityChart({ data }: TaskPriorityChartProps) {
   const { t } = useTranslation(["analytics"]);
+  if (!data || !Array.isArray(data)) return null;
 
   // Custom tooltip component
   const CustomTooltip = ({ active, payload }: any) => {

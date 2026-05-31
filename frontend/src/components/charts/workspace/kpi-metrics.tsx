@@ -233,6 +233,8 @@ export function KPIMetrics({ data, workspaceId }: KPIMetricsProps) {
     }).filter((c): c is NonNullable<typeof c> => c !== null);
   }, [orderedIds, data, workspaceSlug, t]);
 
+  if (!data) return null;
+
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <SortableContext items={orderedIds} strategy={rectSortingStrategy}>

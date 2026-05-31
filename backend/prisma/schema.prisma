@@ -244,7 +244,7 @@ model Project {
   slug            String            @unique
   taskPrefix      String?           @map("task_prefix") @db.VarChar(8)
   description     String?
-  avatar          String? // Made required (removed ?)
+  avatar          String            @default("")
   color           String // Made required (removed ?)
   status          ProjectStatus     @default(PLANNING)
   priority        ProjectPriority   @default(MEDIUM)

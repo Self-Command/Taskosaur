@@ -27,6 +27,7 @@ interface TaskTypeChartProps {
 
 export function TaskTypeChart({ data }: TaskTypeChartProps) {
   const { t } = useTranslation(["analytics"]);
+  if (!data || !Array.isArray(data)) return null;
   const safeData = Array.isArray(data) ? data : [];
   
   const translatedConfig = {

@@ -35,6 +35,7 @@ const CustomizedAxisTick = ({ x, y, payload }: any) => {
 
 export function SprintVelocityChart({ data }: SprintVelocityChartProps) {
   const { t } = useTranslation(["analytics"]);
+  if (!data || !Array.isArray(data)) return null;
 
   const translatedConfig = {
     velocity: { label: t("charts.sprint_velocity_trend.story_points"), color: chartConfig.velocity.color },

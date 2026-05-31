@@ -117,3 +117,23 @@
 .public-DraftEditorPlaceholder-root {
   @apply text-[var(--muted-foreground)];
 }
+/* KaTeX math — reset to inherit text size */
+.katex { font-size: 1em !important; }
+.katex-display { overflow-x: auto; overflow-y: hidden; }
+
+/* bytemd viewer — strip editor chrome, keep rendering clean */
+.bytemd { border: none !important; height: auto !important; }
+.bytemd-body { height: auto !important; }
+.bytemd-viewer { padding: 0 !important; }
+.bytemd-toolbar, .bytemd-status, .bytemd-help { display: none !important; }
+.bytemd-viewer .markdown-body { 
+  font-size: inherit !important; 
+  line-height: inherit !important; 
+  color: inherit !important;
+  background: transparent !important;
+  padding: 0 !important;
+}
+.bytemd-viewer .markdown-body pre { 
+  background: #1e1e2e !important; 
+  border-radius: 0.75rem !important;
+}

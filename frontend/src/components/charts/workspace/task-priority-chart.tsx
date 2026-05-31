@@ -23,6 +23,7 @@ interface TaskPriorityChartProps {
 
 export function TaskPriorityChart({ data }: TaskPriorityChartProps) {
   const { t } = useTranslation(["workspace-home", "common"]);
+  if (!data || !Array.isArray(data)) return null;
   const chartData = data?.map((item) => ({
     name: t(`common:priorities.${item.priority.toLowerCase()}`, chartConfig[item.priority as keyof typeof chartConfig]?.label || item.priority),
     value: item._count.priority,

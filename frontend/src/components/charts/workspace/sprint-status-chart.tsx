@@ -20,6 +20,7 @@ interface SprintStatusChartProps {
 }
 
 export function SprintStatusChart({ data }: SprintStatusChartProps) {
+  if (!data || !Array.isArray(data)) return null;
   const chartData = data?.map((item) => ({
     name: chartConfig[item.status as keyof typeof chartConfig]?.label || item.status,
     value: item._count.status,

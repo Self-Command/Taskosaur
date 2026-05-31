@@ -70,6 +70,7 @@ export function ResourceAllocationChart({ data: initialData }: ResourceAllocatio
   }, []);
 
   useEffect(() => {
+    if (!initialData || !Array.isArray(initialData)) { setChartData([]); return; }
     processData(initialData);
   }, [initialData]);
 
