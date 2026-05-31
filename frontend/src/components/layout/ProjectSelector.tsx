@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useRouter } from "next/navigation";
 import { useProject } from "@/contexts/project-context";
 import { useWorkspace } from "@/contexts/workspace-context";
+import { generateSlug } from "@/utils/slugUtils";
 import { getCurrentProjectId, setCurrentProjectId } from "@/utils/hierarchyContext";
 import {
   DropdownMenu,
@@ -70,7 +71,7 @@ export default function ProjectSelector({
     // 1. Try URL slug
     let project =
       currentProjectSlug &&
-      projects.find((p) => (p.slug || slugify(p.name)) === currentProjectSlug);
+      projects.find((p) => (p.slug || generateSlug(p.name)) === currentProjectSlug);
 
     // 2. Fallback to localStorage id
     if (!project) {
@@ -87,19 +88,11 @@ export default function ProjectSelector({
     setCurrentProjectId(project.id);
     window.dispatchEvent(new CustomEvent("projectChanged"));
 
-    router.replace(`/${currentWorkspaceSlug}/${project.slug || slugify(project.name)}`);
+    router.replace(`/${currentWorkspaceSlug}/${project.slug || generateSlug(project.name)}`);
   };
 
   /* ---------------- helpers ---------------- */
   const getProjectKey = (p: Project) => p.key || p.name.slice(0, 3).toUpperCase();
-  const slugify = (s: string) =>
-    s
-      .toLowerCase()
-      .trim()
-      .replace(/\s+/g, "-")
-      .replace(/[^a-z0-9-]/g, "")
-      .replace(/-+/g, "-")
-      .replace(/^-+|-+$/g, "");
 
   /* ---------------- render ---------------- */
   return (

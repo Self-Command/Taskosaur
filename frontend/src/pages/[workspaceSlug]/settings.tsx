@@ -4,6 +4,7 @@ import { useWorkspace } from "@/contexts/workspace-context";
 import { useAuth } from "@/contexts/auth-context";
 import { toast } from "sonner";
 import { workspaceApi } from "@/utils/api/workspaceApi";
+import { generateSlug } from "@/utils/slugUtils";
 
 // UI components
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -238,12 +239,17 @@ function WorkspaceSettingsContent() {
       setError(null);
       setSuccess(null);
 
-      const updatedWorkspace = await updateWorkspace(workspace.id, {
+      const updatePayload: Record<string, unknown> = {
         name: formData?.name?.trim(),
-        slug: formData?.slug?.trim(),
         description: formData?.description?.trim(),
         parentWorkspaceId: formData.parentWorkspaceId || null,
-      });
+      };
+      const trimmedSlug = formData?.slug?.trim();
+      if (trimmedSlug) {
+        updatePayload.slug = trimmedSlug;
+      }
+
+      const updatedWorkspace = await updateWorkspace(workspace.id, updatePayload);
 
       setWorkspace(updatedWorkspace);
       cacheSlugId("workspace", updatedWorkspace.slug, updatedWorkspace.id);
@@ -288,22 +294,14 @@ function WorkspaceSettingsContent() {
     }
   };
 
-  const generateSlug = (name: string) => {
-    return name
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, "")
-      .replace(/\s+/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-+|-+$/g, "");
-  };
 
   const handleInputChange = (field: string, value: string) => {
     if (field === "name") {
-      // Auto-update slug when name changes
+      const autoSlug = generateSlug(value);
       setFormData((prev) => ({
         ...prev,
         name: value,
-        slug: generateSlug(value),
+        slug: autoSlug || prev.slug,
       }));
     } else {
       setFormData((prev) => ({ ...prev, [field]: value }));

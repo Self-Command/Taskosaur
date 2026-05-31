@@ -11,6 +11,7 @@ import { CreateSprintDto } from './dto/create-sprint.dto';
 import { UpdateSprintDto } from './dto/update-sprint.dto';
 import { AccessControlService } from '../../common/access-control.utils';
 import { ActivityLogService } from '../activity-log/activity-log.service';
+import { SlugService } from '../../common/slug.service';
 
 @Injectable()
 export class SprintsService {
@@ -18,6 +19,7 @@ export class SprintsService {
     private prisma: PrismaService,
     private accessControl: AccessControlService,
     private activityLog: ActivityLogService,
+    private slugService: SlugService,
   ) {}
 
   private async generateUniqueSlug(
@@ -25,14 +27,7 @@ export class SprintsService {
     projectId: string,
     excludeSprintId?: string,
   ): Promise<string> {
-    const baseSlug =
-      name
-        .toLowerCase()
-        .trim()
-        .replace(/[^a-z0-9\s-]/g, '')
-        .replace(/\s+/g, '-')
-        .replace(/-+/g, '-')
-        .replace(/^-|-$/g, '') || 'sprint';
+    const baseSlug = this.slugService.generateSlug(name, 'sprint');
 
     let slug = baseSlug;
     let counter = 1;

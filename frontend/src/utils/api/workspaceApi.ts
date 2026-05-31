@@ -1,4 +1,5 @@
 import api from "@/lib/api";
+import { generateSlug } from "@/utils/slugUtils";
 import {
   AddMemberToWorkspaceData,
   CreateWorkspaceData,
@@ -38,18 +39,13 @@ export const workspaceApi = {
   // Workspace CRUD operations
   createWorkspace: async (workspaceData: CreateWorkspaceData): Promise<Workspace> => {
     try {
-      // Generate slug if not provided
-      const finalWorkspaceData = {
-        ...workspaceData,
-        slug:
-          workspaceData.slug ||
-          workspaceData.name
-            .toLowerCase()
-            .replace(/[^a-z0-9\s-]/g, "") // Remove special characters
-            .replace(/\s+/g, "-") // Replace spaces with hyphens
-            .replace(/-+/g, "-") // Replace multiple hyphens with single
-            .trim(),
-      };
+      const finalWorkspaceData = { ...workspaceData };
+      if (!finalWorkspaceData.slug) {
+        const autoSlug = generateSlug(workspaceData.name);
+        if (autoSlug) {
+          finalWorkspaceData.slug = autoSlug;
+        }
+      }
 
       const response = await api.post<Workspace>("/workspaces", finalWorkspaceData);
       return response.data;

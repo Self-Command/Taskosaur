@@ -54,7 +54,7 @@ export interface Project {
 }
 export interface ProjectData {
   name: string;
-  slug: string;
+  slug?: string;
   taskPrefix?: string;
   color: string;
   avatar?: string;

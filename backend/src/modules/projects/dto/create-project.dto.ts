@@ -23,14 +23,15 @@ export class CreateProjectDto {
   name: string;
 
   @ApiProperty({
-    description: 'The unique slug identifier for the project (used in URLs)',
+    description:
+      'The unique slug identifier for the project (used in URLs). Auto-generated from name if omitted. Supports Chinese → pinyin conversion.',
     example: 'e-commerce-platform-redesign',
-    minLength: 1,
+    required: false,
     maxLength: 100,
   })
   @IsString()
-  @IsNotEmpty()
-  slug: string;
+  @IsOptional()
+  slug?: string;
 
   @ApiProperty({
     description: 'Custom prefix for tasks in this project',

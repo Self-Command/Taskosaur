@@ -81,6 +81,7 @@
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "passport-local": "^1.0.0",
+    "pinyin": "^4.0.0",
     "prisma": "^6.19.0",
     "redis": "^5.5.6",
     "reflect-metadata": "^0.2.2",

@@ -13,6 +13,7 @@ import { HiCog, HiExclamationTriangle, HiArrowPath } from "react-icons/hi2";
 import { useOrganization } from "@/contexts/organization-context";
 import { useAuth } from "@/contexts/auth-context";
 import { useTranslation } from "react-i18next";
+import { generateSlug } from "@/utils/slugUtils";
 
 interface OrganizationSettingsProps {
   organization: Organization;
@@ -64,15 +65,7 @@ export default function OrganizationSettingsComponent({
 
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
-  // Generate slug from name (mirrors backend slugify logic)
-  const generateSlugFromName = (name: string): string => {
-    return name
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, "") // remove special chars
-      .replace(/\s+/g, "-") // replace spaces with hyphens
-      .replace(/-+/g, "-") // replace multiple hyphens with single
-      .trim();
-  };
+  // Generate slug from name — delegates to shared util (backend generates real slug)
 
   // Slug state - separate from settings for better control
   const [slug, setSlug] = useState(organization.slug);
@@ -112,7 +105,7 @@ export default function OrganizationSettingsComponent({
 
       // Only auto-generate slug if user hasn't manually edited it
       if (!isSlugManuallyEdited) {
-        const newSlug = generateSlugFromName(settings.general.name);
+        const newSlug = generateSlug(settings.general.name);
         setSlug(newSlug);
       }
     }
@@ -148,7 +141,7 @@ export default function OrganizationSettingsComponent({
 
   // Reset slug to auto-generated value
   const resetSlugToAuto = () => {
-    setSlug(generateSlugFromName(settings.general.name));
+    setSlug(generateSlug(settings.general.name));
     setIsSlugManuallyEdited(false);
   };
 

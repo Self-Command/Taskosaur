@@ -11,6 +11,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import slugify from 'slugify';
+import { SlugService } from '../../common/slug.service';
 import { DEFAULT_SPRINT } from '../../constants/defaultWorkflow';
 import { AccessControlService } from 'src/common/access-control.utils';
 import { ActivityLogService } from '../activity-log/activity-log.service';
@@ -48,6 +49,7 @@ export class ProjectsService {
     private accessControl: AccessControlService,
     private readonly activityLog: ActivityLogService,
     private settingsService: SettingsService,
+    private slugService: SlugService,
   ) {}
 
   private async isSuperAdmin(userId: string): Promise<boolean> {
@@ -120,8 +122,11 @@ export class ProjectsService {
       }
     }
 
-    // Generate unique slug
-    const baseSlug = slugify(createProjectDto.slug, {
+    // Generate unique slug — auto-generate from name if not provided
+    const rawSlug = createProjectDto.slug?.trim()
+      ? createProjectDto.slug
+      : this.slugService.generateSlug(createProjectDto.name, 'proj');
+    const baseSlug = slugify(rawSlug, {
       lower: true,
       strict: true,
     });

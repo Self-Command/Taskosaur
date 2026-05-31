@@ -10,7 +10,7 @@ import { ProjectMembersService } from '../project-members/project-members.servic
 import { McpLoggerService } from './mcp-logger.service';
 import { EventsGateway } from '../../gateway/events.gateway';
 import { TaskType } from '@prisma/client';
-import slugify from 'slugify';
+import { SlugService } from '../../common/slug.service';
 import * as crypto from 'crypto';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -81,6 +81,7 @@ export class ToolExecutor {
     private projectMembersService: ProjectMembersService,
     private mcpLogger: McpLoggerService,
     private eventsGateway: EventsGateway,
+    private slugService: SlugService,
   ) {}
 
   // ---- helpers ----
@@ -461,7 +462,7 @@ export class ToolExecutor {
       this.requireUUID(params.organizationId, 'organizationId') ||
       this.requireString(params.name, 'name');
     if (err) return { success: false, error: err };
-    const slug = params.slug || slugify(params.name, { lower: true, strict: true });
+    const slug = params.slug || this.slugService.generateSlug(params.name, 'ws');
     const org = await this.prisma.organization.findUnique({
       where: { id: params.organizationId },
       select: { id: true },
@@ -613,7 +614,7 @@ export class ToolExecutor {
         ? words.map((w: string) => w.charAt(0)).join('')
         : params.name.substring(0, 4);
     taskPrefix = (params.taskPrefix || taskPrefix).substring(0, 8).toUpperCase();
-    const slug = params.slug || slugify(params.name, { lower: true, strict: true });
+    const slug = params.slug || this.slugService.generateSlug(params.name, 'item');
 
     const project = await this.prisma.project.create({
       data: {
@@ -1119,7 +1120,7 @@ export class ToolExecutor {
       select: { id: true },
     });
     if (!project) return { success: false, error: `Project not found. Use list_projects first.` };
-    const slug = slugify(params.name, { lower: true, strict: true });
+    const slug = this.slugService.generateSlug(params.name, 'item');
     const sprint = await this.prisma.sprint.create({
       data: {
         name: params.name,
@@ -2087,7 +2088,7 @@ export class ToolExecutor {
     try {
       const dto = {
         name: params.name,
-        slug: params.slug || slugify(params.name, { lower: true, strict: true }),
+        slug: params.slug || this.slugService.generateSlug(params.name, 'item'),
         description: params.description,
         website: params.website,
         avatar: params.avatar,

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useRouter } from "next/navigation";
 import { Organization, CreateOrganizationDto } from "@/types";
+import { generateSlug } from "@/utils/slugUtils";
 import { Button } from "@/components/ui";
 import { organizationApi } from "@/utils/api";
 
@@ -60,21 +61,13 @@ export default function OrganizationForm({
     }
   };
 
-  const generateSlug = (name: string) => {
-    return name
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, "")
-      .replace(/\s+/g, "-")
-      .replace(/-+/g, "-")
-      .trim();
-  };
-
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const name = e.target.value;
+    const autoSlug = generateSlug(name);
     setFormData((prev) => ({
       ...prev,
       name,
-      slug: isEditing ? prev.slug : generateSlug(name),
+      slug: isEditing ? prev.slug : (autoSlug || undefined),
     }));
   };
 

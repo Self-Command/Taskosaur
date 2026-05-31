@@ -22,19 +22,19 @@ export class CreateWorkspaceDto {
   name: string;
 
   @ApiProperty({
-    description: 'The unique slug identifier for the workspace (used in URLs)',
+    description:
+      'The unique slug identifier for the workspace (used in URLs). Auto-generated from name if omitted. Supports Chinese → pinyin conversion.',
     example: 'product-development',
     pattern: '^[a-z0-9-]+$',
-    minLength: 1,
     maxLength: 50,
-    required: true,
+    required: false,
   })
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   @Matches(/^[a-z0-9-]+$/, {
     message: 'Slug can only contain lowercase letters, numbers, and hyphens',
   })
-  slug: string;
+  slug?: string;
 
   @ApiProperty({
     description: 'Optional description of the workspace',

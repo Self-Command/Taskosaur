@@ -1,12 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Role as ProjectRole, ProjectStatus, ProjectPriority, Project } from '@prisma/client';
-import slugify from 'slugify';
+import { SlugService } from '../common/slug.service';
 import { DEFAULT_SPRINT } from '../constants/defaultWorkflow';
 
 @Injectable()
 export class ProjectsSeederService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private slugService: SlugService,
+  ) {}
 
   async seed(workspaces: any[], users: any[]) {
     console.log('🌱 Seeding projects...');
@@ -50,7 +53,7 @@ export class ProjectsSeederService {
               ...projectData,
               workspaceId: workspace.id,
               workflowId: defaultWorkflow.id, // Assign the default workflow
-              slug: slugify(projectData.name, { lower: true, strict: true }),
+              slug: this.slugService.generateSlug(projectData.name, 'proj'),
               createdBy: creatorUser.id,
               updatedBy: creatorUser.id,
               sprints: {

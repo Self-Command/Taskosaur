@@ -22,7 +22,7 @@ import {
   DEFAULT_SPRINT,
   DEFAULT_TASKS,
 } from '../../constants/defaultWorkflow';
-import slugify from 'slugify';
+import { SlugService } from '../../common/slug.service';
 
 @Injectable()
 export class OrganizationsService {
@@ -33,6 +33,7 @@ export class OrganizationsService {
     private activityLog: ActivityLogService,
     private accessControl: AccessControlService,
     private settingsService: SettingsService,
+    private slugService: SlugService,
   ) {}
 
   /**
@@ -73,10 +74,7 @@ export class OrganizationsService {
   }
 
   private async generateUniqueSlug(name: string, excludeId?: string): Promise<string> {
-    const baseSlug = slugify(name, {
-      lower: true,
-      strict: true, // remove special chars
-    });
+    const baseSlug = this.slugService.generateSlug(name, 'org');
 
     let slug = baseSlug;
     let counter = 1;

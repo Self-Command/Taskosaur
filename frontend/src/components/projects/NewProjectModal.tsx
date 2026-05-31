@@ -34,7 +34,7 @@ import { getCurrentWorkspaceId } from "@/utils/hierarchyContext";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PROJECT_CATEGORIES } from "@/utils/data/projectData";
 import { workflowsApi } from "@/utils/api/workflowsApi";
-import { isValidSlug } from "@/utils/slugUtils";
+import { isValidSlug, generateSlug } from "@/utils/slugUtils";
 
 interface NewProjectModalProps {
   isOpen: boolean;
@@ -70,16 +70,7 @@ export function NewProjectModal({
     visibility: "PRIVATE" as const,
   });
 
-  const generateSlug = (name: string) => {
-    return name
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, "")
-      .replace(/\s+/g, "-")
-      .replace(/-+/g, "-")
-      .trim();
-  };
-
-  // Use projectSlug everywhere it's needed
+  // URL preview slug — backend generates the real slug from name
   const projectSlug = generateSlug(formData.name);
 
   const themeColor = formData.color;
@@ -264,7 +255,6 @@ export function NewProjectModal({
     try {
       const projectData = {
         name: formData.name.trim(),
-        slug: projectSlug,
         description: formData.description.trim(),
         color: formData.color,
         status: "ACTIVE" as const,

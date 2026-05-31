@@ -5,6 +5,7 @@ import { useProject } from "@/contexts/project-context";
 import { useWorkspace } from "@/contexts/workspace-context";
 import { useAuth } from "@/contexts/auth-context";
 import { toast } from "sonner";
+import { generateSlug } from "@/utils/slugUtils";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -307,14 +308,19 @@ function ProjectSettingsContent() {
       setError(null);
       setSuccess(null);
 
-      const updatedProject = await updateProject(project.id, {
+      const updatePayload: Record<string, unknown> = {
         name: formData.name.trim(),
-        slug: formData.slug.trim(),
         taskPrefix: formData.taskPrefix.trim().toUpperCase(),
         description: formData.description.trim(),
         status: formData.status,
         visibility: formData.visibility,
-      });
+      };
+      const trimmedSlug = formData.slug.trim();
+      if (trimmedSlug) {
+        updatePayload.slug = trimmedSlug;
+      }
+
+      const updatedProject = await updateProject(project.id, updatePayload);
 
       setProject(updatedProject);
 
@@ -337,22 +343,13 @@ function ProjectSettingsContent() {
     }
   };
 
-  const generateSlug = (name: string) => {
-    return name
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, "")
-      .replace(/\s+/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-+|-+$/g, "");
-  };
-
   const handleInputChange = (field: string, value: string) => {
     if (field === "name") {
-      // Auto-update slug when name changes
+      const autoSlug = generateSlug(value);
       setFormData((prev) => ({
         ...prev,
         name: value,
-        slug: generateSlug(value),
+        slug: autoSlug || prev.slug,
       }));
     } else if (field === "taskPrefix") {
       const upperValue = value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);

@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { ChevronLeft, ChevronRight, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
+import { generateSlug } from "@/utils/slugUtils";
 
 import { OrganizationRole } from "@/types";
 import { LoginContent } from "@/components/login/LoginContent";
@@ -97,17 +98,11 @@ function IntroQuestions({ onComplete }: { onComplete: () => void }) {
   const createOrganizationAndHandleRedirect = async () => {
     const orgName = answers["organizationName"];
 
-    const slug = orgName
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, "")
-      .replace(/\s+/g, "-")
-      .replace(/-+/g, "-")
-      .trim();
+    const autoSlug = generateSlug(orgName);
 
     try {
-      const result = await createOrganization({
+      const createPayload: Record<string, unknown> = {
         name: orgName.trim(),
-        slug,
         description: "My organization created during onboarding",
         settings: {
           allowInvites: true,
@@ -131,7 +126,11 @@ function IntroQuestions({ onComplete }: { onComplete: () => void }) {
             name: projectName.trim(),
           },
         }),
-      });
+      };
+      if (autoSlug) {
+        createPayload.slug = autoSlug;
+      }
+      const result = await createOrganization(createPayload as any);
       return result;
     } catch (error: any) {
       throw new Error(error?.message || "Failed to create organization");

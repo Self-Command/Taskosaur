@@ -50,6 +50,7 @@ import { HealthModule } from './modules/health/health.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { TrelloSyncModule } from './modules/trello-sync/trello-sync.module';
 import { JiraSyncModule } from './modules/jira-sync/jira-sync.module';
+import { SlugModule } from './common/slug.module';
 
 @Module({
   imports: [
@@ -146,6 +147,7 @@ import { JiraSyncModule } from './modules/jira-sync/jira-sync.module';
     AdminModule,
     TrelloSyncModule,
     JiraSyncModule,
+    SlugModule,
   ],
   controllers: [AppController],
   providers: [

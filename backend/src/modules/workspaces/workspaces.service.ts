@@ -12,6 +12,7 @@ import { UpdateWorkspaceDto } from './dto/update-workspace.dto';
 import { AccessControlService } from 'src/common/access-control.utils';
 import { SettingsService } from '../settings/settings.service';
 import { ActivityLogService } from '../activity-log/activity-log.service';
+import { SlugService } from '../../common/slug.service';
 
 @Injectable()
 export class WorkspacesService {
@@ -20,6 +21,7 @@ export class WorkspacesService {
     private accessControl: AccessControlService,
     private settingsService: SettingsService,
     private activityLog: ActivityLogService,
+    private slugService: SlugService,
   ) {}
 
   async create(createWorkspaceDto: CreateWorkspaceDto, userId: string): Promise<Workspace> {
@@ -80,9 +82,12 @@ export class WorkspacesService {
       parentPath = parentWorkspace.path || `/${parentWorkspace.id}`;
     }
 
-    // Generate unique slug
+    // Generate unique slug — auto-generate from name if not provided
+    const rawSlug = createWorkspaceDto.slug?.trim()
+      ? createWorkspaceDto.slug
+      : this.slugService.generateSlug(createWorkspaceDto.name, 'ws');
     const uniqueSlug = await this.generateUniqueSlug(
-      createWorkspaceDto.slug,
+      rawSlug,
       createWorkspaceDto.organizationId,
     );
 

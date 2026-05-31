@@ -10,7 +10,7 @@ import {
   StatusCategory,
   Prisma,
 } from '@prisma/client';
-import slugify from 'slugify';
+import { SlugService } from '../common/slug.service';
 import { TaskRanksService } from '../modules/task-ranks/task-ranks.service';
 
 @Injectable()
@@ -18,6 +18,7 @@ export class TasksSeederService {
   constructor(
     private prisma: PrismaService,
     private taskRanksService: TaskRanksService,
+    private slugService: SlugService,
   ) {}
 
   async seed(projects: Project[], users: User[]) {
@@ -96,10 +97,7 @@ export class TasksSeederService {
               projectId: project.id,
               sprintId: defaultSprint?.id,
               taskNumber: taskNumber,
-              slug: slugify(`${project.slug}-${taskNumber}`, {
-                lower: true,
-                strict: true,
-              }),
+              slug: this.slugService.generateSlug(`${project.slug}-${taskNumber}`, 'task'),
               statusId: taskWithStatus.status.id,
               createdBy: availableUsers[0]?.id || users[0].id,
               updatedBy: availableUsers[0]?.id || users[0].id,
