@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   HiArrowLeft, HiPaperAirplane, HiSparkles, HiPlus, HiTrash,
-  HiPencil, HiChatBubbleLeft, HiStop, HiXMark, HiGlobeAlt, HiLightBulb,
+  HiPencil, HiChatBubbleLeft, HiStop, HiXMark, HiGlobeAlt, HiLightBulb, HiPaperClip,
 } from "react-icons/hi2";
 import { useRouter } from "next/router";
 import { useAuth } from "@/contexts/auth-context";
@@ -10,7 +10,8 @@ import ThinkingBlock from "@/components/chat/ThinkingBlock";
 import api from "@/lib/api";
 
 type ToolExec = { tool: string; params: any; result: any; pending: boolean };
-type Message = { id: string; role: "user" | "assistant"; content: string; thinking: string; toolExecs: ToolExec[]; streaming: boolean };
+type FileAttachment = { name: string; url: string; mimeType: string; size: number; extractedText?: string };
+type Message = { id: string; role: "user" | "assistant"; content: string; thinking: string; toolExecs: ToolExec[]; attachments?: FileAttachment[]; streaming: boolean };
 
 /* ── Tool card badge ── */
 function ToolBadge({ tool }: { tool: string }) {
@@ -122,6 +123,9 @@ export default function ChatPage() {
   const [thinking, setThinking] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [attachments, setAttachments] = useState<FileAttachment[]>([]);
+  const [uploading, setUploading] = useState(false);
 
   /* ── Init ── */
   useEffect(() => { const u = getCurrentUser(); if (u) { setUser(u); loadConvs(); } }, [getCurrentUser]);
@@ -130,20 +134,39 @@ export default function ChatPage() {
 
   const loadConvs = async () => { try { const r = await api.get("/ai-chat/conversations"); setConvs(r.data || []); } catch {} };
 
+  /* ── File upload ── */
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; if (!file) return;
+    setUploading(true);
+    try {
+      const fd = new FormData(); fd.append("file", file);
+      const base = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3000/api";
+      const token = localStorage.getItem("access_token");
+      const res = await fetch(`${base}/ai-chat/upload`, {
+        method: "POST", headers: token ? { Authorization: `Bearer ${token}` } : {}, body: fd, credentials: "include",
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      const data: FileAttachment = await res.json();
+      setAttachments((p) => [...p, data]);
+    } catch (err) { console.error("Upload error:", err); }
+    finally { setUploading(false); if (fileInputRef.current) fileInputRef.current.value = ""; }
+  };
+
   /* ── Abort controller for SSE stream ── */
   const abortRef = useRef<AbortController | null>(null);
 
   /* ── Send message via direct SSE streaming (no polling) ── */
   const send = async () => {
-    const text = input.trim(); if (!text || loading || !user) return;
-    const um: Message = { id: "" + Date.now(), role: "user", content: text, thinking: "", toolExecs: [], streaming: false };
-    setMessages((p) => [...p, um]); setInput(""); setLoading(true);
+    const text = input.trim(); if ((!text && attachments.length === 0) || loading || !user) return;
+    const currAtts = [...attachments];
+    const um: Message = { id: "" + Date.now(), role: "user", content: text, thinking: "", toolExecs: [], attachments: currAtts, streaming: false };
+    setMessages((p) => [...p, um]); setInput(""); setAttachments([]); setLoading(true);
     const aid = "" + (Date.now() + 1);
     setMessages((p) => [...p, { id: aid, role: "assistant", content: "", thinking: "", toolExecs: [], streaming: true }]);
     try {
       const sid = sessionId || "s" + Date.now();
       if (!sessionId) setSessionId(sid);
-      const body: any = { message: text, sessionId: sid, currentOrganizationId: localStorage.getItem("currentOrganizationId"), enableWebSearch: webSearch, enableThinking: thinking };
+      const body: any = { message: text, sessionId: sid, currentOrganizationId: localStorage.getItem("currentOrganizationId"), enableWebSearch: webSearch, enableThinking: thinking, ...(currAtts.length > 0 ? { attachments: currAtts } : {}) };
       const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3000/api";
       const token = localStorage.getItem("access_token");
       const controller = new AbortController();
@@ -323,12 +346,6 @@ export default function ChatPage() {
           <button onClick={async () => { setHistOpen(true); await loadConvs(); }} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 transition-colors" title="历史记录">
             <HiChatBubbleLeft className="w-4 h-4" />
           </button>
-          <button onClick={() => setWebSearch(!webSearch)} className={`p-2 rounded-xl transition-colors ${webSearch ? "bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400" : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400"}`} title={webSearch ? "已开启网络搜索" : "开启网络搜索"}>
-            <HiGlobeAlt className="w-4 h-4" />
-          </button>
-          <button onClick={() => setThinking(!thinking)} className={`p-2 rounded-xl transition-colors ${thinking ? "bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400" : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400"}`} title={thinking ? "已开启深度思考" : "开启深度思考"}>
-            <HiLightBulb className="w-4 h-4" />
-          </button>
         </div>
       </div>
 
@@ -360,7 +377,16 @@ export default function ChatPage() {
             m.role === "user" ? (
               <div key={m.id} className="flex justify-end">
                 <div className="max-w-[85%] bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-2xl rounded-br-lg px-4 py-2.5 shadow-sm">
-                  <div className="text-sm whitespace-pre-wrap break-words leading-relaxed">{m.content}</div>
+                  {m.attachments && m.attachments.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {m.attachments.map((a, i) => (
+                        <a key={i} href={`${(process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3000/api").replace(/\/api$/, "")}${a.url}`} target="_blank" rel="noreferrer" className="flex items-center gap-1 bg-white/20 rounded-md px-2 py-1 text-xs hover:bg-white/30 transition-colors">
+                          {a.mimeType.startsWith("image/") ? "🖼️" : "📄"} {a.name}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                  {m.content && <div className="text-sm whitespace-pre-wrap break-words leading-relaxed">{m.content}</div>}
                 </div>
               </div>
             ) : (
@@ -408,6 +434,20 @@ export default function ChatPage() {
 
       {/* ═══ Input ═══ */}
       <div className="shrink-0 border-t border-gray-100 dark:border-gray-800 p-3.5 bg-white dark:bg-[#0f0f0f]">
+        {attachments.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-2">
+            {attachments.map((a, i) => (
+              <div key={i} className="relative group flex items-center gap-1.5 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 text-xs max-w-[200px]">
+                {a.mimeType.startsWith("image/") ? (
+                  <img src={`${(process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3000/api").replace(/\/api$/, "")}${a.url}`} alt={a.name} className="w-6 h-6 rounded object-cover shrink-0" />
+                ) : (<span className="text-sm shrink-0">📄</span>)}
+                <span className="truncate text-gray-700 dark:text-gray-300">{a.name}</span>
+                <button onClick={() => setAttachments((p) => p.filter((_, j) => j !== i))} className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><HiXMark className="w-2.5 h-2.5" /></button>
+              </div>
+            ))}
+            {uploading && <span className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg px-2 py-1.5 text-xs text-gray-400"><span className="animate-pulse">⏳</span> 上传中...</span>}
+          </div>
+        )}
         <div className="flex gap-2 items-end bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl px-3 py-2 focus-within:border-emerald-400/50 focus-within:ring-2 focus-within:ring-emerald-500/10 transition-all">
           <textarea
             ref={inputRef}
@@ -420,12 +460,18 @@ export default function ChatPage() {
             className="flex-1 px-1 py-1.5 bg-transparent border-0 resize-none text-sm placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none disabled:opacity-50 text-gray-800 dark:text-gray-200"
             style={{ minHeight: "28px", maxHeight: "120px" }}
           />
+          <div className="flex items-center gap-0.5 shrink-0">
+            <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept="image/*,.pdf,.txt,.md,.csv,.json,.js,.ts,.py,.java,.go,.rs,.rb,.c,.cpp,.h,.cs,.swift,.kt,.sql,.sh,.yaml,.yml,.xml,.html,.css,.docx,.xlsx" />
+            <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading} className={`p-1.5 rounded-lg transition-colors ${uploading ? "text-emerald-500 animate-pulse" : "text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"}`} title="上传附件"><HiPaperClip className="w-4 h-4" /></button>
+            <button type="button" onClick={() => setWebSearch(!webSearch)} className={`p-1.5 rounded-lg transition-colors ${webSearch ? "bg-blue-100 dark:bg-blue-900/40 text-blue-600" : "text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"}`} title={webSearch ? "已开启联网搜索" : "联网搜索"}><HiGlobeAlt className="w-4 h-4" /></button>
+            <button type="button" onClick={() => setThinking(!thinking)} className={`p-1.5 rounded-lg transition-colors ${thinking ? "bg-amber-100 dark:bg-amber-900/40 text-amber-600" : "text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"}`} title={thinking ? "已开启深度思考" : "深度思考"}><HiLightBulb className="w-4 h-4" /></button>
+          </div>
           {loading ? (
             <button onClick={stop} className="p-2 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-xl shrink-0 transition-all hover:scale-105 active:scale-95 shadow-sm" title="停止">
               <HiStop className="w-4 h-4" />
             </button>
           ) : (
-            <button onClick={send} disabled={!input.trim() || loading || !user} className="p-2 bg-emerald-500 hover:bg-emerald-600 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white rounded-xl shrink-0 transition-all disabled:cursor-not-allowed hover:scale-105 active:scale-95 shadow-sm disabled:shadow-none" title="发送">
+            <button onClick={send} disabled={(!input.trim() && attachments.length === 0) || loading || !user} className="p-2 bg-emerald-500 hover:bg-emerald-600 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white rounded-xl shrink-0 transition-all disabled:cursor-not-allowed hover:scale-105 active:scale-95 shadow-sm disabled:shadow-none" title="发送">
               <HiPaperAirplane className="w-4 h-4" />
             </button>
           )}

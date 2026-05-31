@@ -292,8 +292,9 @@ export default function Breadcrumb() {
       const ws = workspaceTree.find(w => w.slug === workspaceSegment);
       if (ws) workspaceName = ws.name;
     }
-    // Fallback: try public workspace API
-    if (!workspaceName && workspaceSegment) {
+    // Fallback: try public workspace API (skip for non-workspace routes)
+    const NON_WS_SEGMENTS = new Set(["chat", "dashboard", "tasks", "projects", "settings", "admin", "notifications", "organization"]);
+    if (!workspaceName && workspaceSegment && !NON_WS_SEGMENTS.has(workspaceSegment)) {
       try {
         const wsRes = await api.get(`/public/workspaces/${encodeURIComponent(workspaceSegment)}`);
         if (wsRes?.data?.name) workspaceName = wsRes.data.name;

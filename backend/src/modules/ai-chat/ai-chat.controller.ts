@@ -1,29 +1,17 @@
 // Trigger watch reload
 import {
-  Controller,
-  Post,
-  Body,
-  UseGuards,
-  Delete,
-  Param,
-  Get,
-  Patch,
-  Put,
-  Res,
+  Controller, Post, Body, UseGuards, Delete, Param, Get, Patch, Put, Res,
+  UseInterceptors, UploadedFile,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiTags, ApiOperation, ApiResponse, ApiConsumes } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AiChatService } from './ai-chat.service';
 import {
-  ChatRequestDto,
-  ChatResponseDto,
-  TestConnectionDto,
-  TestConnectionResponseDto,
-  GenerateDescriptionDto,
-  GenerateDescriptionResponseDto,
-  CreateConversationDto,
-  RenameConversationDto,
-  UpdateMessagesDto,
+  ChatRequestDto, ChatResponseDto, ChatAttachmentDto,
+  TestConnectionDto, TestConnectionResponseDto,
+  GenerateDescriptionDto, GenerateDescriptionResponseDto,
+  CreateConversationDto, RenameConversationDto, UpdateMessagesDto,
 } from './dto/chat.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '@prisma/client';
@@ -202,5 +190,15 @@ export class AiChatController {
   @ApiResponse({ status: 200, description: 'Context cleared successfully' })
   async clearContext(@Param('sessionId') sessionId: string): Promise<{ success: boolean }> {
     return this.aiChatService.clearContext(sessionId);
+  }
+
+  @Post('upload')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Upload chat attachment (image, PDF, text, code)' })
+  @ApiConsumes('multipart/form-data')
+  @ApiResponse({ status: 200, type: ChatAttachmentDto })
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 20 * 1024 * 1024 } }))
+  async uploadAttachment(@UploadedFile() file: Express.Multer.File): Promise<ChatAttachmentDto> {
+    return this.aiChatService.uploadAttachment(file);
   }
 }

@@ -1,42 +1,55 @@
-import { IsString, IsNotEmpty, IsOptional, IsArray, ValidateNested, IsIn } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsArray, ValidateNested, IsIn, IsNumber } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { TaskType } from '@prisma/client';
 
+export class ChatAttachmentDto {
+  @ApiProperty({ description: 'Original file name' })
+  @IsString() @IsNotEmpty()
+  name: string;
+
+  @ApiProperty({ description: 'Accessible URL to the file' })
+  @IsString() @IsNotEmpty()
+  url: string;
+
+  @ApiProperty({ description: 'MIME type' })
+  @IsString() @IsNotEmpty()
+  mimeType: string;
+
+  @ApiProperty({ description: 'File size in bytes' })
+  @IsNumber()
+  size: number;
+
+  @ApiPropertyOptional({ description: 'Extracted text (PDF, text, code files)' })
+  @IsOptional() @IsString()
+  extractedText?: string;
+}
+
 export class ChatMessageDto {
-  @ApiProperty({
-    description: 'Role of the message sender',
-    enum: ['system', 'user', 'assistant'],
-  })
-  @IsString()
-  @IsNotEmpty()
-  @IsIn(['system', 'user', 'assistant'])
+  @ApiProperty({ description: 'Role of the message sender', enum: ['system', 'user', 'assistant'] })
+  @IsString() @IsNotEmpty() @IsIn(['system', 'user', 'assistant'])
   role: 'system' | 'user' | 'assistant';
 
-  @ApiProperty({
-    description: 'Content of the message',
-  })
-  @IsString()
-  @IsNotEmpty()
+  @ApiProperty({ description: 'Content of the message' })
+  @IsString() @IsNotEmpty()
   content: string;
+
+  @ApiPropertyOptional({ description: 'File attachments', type: [ChatAttachmentDto] })
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => ChatAttachmentDto)
+  attachments?: ChatAttachmentDto[];
 }
 
 export class ChatRequestDto {
-  @ApiProperty({
-    description: 'User message content',
-  })
-  @IsString()
-  @IsNotEmpty()
+  @ApiProperty({ description: 'User message content' })
+  @IsString() @IsNotEmpty()
   message: string;
 
-  @ApiPropertyOptional({
-    description: 'Conversation history',
-    type: [ChatMessageDto],
-  })
-  @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => ChatMessageDto)
+  @ApiPropertyOptional({ description: 'File attachments', type: [ChatAttachmentDto] })
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => ChatAttachmentDto)
+  attachments?: ChatAttachmentDto[];
+
+  @ApiPropertyOptional({ description: 'Conversation history', type: [ChatMessageDto] })
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => ChatMessageDto)
   history?: ChatMessageDto[];
 
   @ApiPropertyOptional({

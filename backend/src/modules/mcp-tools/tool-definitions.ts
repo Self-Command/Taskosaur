@@ -1068,11 +1068,45 @@ export const MCP_TOOL_DEFINITIONS: MCPToolDefinition[] = [
   // ================================================================
   {
     name: 'list_task_attachments',
-    description: 'List file attachments for a task. / 列出任务文件附件。',
+    description:
+      'List all file attachments for a task. Returns name, URL, size, and MIME type for each file. ' +
+      'Use this to check what files are already attached before adding or removing. / 列出任务文件附件。',
     input_schema: {
       type: 'object',
       properties: { taskId: { type: 'string', description: 'Task ID (UUID)' } },
       required: ['taskId'],
+    },
+    scope: 'project',
+  },
+  {
+    name: 'upload_task_attachment',
+    description:
+      'Add a file attachment to a task. Use this when a user asks to attach a file, image, PDF, ' +
+      'or document to a task. Accepts a URL from a previously uploaded chat file, or any accessible file URL. ' +
+      'The file will be saved to the task and appear in its attachment list. / 上传文件附件到任务。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'Target task ID (UUID)' },
+        fileUrl: { type: 'string', description: 'URL of the file to attach (from chat upload or any accessible URL)' },
+        fileName: { type: 'string', description: 'Original file name (e.g. report.pdf, photo.png)' },
+        mimeType: { type: 'string', description: 'MIME type (e.g. image/png, application/pdf, text/plain)' },
+      },
+      required: ['taskId', 'fileUrl', 'fileName'],
+    },
+    scope: 'project',
+  },
+  {
+    name: 'delete_task_attachment',
+    description:
+      'Remove a file attachment from a task. Use this when a user asks to delete or remove an attached file. ' +
+      'Requires the attachment ID which can be obtained from list_task_attachments. / 删除任务文件附件。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        attachmentId: { type: 'string', description: 'Attachment ID (UUID) from list_task_attachments' },
+      },
+      required: ['attachmentId'],
     },
     scope: 'project',
   },

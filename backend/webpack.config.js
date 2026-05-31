@@ -339,6 +339,8 @@ module.exports = function (options, webpack) {
       'class-validator',
       'class-transformer',
       'cache-manager',
+      'pdf-parse',
+      'mammoth',
 
       // Exclude Swagger modules so they can resolve paths at runtime
       '@nestjs/swagger',

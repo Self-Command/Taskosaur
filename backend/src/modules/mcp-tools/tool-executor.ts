@@ -11,6 +11,7 @@ import { McpLoggerService } from './mcp-logger.service';
 import { EventsGateway } from '../../gateway/events.gateway';
 import { TaskType } from '@prisma/client';
 import { SlugService } from '../../common/slug.service';
+import { StorageService } from '../storage/storage.service';
 import * as crypto from 'crypto';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -82,6 +83,7 @@ export class ToolExecutor {
     private mcpLogger: McpLoggerService,
     private eventsGateway: EventsGateway,
     private slugService: SlugService,
+    private storageService: StorageService,
   ) {}
 
   // ---- helpers ----
@@ -310,6 +312,10 @@ export class ToolExecutor {
       // Attachment
       case 'list_task_attachments':
         return trimForLLM(await this.listTaskAttachments(params, userId));
+      case 'upload_task_attachment':
+        return trimForLLM(await this.uploadTaskAttachment(params, userId));
+      case 'delete_task_attachment':
+        return trimForLLM(await this.deleteTaskAttachment(params, userId));
       // Automation
       case 'list_automation_rules':
         return trimForLLM(await this.listAutomationRules(params, userId));
@@ -1930,6 +1936,73 @@ export class ToolExecutor {
       },
     });
     return { success: true, count: attachments.length, attachments };
+  }
+
+  private async uploadTaskAttachment(params: Record<string, any>, userId: string) {
+    const e = this.requireUUID(params.taskId, 'taskId') || this.requireString(params.fileUrl, 'fileUrl') || this.requireString(params.fileName, 'fileName');
+    if (e) return { success: false, error: e };
+
+    const task = await this.prisma.task.findUnique({ where: { id: params.taskId }, select: { id: true } });
+    if (!task) return { success: false, error: 'Task not found' };
+
+    try {
+      // Download file from URL
+      let buffer: Buffer;
+      if (params.fileUrl.startsWith('/api/uploads/')) {
+        const fs = require('fs');
+        const fname = params.fileUrl.split('/').pop();
+        const localPath = require('path').resolve(process.cwd(), 'uploads', 'chat', decodeURIComponent(fname));
+        if (!fs.existsSync(localPath)) return { success: false, error: 'File not found at ' + localPath };
+        buffer = fs.readFileSync(localPath);
+      } else {
+        const res = await fetch(params.fileUrl);
+        if (!res.ok) return { success: false, error: `Failed to download file: ${res.status}` };
+        buffer = Buffer.from(await res.arrayBuffer());
+      }
+
+      const mimeType = params.mimeType || 'application/octet-stream';
+      const fileSize = buffer.length;
+
+      // Save via StorageService
+      const folder = `tasks/${params.taskId}`;
+      const saved = await this.storageService.saveFile(
+        { buffer, originalname: params.fileName, mimetype: mimeType, size: fileSize } as Express.Multer.File,
+        folder,
+      );
+
+      // Create DB record
+      const attachment = await this.prisma.taskAttachment.create({
+        data: {
+          taskId: params.taskId,
+          fileName: params.fileName,
+          fileSize,
+          mimeType,
+          url: saved.url || `/${saved.key}`,
+          storageKey: saved.key,
+          createdBy: userId,
+          updatedBy: userId,
+        },
+        select: { id: true, fileName: true, fileSize: true, mimeType: true, url: true },
+      });
+
+      return { success: true, attachment };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Upload failed' };
+    }
+  }
+
+  private async deleteTaskAttachment(params: Record<string, any>, _userId: string) {
+    const e = this.requireUUID(params.attachmentId, 'attachmentId');
+    if (e) return { success: false, error: e };
+    const att = await this.prisma.taskAttachment.findUnique({ where: { id: params.attachmentId } });
+    if (!att) return { success: false, error: 'Attachment not found' };
+    try {
+      if (att.storageKey) await this.storageService.deleteFile(att.storageKey, false);
+      await this.prisma.taskAttachment.delete({ where: { id: params.attachmentId } });
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Delete failed' };
+    }
   }
 
   // ========== AUTOMATION RULE ==========

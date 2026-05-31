@@ -181,25 +181,25 @@ export default function HeaderView({
 
             <div style={{ margin: "12px 16px", borderTop: `1px solid ${border}` }} />
 
-            <button style={row}
+            <div style={row}
               onClick={() => setTheme(isDark ? "light" : "dark")}
               onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
               onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
             >
               <HiSun style={{ width: 20, height: 20, flexShrink: 0, color: rowIconColor }} />
               <span style={{ flex: 1 }}>{t("theme")}</span>
-              <InlineThemeToggle />
-            </button>
+              <div onClick={(e) => e.stopPropagation()}><InlineThemeToggle /></div>
+            </div>
 
-            <button style={row}
+            <div style={row}
               onClick={toggleLanguage}
               onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
               onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
             >
               <HiLanguage style={{ width: 20, height: 20, flexShrink: 0, color: rowIconColor }} />
               <span style={{ flex: 1 }}>{t("language")}</span>
-              <InlineLangToggle />
-            </button>
+              <div onClick={(e) => e.stopPropagation()}><InlineLangToggle /></div>
+            </div>
 
             <button style={row}
               onClick={handleSearchClick}

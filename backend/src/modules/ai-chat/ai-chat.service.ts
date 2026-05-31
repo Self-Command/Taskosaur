@@ -1,20 +1,16 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import {
-  ChatRequestDto,
-  ChatResponseDto,
-  ChatMessageDto,
-  TestConnectionDto,
-  TestConnectionResponseDto,
-  GenerateDescriptionDto,
-  GenerateDescriptionResponseDto,
-  CreateConversationDto,
-  RenameConversationDto,
-  UpdateMessagesDto,
+  ChatRequestDto, ChatResponseDto, ChatMessageDto, ChatAttachmentDto,
+  TestConnectionDto, TestConnectionResponseDto,
+  GenerateDescriptionDto, GenerateDescriptionResponseDto,
+  CreateConversationDto, RenameConversationDto, UpdateMessagesDto,
 } from './dto/chat.dto';
 import { SettingsService } from '../settings/settings.service';
 import { McpToolsService } from '../mcp-tools/mcp-tools.service';
 import { getMCPSystemPrompt } from '../mcp-tools/prompts';
 import { PrismaService } from '../../prisma/prisma.service';
+import { FileUploadService } from './services/file-upload.service';
+import { VisionContentBuilder } from './services/vision-content-builder.service';
 import { Conversation } from '@prisma/client';
 
 const MAX_TOOL_ITERATIONS = 10;
@@ -130,6 +126,8 @@ export class AiChatService {
     private settingsService: SettingsService,
     private prisma: PrismaService,
     private mcpToolsService: McpToolsService,
+    private fileUploadService: FileUploadService,
+    private visionContent: VisionContentBuilder,
   ) {}
 
   /**
@@ -175,6 +173,11 @@ export class AiChatService {
 
   private isUUID(v: string): boolean {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+  }
+
+  async uploadAttachment(file: Express.Multer.File): Promise<ChatAttachmentDto> {
+    if (!file) throw new BadRequestException('No file provided');
+    return this.fileUploadService.process(file);
   }
 
   /**
@@ -345,7 +348,21 @@ export class AiChatService {
       userMessage = `[Current page: ${contextParts.join(', ')}]\n\nIMPORTANT: This is just the page you are viewing. The user's request may be at ANY scope level (organization/workspace/project). Check the SCOPE HIERARCHY in the system prompt to determine the correct scope. Do NOT assume the request is workspace-scoped just because of the page context.\n\n${userMessage}`;
     }
 
-    messages.push({ role: 'user', content: userMessage });
+    const attachments = (chatRequest as any).attachments || [];
+    if (attachments.length > 0) {
+      const lines: string[] = [];
+      for (const a of attachments) {
+        lines.push(`- ${a.name} (${a.mimeType}, ${a.size} bytes) → ${a.url}`);
+        if (a.extractedText) {
+          lines.push(`  Content:\n\`\`\`\n${a.extractedText.slice(0, 3000)}\n\`\`\``);
+        }
+      }
+      userMessage = `## Attached files\n${lines.join('\n')}\n\n${userMessage}`;
+    }
+
+    const msg: any = { role: 'user', content: userMessage };
+    if (attachments.length > 0) msg.attachments = attachments;
+    messages.push(msg);
     return { messages, userMessage };
   }
 
@@ -471,7 +488,7 @@ export class AiChatService {
       if (conversation) {
         await this.prisma.chatMessage
           .create({
-            data: { conversationId: conversation.id, role: 'user', content: userMessage },
+            data: { conversationId: conversation.id, role: 'user', content: userMessage, attachments: (chatRequest as any).attachments || undefined },
           })
           .catch(() => {});
         await this.prisma.chatMessage
@@ -652,7 +669,7 @@ export class AiChatService {
       if (conversation) {
         await this.prisma.chatMessage
           .create({
-            data: { conversationId: conversation.id, role: 'user', content: chatRequest.message },
+            data: { conversationId: conversation.id, role: 'user', content: chatRequest.message, attachments: (chatRequest as any).attachments || undefined },
           })
           .catch(() => {});
         await this.prisma.chatMessage
@@ -1038,7 +1055,7 @@ export class AiChatService {
         requestHeaders['X-Title'] = 'Taskosaur AI Assistant';
         requestBody = {
           model,
-          messages: this.formatMessagesForOpenAI(messages),
+          messages: this.formatMessagesForOpenAI(messages, provider),
           tools: this.mcpToolsService.getOpenAITools(),
           tool_choice: 'auto',
           stream: true,
@@ -1056,7 +1073,7 @@ export class AiChatService {
         requestUrl = `${apiUrl}/chat/completions`;
         requestBody = {
           model,
-          messages: this.formatMessagesForOpenAI(messages),
+          messages: this.formatMessagesForOpenAI(messages, provider),
           tools: this.mcpToolsService.getOpenAITools(),
           tool_choice: 'auto',
           stream: true,
@@ -1077,7 +1094,7 @@ export class AiChatService {
         delete requestHeaders['Authorization'];
         requestBody = {
           model,
-          messages: this.formatMessagesForOpenAI(messages),
+          messages: this.formatMessagesForOpenAI(messages, provider),
           tools: this.mcpToolsService.getOpenAITools(),
           tool_choice: 'auto',
           temperature: 0.1,
@@ -1089,7 +1106,7 @@ export class AiChatService {
         requestUrl = `${apiUrl}/chat/completions`;
         requestBody = {
           model,
-          messages: this.formatMessagesForOpenAI(messages),
+          messages: this.formatMessagesForOpenAI(messages, provider),
           tools: this.mcpToolsService.getOpenAITools(),
           tool_choice: 'auto',
           temperature: 0.1,
@@ -1236,7 +1253,7 @@ export class AiChatService {
         requestUrl = `${apiUrl}/chat/completions`;
         requestBody = {
           model,
-          messages: this.formatMessagesForOpenAI(messages),
+          messages: this.formatMessagesForOpenAI(messages, provider),
           tools: this.mcpToolsService.getOpenAITools(),
           tool_choice: 'auto',
           temperature: 0.1,
@@ -1272,7 +1289,7 @@ export class AiChatService {
 
         requestBody = {
           model,
-          messages: this.formatMessagesForAnthropic(nonSystemMsgs),
+          messages: this.formatMessagesForAnthropic(nonSystemMsgs, provider),
           system: systemMsg?.content || '',
           tools: this.mcpToolsService.getAnthropicTools(),
           max_tokens: 2000,
@@ -1295,7 +1312,7 @@ export class AiChatService {
         delete requestHeaders['Authorization'];
         requestBody = {
           model,
-          messages: this.formatMessagesForOpenAI(messages),
+          messages: this.formatMessagesForOpenAI(messages, provider),
           tools: this.mcpToolsService.getOpenAITools(),
           tool_choice: 'auto',
           temperature: 0.1,
@@ -1310,7 +1327,7 @@ export class AiChatService {
         delete requestHeaders['Authorization'];
         const cleanMessagesForGoogle = messages.filter((m) => (m as any).role !== 'tool');
         requestBody = {
-          contents: this.formatMessagesForGoogle(cleanMessagesForGoogle),
+          contents: this.formatMessagesForGoogle(cleanMessagesForGoogle, provider),
           tools: [{ functionDeclarations: this.mcpToolsService.getGoogleFunctionDeclarations() }],
           generationConfig: {
             temperature: 0.1,
@@ -1324,7 +1341,7 @@ export class AiChatService {
         requestUrl = `${apiUrl}/chat/completions`;
         requestBody = {
           model,
-          messages: this.formatMessagesForOpenAI(messages),
+          messages: this.formatMessagesForOpenAI(messages, provider),
           tools: this.mcpToolsService.getOpenAITools(),
           tool_choice: 'auto',
           temperature: 0.1,
@@ -1456,41 +1473,61 @@ export class AiChatService {
   /**
    * Format messages for OpenAI-compatible API (includes tool role messages)
    */
-  private formatMessagesForOpenAI(messages: ChatMessageDto[]): any[] {
+  // Only OpenAI, Anthropic, Google support vision natively
+  private isVisionProvider(provider: string): boolean {
+    return provider === 'openai' || provider === 'anthropic' || provider === 'google';
+  }
+
+  private formatMessagesForOpenAI(messages: ChatMessageDto[], provider: string): any[] {
+    const useVision = this.isVisionProvider(provider);
     return messages.map((m) => {
-      const msg: any = { role: m.role, content: m.content };
-      if ((m as any).tool_call_id) {
-        msg.tool_call_id = (m as any).tool_call_id;
+      let content: any = m.content;
+      if (useVision && m.role === 'user') {
+        const atts: ChatAttachmentDto[] = (m as any).attachments || [];
+        if (atts.some((a) => this.fileUploadService.isImageMime(a.mimeType))) {
+          content = this.visionContent.build(m.content, atts, 'openai');
+        }
       }
-      if ((m as any).tool_calls) {
-        msg.tool_calls = (m as any).tool_calls;
-      }
+      const msg: any = { role: m.role, content };
+      if ((m as any).tool_call_id) msg.tool_call_id = (m as any).tool_call_id;
+      if ((m as any).tool_calls) msg.tool_calls = (m as any).tool_calls;
       return msg;
     });
   }
 
-  /**
-   * Format messages for Anthropic API
-   */
-  private formatMessagesForAnthropic(messages: ChatMessageDto[]): any[] {
+  private formatMessagesForAnthropic(messages: ChatMessageDto[], provider: string): any[] {
+    const useVision = this.isVisionProvider(provider);
     return messages
       .filter((m) => m.role === 'user' || m.role === 'assistant')
-      .map((m) => ({
-        role: m.role,
-        content: m.content || '',
-      }));
+      .map((m) => {
+        let content: any = m.content || '';
+        if (useVision && m.role === 'user') {
+          const atts: ChatAttachmentDto[] = (m as any).attachments || [];
+          if (atts.some((a) => this.fileUploadService.isImageMime(a.mimeType))) {
+            content = this.visionContent.build(m.content || '', atts, 'anthropic');
+          }
+        }
+        return { role: m.role, content };
+      });
   }
 
-  /**
-   * Format messages for Google Gemini API
-   */
-  private formatMessagesForGoogle(messages: ChatMessageDto[]): any[] {
+  private formatMessagesForGoogle(messages: ChatMessageDto[], provider: string): any[] {
+    const useVision = this.isVisionProvider(provider);
     return messages
       .filter((m) => m.role !== 'system')
-      .map((m) => ({
-        role: m.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: m.content || '' }],
-      }));
+      .map((m) => {
+        if (useVision && m.role === 'user') {
+          const atts: ChatAttachmentDto[] = (m as any).attachments || [];
+          if (atts.some((a) => this.fileUploadService.isImageMime(a.mimeType))) {
+            const parts = this.visionContent.build(m.content || '', atts, 'google');
+            return { role: 'user', parts };
+          }
+        }
+        return {
+          role: m.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: m.content || '' }],
+        };
+      });
   }
 
   /**

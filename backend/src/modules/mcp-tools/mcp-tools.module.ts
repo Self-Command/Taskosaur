@@ -12,6 +12,7 @@ import { OrganizationsModule } from '../organizations/organizations.module';
 import { OrganizationMembersModule } from '../organization-members/organization-members.module';
 import { WorkspaceMembersModule } from '../workspace-members/workspace-members.module';
 import { ProjectMembersModule } from '../project-members/project-members.module';
+import { S3Module } from '../storage/s3.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { ProjectMembersModule } from '../project-members/project-members.module'
     OrganizationMembersModule,
     WorkspaceMembersModule,
     ProjectMembersModule,
+    S3Module,
   ],
   controllers: [McpToolsController],
   providers: [McpToolsService, ToolExecutor, McpLoggerService],

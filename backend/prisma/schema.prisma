@@ -1506,6 +1506,7 @@ model ChatMessage {
   id               String       @id @default(uuid()) @db.Uuid
   role             String       // "user", "assistant", or "system"
   content          String       @default("") @db.Text
+  attachments      Json?        // [{name, url, mimeType, size, extractedText?}]
   toolExecutions   Json?        @map("tool_executions") // MCP tool execution records for assistant messages
   status           String       @default("completed") // pending | streaming | completed | error
   conversationId   String       @map("conversation_id") @db.Uuid
