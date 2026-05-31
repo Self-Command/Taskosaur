@@ -1,14 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   HiBars3, HiChatBubbleLeftRight, HiBell, HiUserGroup,
   HiSun, HiLanguage, HiMagnifyingGlass, HiBuildingOffice,
   HiMoon,
 } from "react-icons/hi2";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetDescription, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useChatContext } from "@/contexts/chat-context";
 import { useTheme } from "next-themes";
 import { useTranslation } from "react-i18next";
+import { useRouter } from "next/router";
+import SearchManager from "@/components/header/SearchManager";
 
 function useIsDark() {
   const { resolvedTheme } = useTheme();
@@ -23,7 +25,7 @@ function InlineThemeToggle() {
   const isDark = useIsDark();
   return (
     <button
-      onClick={() => setTheme(isDark ? "light" : "dark")}
+      onClick={(e) => { e.stopPropagation(); setTheme(isDark ? "light" : "dark"); }}
       style={{
         width: 48, height: 28, borderRadius: 14, border: "none", cursor: "pointer",
         backgroundColor: isDark ? "#374151" : "#e5e7eb",
@@ -59,7 +61,7 @@ function InlineLangToggle() {
   };
   return (
     <button
-      onClick={toggle}
+      onClick={(e) => { e.stopPropagation(); toggle(); }}
       style={{
         padding: "4px 10px", borderRadius: 8,
         border: isDark ? "1px solid #374151" : "1px solid #e5e7eb",
@@ -83,9 +85,32 @@ export default function HeaderView({
 }) {
   const [open, setOpen] = useState(false);
   const { toggleChat, isChatOpen } = useChatContext();
+  const { setTheme } = useTheme();
   const isDark = useIsDark();
   const { t } = useTranslation("common");
+  const router = useRouter();
+  const searchContainerRef = useRef<HTMLDivElement>(null);
   const isAIEnabled = typeof window !== "undefined" && localStorage.getItem("aiEnabled") === "true";
+
+  const toggleLanguage = () => {
+    const currentLang = typeof window !== "undefined" ? localStorage.getItem("i18nextLng") || "en" : "en";
+    const next = currentLang === "en" ? "zh" : "en";
+    localStorage.setItem("i18nextLng", next);
+    window.location.reload();
+  };
+
+  const handleNavClick = (path: string) => {
+    setOpen(false);
+    setTimeout(() => router.push(path), 150);
+  };
+
+  const handleSearchClick = () => {
+    setOpen(false);
+    setTimeout(() => {
+      const btn = searchContainerRef.current?.querySelector("button");
+      btn?.click();
+    }, 200);
+  };
 
   if (!hasOrganizationAccess) return null;
 
@@ -107,99 +132,111 @@ export default function HeaderView({
   };
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger asChild>
-        <Button variant="ghost" size="icon" style={{ height: 36, width: 36, borderRadius: 12, color: isDark ? "#9ca3af" : "#4b5563" }} aria-label="Menu">
-          <HiBars3 style={{ width: 20, height: 20 }} />
-        </Button>
-      </SheetTrigger>
-      <SheetContent side="top" aria-describedby="mobile-menu-desc" style={{
-        width: "100%", maxHeight: "85vh", padding: 0,
-        display: "flex", flexDirection: "column" as const,
-        backgroundColor: bg, borderBottom: `1px solid ${borderB}`,
-        borderBottomLeftRadius: 16, borderBottomRightRadius: 16,
-        boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)",
-        zIndex: 9999,
-      } as any}>
-        <SheetDescription id="mobile-menu-desc" className="sr-only">{t("menu")}</SheetDescription>
-        <div style={{ padding: "16px 20px", borderBottom: `1px solid ${border}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <span style={{ fontSize: 16, fontWeight: 600, color: textTitle }}>{t("menu")}</span>
-        </div>
-        <div style={{ flex: 1, overflowY: "auto" as const, padding: "12px 12px 16px" }}>
-          <button style={row}
-            onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
-          >
-            <HiBuildingOffice style={{ width: 20, height: 20, flexShrink: 0, color: rowIconColor }} />
-            <span style={{ flex: 1 }}>{t("organization")}</span>
-            <span style={{ fontSize: 13, color: textMuted }}>{currentOrganizationId ? t("selected") : t("notSelected")}</span>
-          </button>
-
-          <button style={row}
-            onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
-          >
-            <HiBell style={{ width: 20, height: 20, flexShrink: 0, color: rowIconColor }} />
-            <span style={{ flex: 1 }}>{t("notifications")}</span>
-          </button>
-
-          <button style={row}
-            onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
-          >
-            <HiUserGroup style={{ width: 20, height: 20, flexShrink: 0, color: rowIconColor }} />
-            <span style={{ flex: 1 }}>{t("invitations")}</span>
-          </button>
-
-          <div style={{ margin: "12px 16px", borderTop: `1px solid ${border}` }} />
-
-          <div style={row}
-            onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
-          >
-            <HiSun style={{ width: 20, height: 20, flexShrink: 0, color: rowIconColor }} />
-            <span style={{ flex: 1 }}>{t("theme")}</span>
-            <InlineThemeToggle />
+    <>
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetTrigger asChild>
+          <Button variant="ghost" size="icon" style={{ height: 36, width: 36, borderRadius: 12, color: isDark ? "#9ca3af" : "#4b5563" }} aria-label="Menu">
+            <HiBars3 style={{ width: 20, height: 20 }} />
+          </Button>
+        </SheetTrigger>
+        <SheetContent side="top" aria-describedby="mobile-menu-desc" style={{
+          width: "100%", maxHeight: "85vh", padding: 0,
+          display: "flex", flexDirection: "column" as const,
+          backgroundColor: bg, borderBottom: `1px solid ${borderB}`,
+          borderBottomLeftRadius: 16, borderBottomRightRadius: 16,
+          boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)",
+          zIndex: 9999,
+        } as any}>
+          <SheetTitle className="sr-only">{t("menu")}</SheetTitle>
+          <SheetDescription id="mobile-menu-desc" className="sr-only">{t("menu")}</SheetDescription>
+          <div style={{ padding: "16px 20px", borderBottom: `1px solid ${border}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span style={{ fontSize: 16, fontWeight: 600, color: textTitle }}>{t("menu")}</span>
           </div>
-
-          <div style={row}
-            onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
-          >
-            <HiLanguage style={{ width: 20, height: 20, flexShrink: 0, color: rowIconColor }} />
-            <span style={{ flex: 1 }}>{t("language")}</span>
-            <InlineLangToggle />
-          </div>
-
-          <button style={row}
-            onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
-          >
-            <HiMagnifyingGlass style={{ width: 20, height: 20, flexShrink: 0, color: rowIconColor }} />
-            <span style={{ flex: 1 }}>{t("search")}</span>
-          </button>
-
-          <div style={{ margin: "12px 16px", borderTop: `1px solid ${border}` }} />
-
-          {toggleChat && isAIEnabled && (
-            <button
-              type="button"
-              onClick={() => { toggleChat(); setOpen(false); }}
-              style={{
-                ...row,
-                backgroundColor: isChatOpen ? (isDark ? "rgba(5,150,105,0.15)" : "#ecfdf5") : "transparent",
-                color: isChatOpen ? "#34d399" : text,
-              }}
-              onMouseEnter={(e) => { if (!isChatOpen) e.currentTarget.style.background = hoverBg; }}
-              onMouseLeave={(e) => { if (!isChatOpen) e.currentTarget.style.background = "none"; }}
+          <div style={{ flex: 1, overflowY: "auto" as const, padding: "12px 12px 16px" }}>
+            <button style={row}
+              onClick={() => handleNavClick("/organization")}
+              onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
             >
-              <HiChatBubbleLeftRight style={{ width: 20, height: 20, flexShrink: 0 }} />
-              <span style={{ flex: 1 }}>{t("aiAssistant")}</span>
-              <span style={{ width: 8, height: 8, borderRadius: "50%", flexShrink: 0, backgroundColor: isChatOpen ? "#34d399" : (isDark ? "#374151" : "#d1d5db") }} />
+              <HiBuildingOffice style={{ width: 20, height: 20, flexShrink: 0, color: rowIconColor }} />
+              <span style={{ flex: 1 }}>{t("organization")}</span>
+              <span style={{ fontSize: 13, color: textMuted }}>{currentOrganizationId ? t("selected") : t("notSelected")}</span>
             </button>
-          )}
-        </div>
-      </SheetContent>
-    </Sheet>
+
+            <button style={row}
+              onClick={() => handleNavClick("/notifications")}
+              onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+            >
+              <HiBell style={{ width: 20, height: 20, flexShrink: 0, color: rowIconColor }} />
+              <span style={{ flex: 1 }}>{t("notifications.title")}</span>
+            </button>
+
+            <button style={row}
+              onClick={() => handleNavClick("/invite")}
+              onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+            >
+              <HiUserGroup style={{ width: 20, height: 20, flexShrink: 0, color: rowIconColor }} />
+              <span style={{ flex: 1 }}>{t("invitations")}</span>
+            </button>
+
+            <div style={{ margin: "12px 16px", borderTop: `1px solid ${border}` }} />
+
+            <button style={row}
+              onClick={() => setTheme(isDark ? "light" : "dark")}
+              onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+            >
+              <HiSun style={{ width: 20, height: 20, flexShrink: 0, color: rowIconColor }} />
+              <span style={{ flex: 1 }}>{t("theme")}</span>
+              <InlineThemeToggle />
+            </button>
+
+            <button style={row}
+              onClick={toggleLanguage}
+              onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+            >
+              <HiLanguage style={{ width: 20, height: 20, flexShrink: 0, color: rowIconColor }} />
+              <span style={{ flex: 1 }}>{t("language")}</span>
+              <InlineLangToggle />
+            </button>
+
+            <button style={row}
+              onClick={handleSearchClick}
+              onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+            >
+              <HiMagnifyingGlass style={{ width: 20, height: 20, flexShrink: 0, color: rowIconColor }} />
+              <span style={{ flex: 1 }}>{t("search")}</span>
+            </button>
+
+            <div style={{ margin: "12px 16px", borderTop: `1px solid ${border}` }} />
+
+            {toggleChat && isAIEnabled && (
+              <button
+                type="button"
+                onClick={() => { toggleChat(); setOpen(false); }}
+                style={{
+                  ...row,
+                  backgroundColor: isChatOpen ? (isDark ? "rgba(5,150,105,0.15)" : "#ecfdf5") : "transparent",
+                  color: isChatOpen ? "#34d399" : text,
+                }}
+                onMouseEnter={(e) => { if (!isChatOpen) e.currentTarget.style.background = hoverBg; }}
+                onMouseLeave={(e) => { if (!isChatOpen) e.currentTarget.style.background = "none"; }}
+              >
+                <HiChatBubbleLeftRight style={{ width: 20, height: 20, flexShrink: 0 }} />
+                <span style={{ flex: 1 }}>{t("aiAssistant")}</span>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", flexShrink: 0, backgroundColor: isChatOpen ? "#34d399" : (isDark ? "#374151" : "#d1d5db") }} />
+              </button>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
+      <div ref={searchContainerRef} style={{ position: "fixed", width: 0, height: 0, overflow: "hidden", opacity: 0, pointerEvents: "none" }} aria-hidden="true">
+        <SearchManager />
+      </div>
+    </>
   );
 }

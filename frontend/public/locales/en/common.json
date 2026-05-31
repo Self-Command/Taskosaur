@@ -191,7 +191,18 @@
   "dangerZone": {
     "title": "Danger Zone"
   },
-  "notifications": "Notifications",
+  "notifications": {
+    "title": "Notifications",
+    "pageTitle": "Notifications",
+    "accessDenied": "Access Denied",
+    "markedRead": "Notification marked as read",
+    "markReadFailed": "Failed to mark as read",
+    "deleted": "Notification deleted",
+    "deleteFailed": "Failed to delete notification",
+    "allMarkedRead": "All notifications marked as read",
+    "markAllFailed": "Failed to mark all as read",
+    "noNew": "No new notifications"
+  },
   "invitations": "Invitations",
   "aiAssistant": "AI Assistant",
   "language": "Language",

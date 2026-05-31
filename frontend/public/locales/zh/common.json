@@ -191,7 +191,18 @@
   "dangerZone": {
     "title": "危险区域"
   },
-  "notifications": "通知",
+  "notifications": {
+    "title": "通知",
+    "pageTitle": "通知",
+    "accessDenied": "访问被拒绝",
+    "markedRead": "通知已标记为已读",
+    "markReadFailed": "标记已读失败",
+    "deleted": "通知已删除",
+    "deleteFailed": "删除通知失败",
+    "allMarkedRead": "所有通知已标记为已读",
+    "markAllFailed": "标记所有通知为已读失败",
+    "noNew": "暂无新通知"
+  },
   "invitations": "邀请",
   "aiAssistant": "AI 助手",
   "language": "语言",

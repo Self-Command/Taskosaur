@@ -136,7 +136,19 @@
   background: transparent !important;
   padding: 0 !important;
 }
-.bytemd-viewer .markdown-body pre { 
-  background: #1e1e2e !important; 
+.bytemd-viewer .markdown-body pre {
+  background: #1e1e2e !important;
   border-radius: 0.75rem !important;
+  overflow-x: auto !important;
+  white-space: pre !important;
+  word-wrap: normal !important;
+}
+.bytemd-viewer .markdown-body table {
+  display: block;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.bytemd-viewer .markdown-body img {
+  max-width: 100%;
+  height: auto;
 }

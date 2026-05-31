@@ -12,7 +12,13 @@ export default function InviteRedirect() {
   const { isAuthenticated, user, isLoading } = useAuth();
 
   useEffect(() => {
-    if (!token || isLoading) return;
+    if (isLoading) return;
+
+    // No token provided — redirect to dashboard
+    if (!token) {
+      router.replace("/dashboard");
+      return;
+    }
 
     (async () => {
       try {

@@ -379,7 +379,7 @@ export default function ChatPage() {
                     <ThinkingBlock content={m.thinking} isThinking={false} />
                   )}
                   {m.content ? (
-                    <div className="text-sm leading-relaxed text-gray-800 dark:text-gray-200 prose prose-sm dark:prose-invert max-w-full overflow-x-auto break-words">
+                    <div className="text-sm leading-relaxed text-gray-800 dark:text-gray-200 prose prose-sm dark:prose-invert max-w-none break-words overflow-hidden">
                       <ChatMarkdown key={m.id} content={m.content} />
                     </div>
                   ) : m.streaming ? (

@@ -86,10 +86,7 @@ export class WorkspacesService {
     const rawSlug = createWorkspaceDto.slug?.trim()
       ? createWorkspaceDto.slug
       : this.slugService.generateSlug(createWorkspaceDto.name, 'ws');
-    const uniqueSlug = await this.generateUniqueSlug(
-      rawSlug,
-      createWorkspaceDto.organizationId,
-    );
+    const uniqueSlug = await this.generateUniqueSlug(rawSlug, createWorkspaceDto.organizationId);
 
     try {
       const workspace = await this.prisma.$transaction(async (tx) => {
