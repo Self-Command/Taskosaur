@@ -429,7 +429,7 @@ export default function ChatPanel() {
           messages.map((m) =>
             m.role === "user" ? (
               <div key={m.id} className="flex justify-end">
-                <div className="max-w-[85%] bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-2xl rounded-br-lg px-4 py-2.5 shadow-sm">
+                <div className="max-w-[85%] bg-[#10b981] dark:bg-[#059669] text-white rounded-2xl rounded-br-lg px-4 py-2.5 shadow-sm">
                   <div className="text-sm whitespace-pre-wrap break-words leading-relaxed">{m.content}</div>
                 </div>
               </div>

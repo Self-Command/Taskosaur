@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Tailwind v4: enable class-based dark mode (matches ThemeProvider attribute="class") */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* ================================
    Third-Party Editor Styles
    ================================ */
