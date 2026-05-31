@@ -6,10 +6,11 @@ import {
 import { useRouter } from "next/router";
 import { useAuth } from "@/contexts/auth-context";
 import ChatMarkdown from "@/components/chat/ChatMarkdown";
+import ThinkingBlock from "@/components/chat/ThinkingBlock";
 import api from "@/lib/api";
 
 type ToolExec = { tool: string; params: any; result: any; pending: boolean };
-type Message = { id: string; role: "user" | "assistant"; content: string; toolExecs: ToolExec[]; streaming: boolean };
+type Message = { id: string; role: "user" | "assistant"; content: string; thinking: string; toolExecs: ToolExec[]; streaming: boolean };
 
 /* ── Tool card badge ── */
 function ToolBadge({ tool }: { tool: string }) {
@@ -135,10 +136,10 @@ export default function ChatPage() {
   /* ── Send message via direct SSE streaming (no polling) ── */
   const send = async () => {
     const text = input.trim(); if (!text || loading || !user) return;
-    const um: Message = { id: "" + Date.now(), role: "user", content: text, toolExecs: [], streaming: false };
+    const um: Message = { id: "" + Date.now(), role: "user", content: text, thinking: "", toolExecs: [], streaming: false };
     setMessages((p) => [...p, um]); setInput(""); setLoading(true);
     const aid = "" + (Date.now() + 1);
-    setMessages((p) => [...p, { id: aid, role: "assistant", content: "", toolExecs: [], streaming: true }]);
+    setMessages((p) => [...p, { id: aid, role: "assistant", content: "", thinking: "", toolExecs: [], streaming: true }]);
     try {
       const sid = sessionId || "s" + Date.now();
       if (!sessionId) setSessionId(sid);
@@ -168,30 +169,33 @@ export default function ChatPage() {
         const lines = buf.split("\n");
         buf = lines.pop() || "";
         for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
+          if (!line.trim()) continue;
           try {
-            const data = JSON.parse(line.slice(6));
-            switch (data.type) {
-              case "text_delta":
-                setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") c[c.length - 1] = { ...last, content: (last.content || "") + data.delta, streaming: true }; return c; });
+            const d = JSON.parse(line);
+            switch (d.t) {
+              case "th": // thinking token
+                setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") c[c.length - 1] = { ...last, thinking: (last.thinking || "") + (d.d || ""), streaming: true }; return c; });
                 break;
-              case "tool_start":
-                setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") c[c.length - 1] = { ...last, toolExecs: [...(last.toolExecs || []), { tool: data.tool, params: data.params, result: {}, pending: true }], streaming: true }; return c; });
+              case "tx": // text token
+                setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") c[c.length - 1] = { ...last, content: (last.content || "") + (d.d || ""), streaming: true }; return c; });
                 break;
-              case "tool_result":
-                setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") { const execs = (last.toolExecs || []).map((t: any) => t.tool === data.tool && t.pending ? { ...t, result: data.result, pending: false } : t); c[c.length - 1] = { ...last, toolExecs: execs, streaming: true }; } return c; });
+              case "ts": // tool start
+                setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") c[c.length - 1] = { ...last, toolExecs: [...(last.toolExecs || []), { tool: d.tool, params: d.p || {}, result: {}, pending: true }], streaming: true }; return c; });
                 break;
-              case "navigate":
-                if (data.path) router.push(data.path);
+              case "tr": // tool result
+                setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") { const execs = (last.toolExecs || []).map((t: any) => t.tool === d.tool && t.pending ? { ...t, result: d.r || {}, pending: false } : t); c[c.length - 1] = { ...last, toolExecs: execs, streaming: true }; } return c; });
                 break;
-              case "message":
-                setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") c[c.length - 1] = { ...last, content: data.message || data.content, toolExecs: (data.toolExecutions || []).map((t: any) => ({ tool: t.tool, params: t.params, result: t.result, pending: false })), streaming: false }; return c; });
+              case "nav": // navigate
+                if (d.p) router.push(d.p);
+                break;
+              case "msg": // final message
+                setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") c[c.length - 1] = { ...last, content: d.m || last.content, toolExecs: (d.e || []).map((t: any) => ({ tool: t.tool, params: t.params, result: t.result, pending: false })), streaming: false }; return c; });
                 setLoading(false);
-                if (data.conversationId) setConvId(data.conversationId);
+                if (d.c) setConvId(d.c);
                 loadConvs();
                 break;
-              case "error":
-                setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") c[c.length - 1] = { ...last, content: "错误: " + data.error, streaming: false }; return c; });
+              case "err": // error
+                setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") c[c.length - 1] = { ...last, content: "错误: " + (d.e || ""), streaming: false }; return c; });
                 setLoading(false);
                 break;
             }
@@ -369,6 +373,10 @@ export default function ChatPage() {
                     <div className="space-y-1.5 mb-3">
                       {m.toolExecs.map((t, i) => <ToolCard key={i} t={t} />)}
                     </div>
+                  )}
+                  {/* Thinking block */}
+                  {m.thinking && (
+                    <ThinkingBlock content={m.thinking} isThinking={false} />
                   )}
                   {m.content ? (
                     <div className="text-sm leading-relaxed text-gray-800 dark:text-gray-200 prose prose-sm dark:prose-invert max-w-none break-words">

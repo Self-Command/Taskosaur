@@ -46,7 +46,11 @@
   "recurring": "重复",
   "actions": "操作",
   "edit": "编辑",
-  "filter": "筛选",
+  "filter": {
+    "noItemsFound": "未找到项目",
+    "noFiltersAvailable": "无可用筛选器",
+    "addSections": "添加筛选部分以开始使用"
+  },
   "clearFilter": "清除筛选",
   "noData": "未提供",
   "months": {
@@ -153,11 +157,6 @@
   "splash": {
     "initializing": "正在初始化 Taskosaur"
   },
-  "filter": {
-    "noItemsFound": "未找到项目",
-    "noFiltersAvailable": "无可用筛选器",
-    "addSections": "添加筛选部分以开始使用"
-  },
   "memberSelect": {
     "noMembersFound": "未找到成员。",
     "searchMembers": "搜索成员..."
@@ -192,16 +191,10 @@
   "dangerZone": {
     "title": "危险区域"
   },
-  "notifications": {
-    "title": "通知",
-    "noNew": "无新通知",
-    "markedRead": "已成功标记为已读",
-    "markReadFailed": "标记通知为已读失败",
-    "deleted": "通知删除成功！",
-    "deleteFailed": "删除通知失败",
-    "allMarkedRead": "已全部标记为已读",
-    "markAllFailed": "标记全部为已读失败",
-    "pageTitle": "通知",
-    "accessDenied": "访问被拒绝"
-  }
+  "notifications": "通知",
+  "invitations": "邀请",
+  "aiAssistant": "AI 助手",
+  "language": "语言",
+  "selected": "已选择",
+  "notSelected": "未选择"
 }

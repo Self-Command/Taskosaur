@@ -5,9 +5,10 @@ import {
   HiMoon,
 } from "react-icons/hi2";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetDescription, SheetTrigger } from "@/components/ui/sheet";
 import { useChatContext } from "@/contexts/chat-context";
 import { useTheme } from "next-themes";
+import { useTranslation } from "react-i18next";
 
 function useIsDark() {
   const { resolvedTheme } = useTheme();
@@ -83,6 +84,7 @@ export default function HeaderView({
   const [open, setOpen] = useState(false);
   const { toggleChat, isChatOpen } = useChatContext();
   const isDark = useIsDark();
+  const { t } = useTranslation("common");
   const isAIEnabled = typeof window !== "undefined" && localStorage.getItem("aiEnabled") === "true";
 
   if (!hasOrganizationAccess) return null;
@@ -119,8 +121,8 @@ export default function HeaderView({
         boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)",
       } as any}>
         <div style={{ padding: "16px 20px", borderBottom: `1px solid ${border}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <span style={{ fontSize: 16, fontWeight: 600, color: textTitle }}>菜单</span>
-          <SheetDescription style={{ display: "none" }}>导航菜单</SheetDescription>
+          <span style={{ fontSize: 16, fontWeight: 600, color: textTitle }}>{t("menu")}</span>
+          <SheetDescription style={{ display: "none" }}>{t("menu")}</SheetDescription>
         </div>
         <div style={{ flex: 1, overflowY: "auto" as const, padding: "12px 12px 16px" }}>
           <button style={row}
@@ -128,8 +130,8 @@ export default function HeaderView({
             onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
           >
             <HiBuildingOffice style={{ width: 20, height: 20, flexShrink: 0, color: rowIconColor }} />
-            <span style={{ flex: 1 }}>组织</span>
-            <span style={{ fontSize: 13, color: textMuted }}>{currentOrganizationId ? "已选择" : "未选择"}</span>
+            <span style={{ flex: 1 }}>{t("organization")}</span>
+            <span style={{ fontSize: 13, color: textMuted }}>{currentOrganizationId ? t("selected") : t("notSelected")}</span>
           </button>
 
           <button style={row}
@@ -137,7 +139,7 @@ export default function HeaderView({
             onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
           >
             <HiBell style={{ width: 20, height: 20, flexShrink: 0, color: rowIconColor }} />
-            <span style={{ flex: 1 }}>通知</span>
+            <span style={{ flex: 1 }}>{t("notifications")}</span>
           </button>
 
           <button style={row}
@@ -145,7 +147,7 @@ export default function HeaderView({
             onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
           >
             <HiUserGroup style={{ width: 20, height: 20, flexShrink: 0, color: rowIconColor }} />
-            <span style={{ flex: 1 }}>邀请</span>
+            <span style={{ flex: 1 }}>{t("invitations")}</span>
           </button>
 
           <div style={{ margin: "12px 16px", borderTop: `1px solid ${border}` }} />
@@ -155,7 +157,7 @@ export default function HeaderView({
             onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
           >
             <HiSun style={{ width: 20, height: 20, flexShrink: 0, color: rowIconColor }} />
-            <span style={{ flex: 1 }}>主题</span>
+            <span style={{ flex: 1 }}>{t("theme")}</span>
             <InlineThemeToggle />
           </div>
 
@@ -164,7 +166,7 @@ export default function HeaderView({
             onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
           >
             <HiLanguage style={{ width: 20, height: 20, flexShrink: 0, color: rowIconColor }} />
-            <span style={{ flex: 1 }}>语言</span>
+            <span style={{ flex: 1 }}>{t("language")}</span>
             <InlineLangToggle />
           </div>
 
@@ -173,7 +175,7 @@ export default function HeaderView({
             onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
           >
             <HiMagnifyingGlass style={{ width: 20, height: 20, flexShrink: 0, color: rowIconColor }} />
-            <span style={{ flex: 1 }}>搜索</span>
+            <span style={{ flex: 1 }}>{t("search")}</span>
           </button>
 
           <div style={{ margin: "12px 16px", borderTop: `1px solid ${border}` }} />
@@ -191,7 +193,7 @@ export default function HeaderView({
               onMouseLeave={(e) => { if (!isChatOpen) e.currentTarget.style.background = "none"; }}
             >
               <HiChatBubbleLeftRight style={{ width: 20, height: 20, flexShrink: 0 }} />
-              <span style={{ flex: 1 }}>AI 助手</span>
+              <span style={{ flex: 1 }}>{t("aiAssistant")}</span>
               <span style={{ width: 8, height: 8, borderRadius: "50%", flexShrink: 0, backgroundColor: isChatOpen ? "#34d399" : (isDark ? "#374151" : "#d1d5db") }} />
             </button>
           )}

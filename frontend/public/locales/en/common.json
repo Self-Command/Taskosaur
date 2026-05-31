@@ -46,7 +46,11 @@
   "recurring": "Recurring",
   "actions": "Actions",
   "edit": "Edit",
-  "filter": "Filter",
+  "filter": {
+    "noItemsFound": "No items found",
+    "noFiltersAvailable": "No filters available",
+    "addSections": "Add filter sections to get started"
+  },
   "clearFilter": "Clear Filter",
   "noData": "Not provided",
   "months": {
@@ -153,11 +157,6 @@
   "splash": {
     "initializing": "Initializing Taskosaur"
   },
-  "filter": {
-    "noItemsFound": "No items found",
-    "noFiltersAvailable": "No filters available",
-    "addSections": "Add filter sections to get started"
-  },
   "memberSelect": {
     "noMembersFound": "No members found.",
     "searchMembers": "Search members..."
@@ -192,16 +191,10 @@
   "dangerZone": {
     "title": "Danger Zone"
   },
-  "notifications": {
-    "title": "Notifications",
-    "noNew": "No new notifications",
-    "markedRead": "Successfully marked as read",
-    "markReadFailed": "Failed to mark as read the notification(s)",
-    "deleted": "Notifications(s) deleted successfully!",
-    "deleteFailed": "Failed to delete notification(s)",
-    "allMarkedRead": "Successfully marked all as read",
-    "markAllFailed": "Failed to mark all as read",
-    "pageTitle": "Notifications",
-    "accessDenied": "Access Denied"
-  }
+  "notifications": "Notifications",
+  "invitations": "Invitations",
+  "aiAssistant": "AI Assistant",
+  "language": "Language",
+  "selected": "Selected",
+  "notSelected": "Not selected"
 }
