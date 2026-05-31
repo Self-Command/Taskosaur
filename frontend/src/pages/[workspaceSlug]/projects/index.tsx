@@ -3,9 +3,6 @@ import { useTranslation } from "react-i18next";
 import ProjectsContent from "@/components/projects/ProjectsContent";
 import { SEO } from "@/components/common/SEO";
 
-// Only allow safe slugs - letters, numbers, dashes, underscores
-const isSafeSlug = (slug?: string) => typeof slug === "string" && /^[a-zA-Z0-9_-]+$/.test(slug);
-
 export default function WorkspaceProjectsPage() {
   const router = useRouter();
   const { workspaceSlug } = router.query;
@@ -23,11 +20,10 @@ export default function WorkspaceProjectsPage() {
         emptyStateTitle={t("empty_state_title")}
         emptyStateDescription={t("empty_state_description")}
         enablePagination={true}
-        generateProjectLink={(project, ws) =>
-          isSafeSlug(ws) && isSafeSlug(project?.slug)
-            ? `/${ws}/${project.slug}`
-            : undefined
-        }
+        generateProjectLink={(project, ws) => {
+          if (!ws || !project?.slug) return undefined;
+          return `/${encodeURIComponent(ws)}/${encodeURIComponent(project.slug)}`;
+        }}
       />
     </>
   );

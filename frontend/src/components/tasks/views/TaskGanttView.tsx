@@ -38,7 +38,7 @@ const MINIMUM_ROWS = 9;
 const SCROLL_BUFFER = 5;
 
 function sanitizeSlug(slug: string | undefined): string | undefined {
-  return slug && /^[a-zA-Z0-9\-]+$/.test(slug) ? slug : undefined;
+  return slug && slug.length > 0 ? slug : undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -253,7 +253,12 @@ export default function TaskGanttView({
   const [timeRange, setTimeRange] = useState<TimeRange>({ start: new Date(), end: new Date(), days: [] });
   const [hoveredTask, setHoveredTask] = useState<string | null>(null);
   const [focusedTask, setFocusedTask] = useState<string | null>(null);
-  const [isCompact, setIsCompact] = useState(false);
+  const [isCompact, setIsCompact] = useState(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
+  useEffect(() => {
+    const onResize = () => setIsCompact(window.innerWidth < 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Collapsed group keys

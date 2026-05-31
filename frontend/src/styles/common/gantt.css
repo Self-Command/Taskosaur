@@ -147,14 +147,23 @@
 /* Responsive Gantt styles */
 @media (max-width: 768px) {
   .gantt-wrapper {
-    @apply p-4;
+    @apply p-2;
+    -webkit-overflow-scrolling: touch;
   }
 
   .gantt-task-info {
-    @apply min-w-40;
+    @apply min-w-32 max-w-36;
   }
 
   .gantt-timeline-header {
+    @apply text-[10px];
+  }
+
+  .gantt-task-bar {
+    @apply h-4;
+  }
+
+  .gantt-task-row {
     @apply text-xs;
   }
 }
