@@ -12,14 +12,12 @@ interface ProjectsWithPaginationProps {
 }
 
 const isValidProject = (project: Project): boolean => {
-  if (!project.workspace?.slug) {
+  if (project.workspace?.slug == null) {
     return false;
   }
-
-  if (!project.slug && !project.name) {
+  if (project.slug == null && !project.name) {
     return false;
   }
-
   return true;
 };
 
@@ -29,8 +27,7 @@ const getWorkspaceSlug = (project: Project): string => {
 
 const generateProjectUrl = (project: Project): string => {
   const workspaceSlug = getWorkspaceSlug(project);
-  const projectSlug = project.slug;
-
+  const projectSlug = project.slug || project.id;
   return `/${workspaceSlug}/${projectSlug}`;
 };
 

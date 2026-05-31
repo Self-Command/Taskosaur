@@ -360,23 +360,18 @@ export class OrganizationsService {
 
   // Helper method to generate unique workspace slug
   private async generateUniqueWorkspaceSlug(name: string, organizationId: string): Promise<string> {
-    const baseSlug = name
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-')
-      .trim();
+    const baseSlug = this.slugService.generateSlug(name, 'ws');
 
     let slug = baseSlug;
     let counter = 1;
-    const MAX_ITERATIONS = 100; // Prevent DoS attacks
+    const MAX_ITERATIONS = 100;
 
     while (counter <= MAX_ITERATIONS) {
       const exists = await this.prisma.workspace.findFirst({
         where: { slug, organizationId },
       });
 
-      if (!exists) break; // slug is available
+      if (!exists) break;
       slug = `${baseSlug}-${counter}`;
       counter++;
     }
@@ -393,25 +388,19 @@ export class OrganizationsService {
     return slug;
   }
 
-  // Helper method to generate unique project slug
   private async generateUniqueProjectSlug(name: string, workspaceId: string): Promise<string> {
-    const baseSlug = name
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-')
-      .trim();
+    const baseSlug = this.slugService.generateSlug(name, 'proj');
 
     let slug = baseSlug;
     let counter = 1;
-    const MAX_ITERATIONS = 100; // Prevent DoS attacks
+    const MAX_ITERATIONS = 100;
 
     while (counter <= MAX_ITERATIONS) {
       const exists = await this.prisma.project.findFirst({
         where: { slug, workspaceId },
       });
 
-      if (!exists) break; // slug is available
+      if (!exists) break;
       slug = `${baseSlug}-${counter}`;
       counter++;
     }
