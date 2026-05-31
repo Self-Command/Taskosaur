@@ -142,9 +142,7 @@ export default function NotificationDropdown({
 
   const handleViewAllNotifications = () => {
     setDropdownOpen(false);
-    setTimeout(() => {
-      router.push("/notifications");
-    }, 100);
+    router.push("/notifications");
   };
 
   if (!userId || !organizationId) return null;

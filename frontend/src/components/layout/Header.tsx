@@ -9,6 +9,7 @@ import NotificationDropdown from "../header/NotificationDropdown";
 import { ModeToggle } from "../header/ModeToggle";
 import { LanguageToggle } from "../header/LanguageToggle";
 import { useAuth } from "@/contexts/auth-context";
+import { TokenManager } from "@/lib/api";
 import { useChatContext } from "@/contexts/chat-context";
 import { useRouter } from "next/router";
 import {
@@ -91,18 +92,10 @@ export default function Header() {
   }, [currentOrganizationId]);
 
   useEffect(() => {
-    const initializeComponent = async () => {
-      const user = getCurrentUser();
-      setCurrentUser(user);
-
-      if (user?.id) {
-        const redirectPath = await checkOrganizationAndRedirect();
-        setHasOrganizationAccess(redirectPath !== "/organization");
-      }
-    };
-
-    initializeComponent();
-  }, [getCurrentUser, checkOrganizationAndRedirect]);
+    const user = getCurrentUser();
+    setCurrentUser(user);
+    setHasOrganizationAccess(!!TokenManager.getCurrentOrgId());
+  }, [getCurrentUser]);
 
   // Check AI enabled status
   useEffect(() => {

@@ -14,10 +14,18 @@ interface AppBootstrapperProps {
   children: React.ReactNode;
 }
 
-type InitPhase = "SYSTEM_CHECK" | "AUTH_CHECK" | "READY";
+type InitPhase = "SYSTEM_CHECK" | "READY";
 
-// Session cache — avoid redundant DB queries on every page navigation
-let cachedUsersExist: boolean | null = null;
+// Persist across page refreshes — users-exist check almost never changes
+const getCachedUsersExist = (): boolean | null => {
+  try {
+    const v = localStorage.getItem('__tu');
+    return v ? JSON.parse(v) : null;
+  } catch { return null; }
+};
+const setCachedUsersExist = (val: boolean) => {
+  try { localStorage.setItem('__tu', JSON.stringify(val)); } catch {}
+};
 
 export default function AppBootstrapper({ children }: AppBootstrapperProps) {
   const router = useRouter();
@@ -29,48 +37,38 @@ export default function AppBootstrapper({ children }: AppBootstrapperProps) {
   } = useAuth();
 
   const [phase, setPhase] = useState<InitPhase>("SYSTEM_CHECK");
-  const [statusText, setStatusText] = useState("Checking system status");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [hasOrganization, setHasOrganization] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
   const isInitialized = useRef(false);
+  const cachedAuth = useRef(false);
+  const cachedOrg = useRef(false);
 
-  // Define public routes (merged from SetupChecker and ProtectedRoute)
   const publicRoutes = [
-    "/login",
-    "/register",
-    "/forgot-password",
-    "/reset-password",
-    "/terms-of-service",
-    "/privacy-policy",
-    "/setup",
-    "/public/task/[token]",
-    "/invite",
-    "/invite/invalid"
+    "/login", "/register", "/forgot-password", "/reset-password",
+    "/terms-of-service", "/privacy-policy", "/setup",
+    "/public/task/[token]", "/invite", "/invite/invalid",
   ];
 
   const handleSystemCheck = async () => {
-    // Skip setup check on routes that don't need it
     const skipRoutes = ["/login", "/register", "/forgot-password", "/reset-password", "/terms-of-service", "/privacy-policy", "/public/"];
-    const shouldSkip = skipRoutes.some(route => router.pathname.startsWith(route));
-
-    if (shouldSkip || router.pathname === "/setup") {
-      return true; // Already on a safe route or setup
+    if (skipRoutes.some(r => router.pathname.startsWith(r)) || router.pathname === "/setup") {
+      return true;
     }
 
     try {
-      // Use cached result to avoid hitting DB on every navigation
-      if (cachedUsersExist === null) {
-        const { exists } = await authApi.checkUsersExist();
-        cachedUsersExist = exists;
+      let exists = getCachedUsersExist();
+      if (exists === null) {
+        const res = await authApi.checkUsersExist();
+        exists = res.exists;
+        setCachedUsersExist(exists);
       }
-      if (!cachedUsersExist) {
+      if (!exists) {
         setIsRedirecting(true);
         router.replace("/setup");
         return false;
       }
-    } catch (error) {
-      // Fallback check
+    } catch {
       try {
         const setupStatus = await authApi.checkSetupStatus();
         if (setupStatus?.required) {
@@ -79,7 +77,6 @@ export default function AppBootstrapper({ children }: AppBootstrapperProps) {
           return false;
         }
       } catch {
-        // If everything fails, check if we have a token
         const hasToken = typeof window !== "undefined" && (
           localStorage.getItem("access_token") ||
           document.cookie.includes("access_token")
@@ -97,14 +94,14 @@ export default function AppBootstrapper({ children }: AppBootstrapperProps) {
   const handleAuthCheck = useCallback(async () => {
     if (!router.isReady) return { isAuth: false, isOrg: false };
 
-    const isPublicRoute = 
-      publicRoutes.includes(router.pathname) || 
+    const isPublicRoute =
+      publicRoutes.includes(router.pathname) ||
       router.pathname.startsWith("/public/task/") ||
       (typeof window !== "undefined" && window.location.pathname.startsWith("/public/"));
 
     const isProjectRoute = router.pathname.includes("/[workspaceSlug]/[projectSlug]") ||
       (typeof window !== "undefined" && /\/[^\/]+\/[^\/]+/.test(window.location.pathname) && !window.location.pathname.startsWith("/public/") && !window.location.pathname.startsWith("/admin"));
-    
+
     const actualPath = typeof window !== "undefined" ? window.location.pathname : router.asPath.split("?")[0];
     const isSettingsOrMembersRoute = actualPath.endsWith("/settings") || actualPath.endsWith("/members");
     const isPublicProjectRoute = isProjectRoute && !isSettingsOrMembersRoute;
@@ -116,7 +113,7 @@ export default function AppBootstrapper({ children }: AppBootstrapperProps) {
       const contextAuth = typeof contextIsAuthenticated === "function" ? contextIsAuthenticated() : contextIsAuthenticated;
 
       const isAuth = !!(accessToken && currentUser && contextAuth);
-      
+
       if (!isAuth) {
         if (isPublicRoute || isPublicProjectRoute) {
           return { isAuth: false, isOrg: false };
@@ -129,7 +126,6 @@ export default function AppBootstrapper({ children }: AppBootstrapperProps) {
         if (!authPages.includes(router.pathname)) {
           return { isAuth: true, isOrg: true };
         }
-
         if (typeof checkOrganizationAndRedirect === "function") {
           const orgRedirect = await checkOrganizationAndRedirect();
           if (!currentOrgId && orgRedirect === "/organization") {
@@ -153,55 +149,69 @@ export default function AppBootstrapper({ children }: AppBootstrapperProps) {
         }
       }
       return { isAuth: true, isOrg: true };
-    } catch (error) {
-      console.error("[AppBootstrapper] Auth check error:", error);
+    } catch {
       return { isAuth: false, redirectPath: "/login", isOrg: false };
     }
   }, [router.isReady, router.pathname, contextIsAuthenticated, getCurrentUser, checkOrganizationAndRedirect]);
 
+  // First load: full async bootstrap
   useEffect(() => {
     if (authLoading || !router.isReady) return;
 
     const bootstrap = async () => {
-      const needsFullBootstrap = !isInitialized.current;
+      if (isInitialized.current) return;
 
-      if (needsFullBootstrap) {
-        // Phase 1: System Check
-        setPhase("SYSTEM_CHECK");
-        setStatusText("Verifying system integrity");
-        const systemReady = await handleSystemCheck();
-        if (!systemReady) return;
+      const [systemReady, authResult] = await Promise.all([
+        handleSystemCheck(),
+        handleAuthCheck(),
+      ]);
+      if (!systemReady) return;
 
-        // Phase 2: Auth Check
-        setPhase("AUTH_CHECK");
-        setStatusText("Authenticating session");
-      }
-
-      const { isAuth, redirectPath, isOrg } = await handleAuthCheck();
-      
-      setIsAuthenticated(isAuth);
-      setHasOrganization(isOrg);
+      const { isAuth, redirectPath, isOrg } = authResult;
+      cachedAuth.current = isAuth;
+      cachedOrg.current = isOrg;
 
       if (redirectPath && redirectPath !== router.pathname) {
-        setIsRedirecting(true);
         if (!isAuth && redirectPath === "/login") {
           TokenManager.clearTokens();
         }
         await router.replace(redirectPath);
-        setIsRedirecting(false);
       }
 
-      if (needsFullBootstrap) {
-        // Phase 3: Ready
-        setPhase("READY");
-        isInitialized.current = true;
-      }
+      setIsAuthenticated(isAuth);
+      setHasOrganization(isOrg);
+      setPhase("READY");
+      isInitialized.current = true;
     };
 
     bootstrap();
-  }, [authLoading, router.isReady, handleAuthCheck]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, router.isReady]);
 
-  // Synchronize language with user preference
+  // Subsequent navigations: sync-only check (no network call unless token changed)
+  useEffect(() => {
+    if (!isInitialized.current || !router.isReady) return;
+
+    const hasToken = !!TokenManager.getAccessToken();
+    if (hasToken === cachedAuth.current) return; // no change, skip
+
+    // Token appeared or disappeared — re-run full check
+    handleAuthCheck().then(authResult => {
+      cachedAuth.current = authResult.isAuth;
+      cachedOrg.current = authResult.isOrg;
+      setIsAuthenticated(authResult.isAuth);
+      setHasOrganization(authResult.isOrg);
+
+      if (authResult.redirectPath && authResult.redirectPath !== router.pathname) {
+        if (!authResult.isAuth && authResult.redirectPath === "/login") {
+          TokenManager.clearTokens();
+        }
+        router.replace(authResult.redirectPath);
+      }
+    });
+  }, [router.pathname]);
+
+  // Language sync
   useEffect(() => {
     if (isAuthenticated) {
       const user = getCurrentUser();
@@ -212,12 +222,12 @@ export default function AppBootstrapper({ children }: AppBootstrapperProps) {
     }
   }, [isAuthenticated, getCurrentUser]);
 
-  // Handle Loading States
   if (phase !== "READY" || isRedirecting) {
-    return <SplashScreen statusText={statusText} isExiting={phase === "READY"} />;
+    const text = phase === "SYSTEM_CHECK" ? "Checking system status" : "Loading";
+    return <SplashScreen statusText={text} isExiting={phase === "READY"} />;
   }
 
-  // Routing Logic (Same as ProtectedRoute)
+  // Routing
   const isPublicRoute = publicRoutes.includes(router.pathname) || router.pathname.startsWith("/public/task/") || (typeof window !== "undefined" && window.location.pathname.startsWith("/public/"));
   const isProjectRoute = router.pathname.includes("/[workspaceSlug]/[projectSlug]") || (typeof window !== "undefined" && /\/[^\/]+\/[^\/]+/.test(window.location.pathname) && !window.location.pathname.startsWith("/public/") && !window.location.pathname.startsWith("/admin"));
   const actualPath = typeof window !== "undefined" ? window.location.pathname : router.asPath.split("?")[0];

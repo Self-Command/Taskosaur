@@ -15,6 +15,8 @@ export interface ActionButtonProps {
   onClick?: (any) => void;
   type?: "button" | "submit" | "reset";
   disabled?: boolean;
+  isLoading?: boolean;
+  loadingText?: string;
   asChild?: boolean;
   showPlusIcon?: boolean;
   secondary?: boolean;
@@ -23,6 +25,13 @@ export interface ActionButtonProps {
   onMouseEnter?: (event: React.MouseEvent<HTMLButtonElement>) => void;
   onMouseLeave?: (event: React.MouseEvent<HTMLButtonElement>) => void;
 }
+
+const Spinner = () => (
+  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+  </svg>
+);
 
 const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProps>(
   (
@@ -35,6 +44,8 @@ const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProps>(
       onClick,
       type = "button",
       disabled = false,
+      isLoading = false,
+      loadingText,
       asChild = false,
       showPlusIcon = false,
       secondary = false,
@@ -43,6 +54,7 @@ const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProps>(
     },
     ref
   ) => {
+    const isDisabled = disabled || isLoading;
     // Define semantic classes based on props
     const getSemanticClasses = () => {
       let classes = "actionbutton-base";
@@ -79,9 +91,9 @@ const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProps>(
           ref={ref}
           variant={variant}
           className={combinedClasses}
-          onClick={onClick}
+          onClick={isLoading ? undefined : onClick}
           type={type}
-          disabled={disabled}
+          disabled={isDisabled}
           asChild
           {...props}
         >
@@ -90,24 +102,27 @@ const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProps>(
       );
     }
 
+    const displayText = isLoading && loadingText ? loadingText : children;
+
     return (
       <Button
         ref={ref}
         variant={variant}
         className={combinedClasses}
-        onClick={onClick}
+        onClick={isLoading ? undefined : onClick}
         type={type}
-        disabled={disabled}
+        disabled={isDisabled}
         {...props}
       >
-        {showPlusIcon && (
+        {isLoading && <span className="flex-shrink-0"><Spinner /></span>}
+        {!isLoading && showPlusIcon && (
           <span className="flex-shrink-0">
             <HiPlus className="w-4 h-4" />
           </span>
         )}
-        {leftIcon && <span className="flex-shrink-0">{leftIcon}</span>}
-        <span className="truncate">{children}</span>
-        {rightIcon && <span className="flex-shrink-0">{rightIcon}</span>}
+        {!isLoading && leftIcon && <span className="flex-shrink-0">{leftIcon}</span>}
+        <span className="truncate">{displayText}</span>
+        {!isLoading && rightIcon && <span className="flex-shrink-0">{rightIcon}</span>}
       </Button>
     );
   }

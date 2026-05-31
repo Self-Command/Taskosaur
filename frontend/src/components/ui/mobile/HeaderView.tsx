@@ -101,15 +101,13 @@ export default function HeaderView({
 
   const handleNavClick = (path: string) => {
     setOpen(false);
-    setTimeout(() => router.push(path), 150);
+    router.push(path);
   };
 
   const handleSearchClick = () => {
     setOpen(false);
-    setTimeout(() => {
-      const btn = searchContainerRef.current?.querySelector("button");
-      btn?.click();
-    }, 200);
+    const btn = searchContainerRef.current?.querySelector("button");
+    btn?.click();
   };
 
   if (!hasOrganizationAccess) return null;
