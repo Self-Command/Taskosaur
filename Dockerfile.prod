@@ -34,9 +34,9 @@ ENV BUILD_NUMBER=${BUILD_NUMBER}
 
 RUN npm run build:dist
 
-# Install production deps into dist
+# Install production deps into dist. --ignore-scripts skips husky postinstall (not needed in Docker)
 COPY package.json package-lock.json ./dist/
-RUN cd dist && npm ci --omit=dev
+RUN cd dist && npm ci --omit=dev --ignore-scripts
 
 # =============================================================================
 # Stage 2: Production - Minimal runtime image
