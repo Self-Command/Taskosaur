@@ -47,11 +47,13 @@ wait_for_redis() {
 wait_for_postgres
 wait_for_redis
 
-echo "🔨 Generating Prisma Client..."
-npx prisma generate
-
-echo "🗃️  Deploying database migrations..."
-npx prisma migrate deploy || echo "⚠️  Migration deploy skipped"
+# Prisma client already generated during Docker build
+# Run migrations using the dist package.json script
+if [ -f "prisma/schema.prisma" ]; then
+  echo "🗃️  Deploying database migrations..."
+  ls node_modules/.bin/prisma 2>/dev/null && echo "(prisma binary found)" || echo "(prisma binary missing)"
+  npm run prisma:migrate:deploy || echo "⚠️  Migration deploy skipped"
+fi
 
 echo "🎯 Starting production server..."
 exec node main.js
