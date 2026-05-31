@@ -154,7 +154,7 @@ export default function Breadcrumb() {
           // Add project - fetch actual name from API
           let pgName = formatSegment(segments[1]);
           try {
-            const project = await projectApi.getProjectBySlug(segments[1], isAuthenticated, segments[0]);
+            const project = await projectApi.getProjectBySlug(segments[1], isAuthenticated(), segments[0]);
             if (project?.name) pgName = project.name;
           } catch {}
 
@@ -279,7 +279,7 @@ export default function Breadcrumb() {
 
     if (hasProject) {
       try {
-        const project = await projectApi.getProjectBySlug(segments[1], isAuthenticated, segments[0]);
+        const project = await projectApi.getProjectBySlug(segments[1], isAuthenticated(), segments[0]);
         projectName = project?.name || null;
       } catch {
         // Fall back to formatSegment if API call fails
