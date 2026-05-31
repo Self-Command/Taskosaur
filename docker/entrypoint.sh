@@ -48,10 +48,10 @@ wait_for_postgres
 wait_for_redis
 
 echo "🔨 Generating Prisma Client..."
-npm run prisma:generate
+npx prisma generate
 
 echo "🗃️  Deploying database migrations..."
-npm run prisma:migrate:deploy || echo "⚠️  Migration deploy skipped"
+npx prisma migrate deploy || echo "⚠️  Migration deploy skipped"
 
 echo "🎯 Starting production server..."
 exec node main.js

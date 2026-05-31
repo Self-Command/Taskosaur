@@ -85,7 +85,7 @@ services:
       AWS_REGION: ${AWS_REGION:-}
       AWS_BUCKET_NAME: ${AWS_BUCKET_NAME:-}
     ports:
-      - "${APP_PORT:-3000}:3000"
+      - "${APP_PORT:-9700}:3000"
     volumes:
       - app_uploads:/app/uploads
       - app_logs:/app/logs
