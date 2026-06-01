@@ -67,25 +67,22 @@ export default function UserAvatar({ user, size = "md", color = "primary", class
     return "User";
   };
 
-  const isValidUrl = (string: string) => {
-    try {
-      new URL(string);
-      return true;
-    } catch (error_) {
-      return string.startsWith("/");
-    }
+  const resolveAvatarUrl = (avatar?: string) => {
+    if (!avatar) return null;
+    if (/^https?:\/\//.test(avatar)) return avatar;
+    if (avatar.startsWith("/")) return avatar;
+    const base = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3000/api";
+    return `${base}/uploads/${avatar}`;
   };
 
   const userName = getUserName();
   const initial = userName ? userName.charAt(0).toUpperCase() : "U";
-  const avatarImage = typeof user !== "string" && user ? user.avatar : undefined;
+  const avatarUrl = typeof user !== "string" && user ? resolveAvatarUrl(user.avatar) : undefined;
 
-  // Only show image if we have a valid URL/path and no error occurred
   const shouldShowImage =
-    avatarImage &&
+    avatarUrl &&
     !imageError &&
-    !avatarImage.includes("/api/placeholder") &&
-    isValidUrl(avatarImage);
+    !avatarUrl.includes("/api/placeholder");
   return (
     <div
       className={className}
@@ -105,7 +102,7 @@ export default function UserAvatar({ user, size = "md", color = "primary", class
     >
       {shouldShowImage ? (
         <Image
-          src={avatarImage}
+          src={avatarUrl!}
           alt={userName}
           style={{
             width: "100%",
