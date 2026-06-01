@@ -101,7 +101,7 @@ export default function ProjectSelector({
         <div className="layout-project-selector-trigger">
           <div
             className="layout-project-selector-icon"
-            style={{ backgroundColor: currentProject?.color || "var(--sidebar-primary)" }}
+            style={{ backgroundColor: currentProject?.avatar ? "transparent" : (currentProject?.color || "var(--sidebar-primary)") }}
           >
             {currentProject?.avatar ? (
               <img src={currentProject.avatar} alt="" className="w-full h-full object-cover rounded-md" />
