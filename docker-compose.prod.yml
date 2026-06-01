@@ -72,7 +72,7 @@ services:
       EMAIL_DOMAIN: ${EMAIL_DOMAIN:-taskosaur.com}
 
       # File Upload
-      UPLOAD_DEST: ${UPLOAD_DEST:-./uploads}
+      UPLOAD_DEST: ${UPLOAD_DEST:-/app/uploads}
       MAX_FILE_SIZE: ${MAX_FILE_SIZE:-10485760}
 
       # Queue Configuration
