@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { HiCalendar, HiUser, HiPaperClip, HiArrowDownTray } from 'react-icons/hi2';
 import { Button } from '@/components/ui/button';
 import UserAvatar from '@/components/ui/avatars/UserAvatar';
-import ReactMarkdown from 'react-markdown';
+import { SafeMarkdownRenderer } from "@/components/common/SafeMarkdownRenderer";
 import remarkGfm from 'remark-gfm';
 import { toast } from 'sonner';
 import { PriorityBadge } from '@/components/badges/PriorityBadge';
@@ -101,9 +101,7 @@ export default function PublicTaskView({ task, token }: PublicTaskViewProps) {
               <Label className="text-base text-[var(--foreground)] font-semibold">{t("description")}</Label>
               {task.description ? (
                 <div className="prose dark:prose-invert max-w-none text-[var(--foreground)] text-sm leading-relaxed p-4 rounded-md border border-[var(--border)] bg-[var(--background)]">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {task.description}
-                  </ReactMarkdown>
+                  <SafeMarkdownRenderer content={task.description} />
                 </div>
               ) : (
                 <div className="text-sm text-[var(--muted-foreground)] italic p-4 rounded-md border border-[var(--border)] bg-[var(--muted)]/20">
