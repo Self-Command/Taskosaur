@@ -54,5 +54,10 @@ if [ -f "prisma/schema.prisma" ]; then
   node node_modules/prisma/build/index.js migrate deploy || echo "⚠️  Migration deploy skipped"
 fi
 
+# Ensure upload directories exist with correct permissions
+UPLOAD_DIR="${UPLOAD_DEST:-./uploads}"
+echo "📁 Ensuring upload directory exists: $UPLOAD_DIR"
+mkdir -p "$UPLOAD_DIR/avatar" "$UPLOAD_DIR/chat" "$UPLOAD_DIR/tasks" 2>/dev/null || true
+
 echo "🎯 Starting production server..."
 exec node main.js
