@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import * as crypto from 'crypto';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -65,7 +66,26 @@ export class SettingsController {
   @ApiOperation({ summary: 'Delete a setting' })
   @ApiResponse({ status: 200, description: 'Setting deleted successfully' })
   async deleteSetting(@CurrentUser() user: User, @Param('key') key: string) {
-    await this.settingsService.delete(key, user.id); // Delete user-specific setting
+    await this.settingsService.delete(key, user.id);
     return { message: 'Setting deleted successfully' };
+  }
+
+  /** 获取或生成用户 API Key（用于第三方App接入） */
+  @Get('api-key/my')
+  async getApiKey(@CurrentUser() user: User) {
+    const existing = await this.settingsService.get('user_api_key', user.id);
+    if (existing) return { apiKey: existing, regenerated: false };
+    // 自动生成唯一Key
+    const key = 'tsk_' + crypto.randomBytes(16).toString('hex');
+    await this.settingsService.set('user_api_key', key, user.id, 'OpenAI-compatible API key', 'api_key', false);
+    return { apiKey: key, regenerated: true };
+  }
+
+  /** 重新生成 API Key */
+  @Post('api-key/regenerate')
+  async regenerateApiKey(@CurrentUser() user: User) {
+    const key = 'tsk_' + crypto.randomBytes(16).toString('hex');
+    await this.settingsService.set('user_api_key', key, user.id, 'OpenAI-compatible API key', 'api_key', false);
+    return { apiKey: key };
   }
 }

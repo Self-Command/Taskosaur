@@ -34,11 +34,16 @@ export class OpenAICompatController {
       const { messages, stream } = body;
 
       const authHeader = req.headers.authorization || '';
-      const userId = authHeader.replace('Bearer ', '').trim();
-      if (!userId) return res.status(401).json({ error: { message: 'Missing API key' } });
+      const apiKey = authHeader.replace('Bearer ', '').trim();
+      if (!apiKey) return res.status(401).json({ error: { message: 'Missing API key' } });
+
+      // 用 API Key 查 settings 表找到 userId
+      const setting = await this.prisma.settings.findFirst({ where: { key: 'user_api_key', value: apiKey }, select: { userId: true } });
+      const userId = setting?.userId;
+      if (!userId) return res.status(401).json({ error: { message: 'Invalid API key. Get your key from Settings page.' } });
 
       const user = await this.prisma.user.findUnique({ where: { id: userId } });
-      if (!user) return res.status(401).json({ error: { message: 'Invalid user ID' } });
+      if (!user) return res.status(401).json({ error: { message: 'User not found' } });
 
       const tz = (user as any).timezone || 'UTC';
       const systemMsg = {
