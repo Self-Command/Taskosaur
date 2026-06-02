@@ -938,6 +938,7 @@ export default function CreateTask({ projectSlug, workspace, projects }: CreateT
                       const sd = new Date(newStart.includes('T') ? newStart : newStart + 'T00:00');
                       const dd = new Date(formData.dueDate.includes('T') ? formData.dueDate : formData.dueDate + 'T23:59');
                       if (sd > dd) {
+                        toast.error("开始时间不能晚于截止时间，已清空截止时间");
                         handleFormDataChange("dueDate", "");
                       }
                     }
@@ -955,7 +956,7 @@ export default function CreateTask({ projectSlug, workspace, projects }: CreateT
                       const sd = new Date(formData.startDate.includes('T') ? formData.startDate : formData.startDate + 'T00:00');
                       const dd = new Date(newDueDate.includes('T') ? newDueDate : newDueDate + 'T23:59');
                       if (dd < sd) {
-                        toast.error("Due date cannot be before start date");
+                        toast.error("截止时间不能早于开始时间");
                         return;
                       }
                     }

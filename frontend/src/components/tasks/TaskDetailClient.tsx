@@ -194,15 +194,14 @@ export default function TaskDetailClient({
     editTaskData.dueDate !== toDatetimeLocalValue(task?.dueDate);
 
   const handleStartDateChange = (newStartDate: string) => {
-    // Validate that start date is not after due date
     if (newStartDate && editTaskData.dueDate) {
-      if (new Date(newStartDate) > new Date(editTaskData.dueDate)) {
-        toast.error(t("detail.startDateError"));
-        return;
+      const sd = new Date(newStartDate.includes('T') ? newStartDate : newStartDate + 'T00:00');
+      const dd = new Date(editTaskData.dueDate.includes('T') ? editTaskData.dueDate : editTaskData.dueDate + 'T23:59');
+      if (sd > dd) {
+        toast.error("开始时间不能晚于截止时间，已清空截止时间");
+        handleTaskFieldChange("dueDate", "");
       }
     }
-
-    // Only update local state
     handleTaskFieldChange("startDate", newStartDate);
   };
 
@@ -371,15 +370,14 @@ export default function TaskDetailClient({
   }, [projectSlug, task?.project?.slug, isAuth]);
 
   const handleDueDateChange = (newDueDate: string) => {
-    // Validate that due date is not before start date
     if (newDueDate && editTaskData.startDate) {
-      if (new Date(newDueDate) < new Date(editTaskData.startDate)) {
-        toast.error(t("detail.dueDateError"));
+      const sd = new Date(editTaskData.startDate.includes('T') ? editTaskData.startDate : editTaskData.startDate + 'T00:00');
+      const dd = new Date(newDueDate.includes('T') ? newDueDate : newDueDate + 'T23:59');
+      if (dd < sd) {
+        toast.error("截止时间不能早于开始时间");
         return;
       }
     }
-
-    // Only update local state
     handleTaskFieldChange("dueDate", newDueDate);
   };
 
