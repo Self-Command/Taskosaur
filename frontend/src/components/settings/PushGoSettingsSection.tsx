@@ -20,13 +20,13 @@ export default function PushGoSettingsSection() {
 
   const load = async () => {
     try {
-      const [c, p] = await Promise.all([
-        api.get("/settings/pushgo_channel_id").catch(() => ({ value: "" })),
-        api.get("/settings/pushgo_channel_password").catch(() => ({ value: "" })),
-      ]);
-      setChannelId((c as any)?.value || "");
-      setPassword((p as any)?.value || "");
-    } catch {}
+      const c = await api.get("/settings/pushgo_channel_id");
+      const p = await api.get("/settings/pushgo_channel_password");
+      setChannelId(c?.value || "");
+      setPassword(p?.value || "");
+    } catch {
+      // silently fail — user needs to configure
+    }
   };
 
   const save = async () => {
