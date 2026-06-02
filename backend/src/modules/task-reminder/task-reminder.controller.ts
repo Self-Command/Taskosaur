@@ -111,7 +111,6 @@ export class TaskReminderController {
     const photoSize = photo ? (photo.size / 1024 / 1024).toFixed(1) + 'MB' : '';
     return res.send(detailHtml(cat === 'IN_PROGRESS' ? '已开始处理' : '已完成', now, photoName, photoSize));
   }
-  }
 
   private async getFullTask(taskId: string) {
     return this.prisma.task.findUnique({
