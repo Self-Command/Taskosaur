@@ -495,6 +495,14 @@ export function NewTaskModal({
           throw new Error(t("modal.errorNoStatus"));
         }
 
+        // 校验到期日不能早于今天
+        const today = getTodayDate();
+        if (formData.dueDate && formData.dueDate < today) {
+          toast.error("截止日期不能早于今天");
+          setIsSubmitting(false);
+          return;
+        }
+
         const taskData: any = {
           title: formData.title.trim(),
           description: "",
