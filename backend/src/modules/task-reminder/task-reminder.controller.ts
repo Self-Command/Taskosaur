@@ -31,9 +31,7 @@ export class TaskReminderController {
   ) {
     const t = await this.getFullTask(taskId);
     if (!t) return res.send(resultHtml('任务未找到', false));
-    if (t.startDate && Date.now() > new Date(t.startDate).getTime())
-      return res.send(resultHtml('⏰ 已超过开始时间，无法打卡', false));
-    if (t.completedAt) return res.send(resultHtml('任务已完成，无法重复打卡', false));
+    if (t.completedAt) return res.send(resultHtml('任务已完成', false));
     return res.send(checkinHtml(t, userId, 'start-reminder'));
   }
 
@@ -46,9 +44,7 @@ export class TaskReminderController {
   ) {
     const t = await this.getFullTask(taskId);
     if (!t) return res.send(resultHtml('任务未找到', false));
-    if (t.dueDate && Date.now() > new Date(t.dueDate).getTime())
-      return res.send(resultHtml('⏰ 已超过截止时间，无法打卡', false));
-    if (t.completedAt) return res.send(resultHtml('任务已完成，无法重复打卡', false));
+    if (t.completedAt) return res.send(resultHtml('任务已完成', false));
     return res.send(checkinHtml(t, userId, 'complete-reminder'));
   }
 
@@ -87,18 +83,6 @@ export class TaskReminderController {
       },
     });
     if (!task) return res.send(resultHtml('任务未找到', false));
-    if (
-      type === 'start-reminder' &&
-      task.startDate &&
-      Date.now() > new Date(task.startDate).getTime()
-    )
-      return res.send(resultHtml('⏰ 已超时', false));
-    if (
-      type === 'complete-reminder' &&
-      task.dueDate &&
-      Date.now() > new Date(task.dueDate).getTime()
-    )
-      return res.send(resultHtml('⏰ 已超时', false));
 
     if (photo) {
       await this.prisma.taskAttachment.create({
