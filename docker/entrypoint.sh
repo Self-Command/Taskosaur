@@ -51,7 +51,16 @@ wait_for_redis
 # Run migrations directly via node (prisma bin symlink may be broken)
 if [ -f "prisma/schema.prisma" ]; then
   echo "🗃️  Deploying database migrations..."
-  node node_modules/prisma/build/index.js migrate deploy || echo "⚠️  Migration deploy skipped"
+  if ! node node_modules/prisma/build/index.js migrate deploy; then
+    echo "⚠️  Migration deploy failed, auto-resolving and pushing schema..."
+    # Mark failed migrations as rolled back
+    for row in $(node node_modules/prisma/build/index.js migrate status 2>/dev/null | grep "Failed" | awk '{print $1}'); do
+      echo "   Rolling back: $row"
+      node node_modules/prisma/build/index.js migrate resolve --rolled-back "$row" 2>/dev/null || true
+    done
+    # Push schema with data loss acceptance
+    node node_modules/prisma/build/index.js db push --accept-data-loss || true
+  fi
 fi
 
 # Ensure upload directories exist with correct permissions
