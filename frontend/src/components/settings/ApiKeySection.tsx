@@ -18,9 +18,14 @@ export default function ApiKeySection() {
 
   const loadKey = async () => {
     try {
-      const res = await api.get("/settings/api-key/my") as any;
-      setApiKey(res?.apiKey || "");
-    } catch {} finally { setLoading(false); }
+      const res = await api.get("/settings/api-key/my");
+      // axios interceptor returns response.data, but also handle raw axios response
+      const data = res?.data || res;
+      const key = data?.apiKey || "";
+      setApiKey(key);
+    } catch (e: any) {
+      // ignore — user not logged in or no key yet
+    } finally { setLoading(false); }
   };
 
   const copy = () => {
@@ -57,7 +62,7 @@ export default function ApiKeySection() {
           <>
             <div className="space-y-2">
               <div className="text-xs font-medium text-[var(--muted-foreground)]">API Host</div>
-              <Input value="https://work.spacedo.org/v1" readOnly className="font-mono text-sm bg-[var(--background)] border-[var(--border)]" />
+              <Input value={`${process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/api\/?$/, '') || window.location.origin}/v1`} readOnly className="font-mono text-sm bg-[var(--background)] border-[var(--border)]" />
             </div>
             <div className="space-y-2">
               <div className="text-xs font-medium text-[var(--muted-foreground)]">API Key</div>

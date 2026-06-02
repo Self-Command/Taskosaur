@@ -384,7 +384,7 @@ export default function TaskDetailClient({
   const saveDueDate = async (newDueDate: string) => {
     try {
       const updateData: UpdateTaskRequest = {
-        dueDate: formatDateForApi(newDueDate) || null,
+        dueDate: formatDateForApi(newDueDate, { endOfDay: true }) || null,
       };
 
       await updateTask(taskId, updateData);
@@ -826,7 +826,7 @@ export default function TaskDetailClient({
         description: sanitizedDescription,
         priority: editTaskData.priority || "MEDIUM",
         startDate: task.startDate || new Date().toISOString(),
-        dueDate: editTaskData.dueDate ? formatDateForApi(editTaskData.dueDate) : undefined,
+        dueDate: editTaskData.dueDate ? formatDateForApi(editTaskData.dueDate, { endOfDay: true }) : undefined,
         remainingEstimate: task.remainingEstimate || 0,
         assigneeIds: assignees.map((a) => a.id),
         reporterIds: reporters.map((r) => r.id),

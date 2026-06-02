@@ -20,8 +20,8 @@ export default function PushGoSettingsSection() {
 
   const load = async () => {
     try {
-      const c = await api.get("/settings/pushgo_channel_id");
-      const p = await api.get("/settings/pushgo_channel_password");
+      const c = await api.get("/settings/pushgo_channel_id") as any;
+      const p = await api.get("/settings/pushgo_channel_password") as any;
       setChannelId(c?.value || "");
       setPassword(p?.value || "");
     } catch {

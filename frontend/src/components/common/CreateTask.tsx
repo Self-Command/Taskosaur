@@ -405,8 +405,8 @@ export default function CreateTask({ projectSlug, workspace, projects }: CreateT
         startDate: formData.startDate ? formatDateForApi(formData.startDate)
           : formatDateForApi(getTodayDate()),
         dueDate: formData.dueDate
-          ? formatDateForApi(formData.dueDate)
-          : formatDateForApi(getTodayDate()),
+          ? formatDateForApi(formData.dueDate, { endOfDay: true })
+          : formatDateForApi(getTodayDate(), { endOfDay: true }),
         projectId: selectedProject.id,
         statusId: formData.status || defaultStatus?.id,
       };

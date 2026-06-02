@@ -1,16 +1,17 @@
-export function formatDateForApi(dateValue: string): string | null {
+export function formatDateForApi(dateValue: string, opts?: { endOfDay?: boolean }): string | null {
   if (!dateValue) return null;
 
-  // datetime-local format: YYYY-MM-DDTHH:MM or YYYY-MM-DDTHH:MM:SS
   if (dateValue.includes('T')) {
     const date = new Date(dateValue);
     if (isNaN(date.getTime())) return null;
     return date.toISOString();
   }
 
-  // Date-only: YYYY-MM-DD — create at UTC midnight to prevent timezone shifts
   const [year, month, day] = dateValue.split('-');
-  const date = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day)));
+  const y = parseInt(year), m = parseInt(month) - 1, d = parseInt(day);
+  const date = opts?.endOfDay
+    ? new Date(Date.UTC(y, m, d, 23, 59, 59))
+    : new Date(Date.UTC(y, m, d, 0, 0, 0));
   if (isNaN(date.getTime())) return null;
   return date.toISOString();
 }
