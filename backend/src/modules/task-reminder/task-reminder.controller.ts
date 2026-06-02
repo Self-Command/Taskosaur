@@ -61,7 +61,7 @@ export class TaskReminderController {
         filename: (_, file, cb) =>
           cb(null, Date.now() + '-' + Math.round(Math.random() * 1e9) + extname(file.originalname)),
       }),
-      limits: { fileSize: 10 * 1024 * 1024 },
+      limits: { fileSize: 50 * 1024 * 1024, fieldSize: 10 * 1024 * 1024 },
     }),
   )
   async submitCheckin(
@@ -209,9 +209,12 @@ function checkinHtml(t: any, userId: string, type: string) {
     <script>
       let pf=null;
       function prev(e){const f=e.target.files[0];if(!f)return;pf=f;const i=document.getElementById('pv');i.src=URL.createObjectURL(f);i.style.display='block'}
-      async function go(skip){if(skip)pf=null;const b=document.getElementById('sb');b.classList.add('loading');b.textContent='提交中...';
+      async function go(skip){if(skip)pf=null;const b=document.getElementById('sb');const s=document.getElementById('st');
+        b.classList.add('loading');b.textContent='提交中...';s.textContent=pf?'正在上传照片...':'';
         const fd=new FormData();if(pf)fd.append('photo',pf);
-        try{const r=await fetch('/api/tasks/${t.id}/checkin?userId=${userId}&type=${type}',{method:'POST',body:fd});document.body.innerHTML=await r.text()}
-        catch(e){document.getElementById('st').textContent='网络错误';b.classList.remove('loading');b.textContent='${label}'}}
+        try{const ctrl=new AbortController();setTimeout(()=>ctrl.abort(),60000);
+        const r=await fetch('/api/tasks/${t.id}/checkin?userId=${userId}&type=${type}',{method:'POST',body:fd,signal:ctrl.signal});
+        if(r.ok){document.body.innerHTML=await r.text()}else{s.textContent='提交失败('+r.status+')，重试';b.classList.remove('loading');b.textContent='${label}'}}
+        catch(e){s.textContent='网络错误，重试';b.classList.remove('loading');b.textContent='${label}'}}
     </script></body></html>`;
 }
