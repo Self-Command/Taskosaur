@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { CardContent } from "@/components/ui/card";
 import { Calendar, Clock, CheckCircle, Sparkles } from "lucide-react";
 import { Task } from "@/types";
-import { getRelativeDateLabel, isDateOverdue as checkDateOverdue, formatDateTimeForDisplay } from "@/utils/date";
+import { formatDateAsCountdown } from "@/utils/date";
 
 interface TodayAgendaDialogProps {
   isOpen: boolean;
@@ -61,21 +61,8 @@ const getPriorityConfig = (priority: string) => {
   }
 };
 
-const formatDueDate = (dateString: string, t: any, lng: string) => {
-  if (checkDateOverdue(dateString)) return t("agenda.overdue");
-
-  const label = getRelativeDateLabel(dateString);
-  if (label === "Today") return t("agenda.today");
-  if (label === "Tomorrow") return t("agenda.tomorrow");
-
-  const options: Intl.DateTimeFormatOptions = {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "numeric",
-    hour12: true,
-  };
-  return new Intl.DateTimeFormat(lng, options).format(new Date(dateString));
+const formatDueDate = (dateString: string) => {
+  return formatDateAsCountdown(dateString);
 };
 
 const TaskAgendaItem: React.FC<TaskAgendaItemProps> = ({ task, onClick }) => {
@@ -145,7 +132,7 @@ const TaskAgendaItem: React.FC<TaskAgendaItemProps> = ({ task, onClick }) => {
               <>
                 <Clock className="w-2.5 h-2.5 text-[var(--muted-foreground)]" />
                 <span className="text-[10px] text-[var(--muted-foreground)]">
-                  {t("agenda.due")}: {formatDueDate(task.dueDate, t, i18n.language)}
+                  {t("agenda.due")}: {formatDueDate(task.dueDate)}
                 </span>
               </>
             ) : (

@@ -1,10 +1,17 @@
 export function formatDateForApi(dateValue: string): string | null {
   if (!dateValue) return null;
 
-  // Create date at UTC midnight to prevent timezone shifts
-  // This ensures the date stays consistent regardless of user's timezone
+  // datetime-local format: YYYY-MM-DDTHH:MM or YYYY-MM-DDTHH:MM:SS
+  if (dateValue.includes('T')) {
+    const date = new Date(dateValue);
+    if (isNaN(date.getTime())) return null;
+    return date.toISOString();
+  }
+
+  // Date-only: YYYY-MM-DD — create at UTC midnight to prevent timezone shifts
   const [year, month, day] = dateValue.split('-');
   const date = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day)));
+  if (isNaN(date.getTime())) return null;
   return date.toISOString();
 }
 

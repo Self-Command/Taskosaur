@@ -1,9 +1,16 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import {
-  ChatRequestDto, ChatResponseDto, ChatMessageDto, ChatAttachmentDto,
-  TestConnectionDto, TestConnectionResponseDto,
-  GenerateDescriptionDto, GenerateDescriptionResponseDto,
-  CreateConversationDto, RenameConversationDto, UpdateMessagesDto,
+  ChatRequestDto,
+  ChatResponseDto,
+  ChatMessageDto,
+  ChatAttachmentDto,
+  TestConnectionDto,
+  TestConnectionResponseDto,
+  GenerateDescriptionDto,
+  GenerateDescriptionResponseDto,
+  CreateConversationDto,
+  RenameConversationDto,
+  UpdateMessagesDto,
 } from './dto/chat.dto';
 import { SettingsService } from '../settings/settings.service';
 import { McpToolsService } from '../mcp-tools/mcp-tools.service';
@@ -488,7 +495,12 @@ export class AiChatService {
       if (conversation) {
         await this.prisma.chatMessage
           .create({
-            data: { conversationId: conversation.id, role: 'user', content: userMessage, attachments: (chatRequest as any).attachments || undefined },
+            data: {
+              conversationId: conversation.id,
+              role: 'user',
+              content: userMessage,
+              attachments: (chatRequest as any).attachments || undefined,
+            },
           })
           .catch(() => {});
         await this.prisma.chatMessage
@@ -669,7 +681,12 @@ export class AiChatService {
       if (conversation) {
         await this.prisma.chatMessage
           .create({
-            data: { conversationId: conversation.id, role: 'user', content: chatRequest.message, attachments: (chatRequest as any).attachments || undefined },
+            data: {
+              conversationId: conversation.id,
+              role: 'user',
+              content: chatRequest.message,
+              attachments: (chatRequest as any).attachments || undefined,
+            },
           })
           .catch(() => {});
         await this.prisma.chatMessage

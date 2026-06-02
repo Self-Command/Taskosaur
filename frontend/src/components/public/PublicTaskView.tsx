@@ -1,5 +1,5 @@
 import { PublicSharedTask, shareApi } from '@/utils/api/shareApi';
-import { formatDateForDisplay } from "@/utils/date";
+import { formatDateTimeForDisplay } from "@/utils/date";
 import { Badge } from '@/components/ui/badge';
 import { HiCalendar, HiUser, HiPaperClip, HiArrowDownTray } from 'react-icons/hi2';
 import { Button } from '@/components/ui/button';
@@ -25,11 +25,7 @@ export default function PublicTaskView({ task, token }: PublicTaskViewProps) {
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'No due date';
-    return formatDateForDisplay(dateString, {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
+    return formatDateTimeForDisplay(dateString, 'MMM D, YYYY HH:mm');
   };
 
   const handleDownload = async (attachment: { id: string, fileName: string }) => {

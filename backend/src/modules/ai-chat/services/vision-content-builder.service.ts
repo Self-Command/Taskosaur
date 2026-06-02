@@ -13,7 +13,11 @@ export class VisionContentBuilder {
    * Build message content for vision-capable providers.
    * Returns plain text when no images are attached.
    */
-  build(text: string, attachments: FileAttachment[], provider: 'openai' | 'anthropic' | 'google'): any {
+  build(
+    text: string,
+    attachments: FileAttachment[],
+    provider: 'openai' | 'anthropic' | 'google',
+  ): any {
     const images = attachments.filter((a) => this.fileService.isImageMime(a.mimeType));
     if (images.length === 0) return text;
 
@@ -27,7 +31,10 @@ export class VisionContentBuilder {
       if (provider === 'openai') {
         parts.push({ type: 'image_url', image_url: { url: `data:${img.mimeType};base64,${b64}` } });
       } else if (provider === 'anthropic') {
-        parts.push({ type: 'image', source: { type: 'base64', media_type: img.mimeType, data: b64 } });
+        parts.push({
+          type: 'image',
+          source: { type: 'base64', media_type: img.mimeType, data: b64 },
+        });
       } else {
         parts.push({ inlineData: { mimeType: img.mimeType, data: b64 } });
       }

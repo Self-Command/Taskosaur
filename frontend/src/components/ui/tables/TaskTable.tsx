@@ -18,7 +18,7 @@ import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 import { getUserTimezone } from "@/utils/date";
-import { getRelativeDateLabel, formatDateForDisplay, isDateOverdue as checkDateOverdue } from "@/utils/date";
+import { formatDateAsCountdown, isDatePast } from "@/utils/date";
 import {
   CalendarDays,
   User,
@@ -1070,12 +1070,8 @@ const TaskTable: React.FC<TaskTableProps> = ({
   const today = getTodayDate();
 
   const formatDate = (dateString: string) => {
-    const label = getRelativeDateLabel(dateString);
-    // If it's a relative label, return it; otherwise format the date
-    if (["Today", "Tomorrow", "Yesterday"].includes(label) || label.includes("days")) {
-      return label;
-    }
-    return formatDateForDisplay(dateString);
+    if (!dateString) return '';
+    return formatDateAsCountdown(dateString);
   };
 
   const getInitials = (firstName: string, lastName: string) => {
@@ -1435,7 +1431,8 @@ const TaskTable: React.FC<TaskTableProps> = ({
   };
 
   const isOverdue = (dueDate: string, completedAt?: string) => {
-    return checkDateOverdue(dueDate, completedAt);
+    if (completedAt) return false;
+    return isDatePast(dueDate);
   };
 
   const renderDynamicCellContent = (task: Task, column: ColumnConfig) => {
@@ -2212,7 +2209,7 @@ const TaskTable: React.FC<TaskTableProps> = ({
             {task.dueDate ? (
               <div className="tasktable-date-container">
                 <CalendarDays className="tasktable-date-icon w-4 h-4" />
-                <span className={cn("tasktable-date-text", isOverdue(task.dueDate, task.completedAt) && "text-red-600")}>
+                <span className={cn("tasktable-date-text", isDatePast(task.dueDate) && !task.completedAt && "text-red-600")}>
                   {formatDate(task.dueDate)}
                 </span>
               </div>

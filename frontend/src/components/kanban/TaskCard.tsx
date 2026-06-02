@@ -4,7 +4,7 @@ import { CardContent } from "@/components/ui/card";
 import { HiChatBubbleLeft, HiCalendarDays, HiPaperClip } from "react-icons/hi2";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
-import { getRelativeDateLabel, isDateOverdue as checkDateOverdue } from "@/utils/date";
+import { formatDateAsCountdown, isDatePast } from "@/utils/date";
 
 interface KanbanTask {
   id: string;
@@ -86,7 +86,7 @@ const getInitials = (firstName?: string, lastName?: string) => {
 };
 
 const formatDueDate = (dueDate: string) => {
-  return getRelativeDateLabel(dueDate);
+  return formatDateAsCountdown(dueDate);
 };
 
 const TaskCard: React.FC<TaskCardProps> = ({
@@ -98,7 +98,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
   onClick,
 }) => {
   const { t } = useTranslation("kanban");
-  const isOverdue = task.dueDate ? checkDateOverdue(task.dueDate, task.completedAt) : false;
+  const isOverdue = task.dueDate ? isDatePast(task.dueDate) && !task.completedAt : false;
   const category = getCategoryFromDescription(task.description);
   const priorityColor = getPriorityColor(task.priority);
 

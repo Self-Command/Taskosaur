@@ -51,6 +51,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { toast } from "sonner";
 import { formatDateForApi, getTodayDate } from "@/utils/handleDateChange";
 import { PRIORITY_OPTIONS, TASK_TYPE_OPTIONS } from "@/utils/data/taskData";
+import DateTimePicker from "@/components/common/DateTimePicker";
 interface FormData {
   title: string;
   workspace: {
@@ -849,19 +850,11 @@ export function NewTaskModal({
                 />
                 {t("modal.dueDate")}
               </Label>
-              <Input
-                id="dueDate"
-                type="date"
+              <DateTimePicker
                 value={formData.dueDate}
-                onChange={(e) => setFormData((prev) => ({ ...prev, dueDate: e.target.value }))}
+                onChange={(value) => setFormData((prev) => ({ ...prev, dueDate: value }))}
                 min={getToday()}
-                className="border-none transition-colors duration-300 h-10 w-full font-normal  rounded-md"
-                onFocus={(e) => {
-                  e.target.style.boxShadow = "none";
-                }}
-                onBlur={(e) => {
-                  e.target.style.boxShadow = "none";
-                }}
+                placeholder={t("modal.dueDate")}
                 disabled={isSubmitting}
               />
             </div>

@@ -2,7 +2,7 @@ import { Task } from "@/types";
 import Link from "next/link";
 import { HiCalendarDays } from "react-icons/hi2";
 import { GripVertical } from "lucide-react";
-import { formatDateForDisplay } from "@/utils/date";
+import { formatDateTimeForDisplay } from "@/utils/date";
 import { useTranslation } from "react-i18next";
 
 interface TaskInfoPanelProps {
@@ -88,13 +88,13 @@ export const TaskInfoPanel: React.FC<TaskInfoPanelProps> = ({
           <div
             className="flex items-center gap-1 text-xs text-[var(--muted-foreground)] shrink-0"
             title={`${t("due")}: ${
-              task.dueDate ? formatDateForDisplay(task.dueDate) : t("tasks:table.noDueDate")
+              task.dueDate ? formatDateTimeForDisplay(task.dueDate) : t("tasks:table.noDueDate")
             }`}
           >
             <HiCalendarDays className="w-3 h-3 shrink-0" />
             <span>
               {task.dueDate
-                ? formatDateForDisplay(task.dueDate, "MMM D")
+                ? formatDateTimeForDisplay(task.dueDate, "MMM D, HH:mm")
                 : t("tasks:table.noDueDate")}
             </span>
             {isOverdue && <span className="text-red-600 dark:text-red-400 font-bold ml-1">!</span>}

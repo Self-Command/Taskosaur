@@ -351,3 +351,42 @@ export const formatApiDate = (date: Date): string => {
 export const getTodayDate = (): string => {
   return dayjs().tz(getUserTimezone()).format('YYYY-MM-DD');
 };
+
+/**
+ * Format a due date as countdown from now.
+ * Future: "2d 3h 15min" (normal). Past: "1d 5h" (red, via caller).
+ * Units: y m d h min — space-separated, non-zero only, minimum shown.
+ */
+export const formatDateAsCountdown = (dateString: string): string => {
+  if (!dateString) return '';
+  const now = dayjs().tz(getUserTimezone());
+  const target = dayjs(dateString).tz(getUserTimezone());
+  if (!target.isValid()) return '';
+
+  const diffMs = target.diff(now);
+  const abs = Math.abs(diffMs);
+  const totalMinutes = Math.floor(abs / 60000);
+
+  const years = Math.floor(totalMinutes / 525600);
+  const months = Math.floor((totalMinutes % 525600) / 43200);
+  const days = Math.floor((totalMinutes % 43200) / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const mins = totalMinutes % 60;
+
+  const parts: string[] = [];
+  if (years > 0) parts.push(`${years}y`);
+  if (months > 0) parts.push(`${months}m`);
+  if (days > 0) parts.push(`${days}d`);
+  if (hours > 0) parts.push(`${hours}h`);
+  if (mins > 0 || parts.length === 0) parts.push(`${mins}min`);
+
+  return parts.join(' ');
+};
+
+/** Whether a date is in the past (overdue). */
+export const isDatePast = (dateString: string): boolean => {
+  if (!dateString) return false;
+  const now = dayjs().tz(getUserTimezone());
+  const target = dayjs(dateString).tz(getUserTimezone());
+  return target.isValid() && target.isBefore(now);
+};

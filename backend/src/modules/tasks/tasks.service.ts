@@ -21,6 +21,7 @@ import { RecurrenceService } from './recurrence.service';
 import { TaskRanksService } from '../task-ranks/task-ranks.service';
 import { ReorderDto } from '../task-ranks/dto/reorder.dto';
 import { RecurrenceConfigDto } from './dto/recurrence-config.dto';
+import { TaskReminderService } from '../task-reminder/task-reminder.service';
 
 @Injectable()
 export class TasksService {
@@ -32,6 +33,7 @@ export class TasksService {
     private storageService: StorageService,
     private recurrenceService: RecurrenceService,
     private taskRanksService: TaskRanksService,
+    private reminderService: TaskReminderService,
   ) {}
 
   /**
@@ -182,8 +184,8 @@ export class TasksService {
       if (taskData.priority) taskCreateData.priority = taskData.priority;
       if (taskData.projectId) taskCreateData.projectId = taskData.projectId;
       if (taskData.statusId) taskCreateData.statusId = taskData.statusId;
-      if (taskData.startDate) taskCreateData.startDate = taskData.startDate;
-      if (taskData.dueDate) taskCreateData.dueDate = taskData.dueDate;
+      if (taskData.startDate !== undefined) taskCreateData.startDate = taskData.startDate;
+      if (taskData.dueDate !== undefined) taskCreateData.dueDate = taskData.dueDate;
       if (taskData.storyPoints !== undefined) taskCreateData.storyPoints = taskData.storyPoints;
       if (taskData.originalEstimate !== undefined)
         taskCreateData.originalEstimate = taskData.originalEstimate;
@@ -324,6 +326,9 @@ export class TasksService {
         });
       }
 
+      this.reminderService
+        .schedule(task)
+        .catch((e) => this.logger.error(`Reminder schedule failed: ${e.message}`));
       return task;
     });
   }
@@ -629,8 +634,8 @@ export class TasksService {
       if (taskData.priority) taskCreateData.priority = taskData.priority;
       if (taskData.projectId) taskCreateData.projectId = taskData.projectId;
       if (taskData.statusId) taskCreateData.statusId = taskData.statusId;
-      if (taskData.startDate) taskCreateData.startDate = taskData.startDate;
-      if (taskData.dueDate) taskCreateData.dueDate = taskData.dueDate;
+      if (taskData.startDate !== undefined) taskCreateData.startDate = taskData.startDate;
+      if (taskData.dueDate !== undefined) taskCreateData.dueDate = taskData.dueDate;
       if (taskData.storyPoints !== undefined) taskCreateData.storyPoints = taskData.storyPoints;
       if (taskData.originalEstimate !== undefined)
         taskCreateData.originalEstimate = taskData.originalEstimate;
@@ -2807,6 +2812,9 @@ export class TasksService {
         },
       });
 
+      this.reminderService
+        .schedule(updatedTask)
+        .catch((e) => this.logger.error(`Reminder schedule failed: ${e.message}`));
       return this.flattenTaskRelations(updatedTask);
     } catch (error: any) {
       if (error.code === 'P2025' || error instanceof NotFoundException) {

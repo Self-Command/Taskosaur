@@ -1,17 +1,33 @@
 // Trigger watch reload
 import {
-  Controller, Post, Body, UseGuards, Delete, Param, Get, Patch, Put, Res,
-  UseInterceptors, UploadedFile,
+  Controller,
+  Post,
+  Body,
+  UseGuards,
+  Delete,
+  Param,
+  Get,
+  Patch,
+  Put,
+  Res,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiResponse, ApiConsumes } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AiChatService } from './ai-chat.service';
 import {
-  ChatRequestDto, ChatResponseDto, ChatAttachmentDto,
-  TestConnectionDto, TestConnectionResponseDto,
-  GenerateDescriptionDto, GenerateDescriptionResponseDto,
-  CreateConversationDto, RenameConversationDto, UpdateMessagesDto,
+  ChatRequestDto,
+  ChatResponseDto,
+  ChatAttachmentDto,
+  TestConnectionDto,
+  TestConnectionResponseDto,
+  GenerateDescriptionDto,
+  GenerateDescriptionResponseDto,
+  CreateConversationDto,
+  RenameConversationDto,
+  UpdateMessagesDto,
 } from './dto/chat.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '@prisma/client';

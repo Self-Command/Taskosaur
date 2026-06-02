@@ -1939,10 +1939,16 @@ export class ToolExecutor {
   }
 
   private async uploadTaskAttachment(params: Record<string, any>, userId: string) {
-    const e = this.requireUUID(params.taskId, 'taskId') || this.requireString(params.fileUrl, 'fileUrl') || this.requireString(params.fileName, 'fileName');
+    const e =
+      this.requireUUID(params.taskId, 'taskId') ||
+      this.requireString(params.fileUrl, 'fileUrl') ||
+      this.requireString(params.fileName, 'fileName');
     if (e) return { success: false, error: e };
 
-    const task = await this.prisma.task.findUnique({ where: { id: params.taskId }, select: { id: true } });
+    const task = await this.prisma.task.findUnique({
+      where: { id: params.taskId },
+      select: { id: true },
+    });
     if (!task) return { success: false, error: 'Task not found' };
 
     try {
@@ -1951,8 +1957,14 @@ export class ToolExecutor {
       if (params.fileUrl.startsWith('/api/uploads/')) {
         const fs = require('fs');
         const fname = params.fileUrl.split('/').pop();
-        const localPath = require('path').resolve(process.cwd(), 'uploads', 'chat', decodeURIComponent(fname));
-        if (!fs.existsSync(localPath)) return { success: false, error: 'File not found at ' + localPath };
+        const localPath = require('path').resolve(
+          process.cwd(),
+          'uploads',
+          'chat',
+          decodeURIComponent(fname),
+        );
+        if (!fs.existsSync(localPath))
+          return { success: false, error: 'File not found at ' + localPath };
         buffer = fs.readFileSync(localPath);
       } else {
         const res = await fetch(params.fileUrl);
@@ -1966,7 +1978,12 @@ export class ToolExecutor {
       // Save via StorageService
       const folder = `tasks/${params.taskId}`;
       const saved = await this.storageService.saveFile(
-        { buffer, originalname: params.fileName, mimetype: mimeType, size: fileSize } as Express.Multer.File,
+        {
+          buffer,
+          originalname: params.fileName,
+          mimetype: mimeType,
+          size: fileSize,
+        } as Express.Multer.File,
         folder,
       );
 

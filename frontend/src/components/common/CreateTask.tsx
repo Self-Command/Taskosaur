@@ -27,6 +27,7 @@ import ActionButton from "./ActionButton";
 import { useProject } from "@/contexts/project-context";
 import { useSprint } from "@/contexts/sprint-context";
 import { formatDateForApi, getTodayDate } from "@/utils/handleDateChange";
+import DateTimePicker from "@/components/common/DateTimePicker";
 import MemberSelect from "./MemberSelect";
 import { Plus, Eye, X } from "lucide-react";
 import { Button } from "../ui";
@@ -929,47 +930,38 @@ export default function CreateTask({ projectSlug, workspace, projects }: CreateT
 
               <div className="space-y-2">
                 <Label htmlFor="startDate">{t("startDate")}</Label>
-                <Input
-                  id="startDate"
-                  name="startDate"
-                  type="date"
+                <DateTimePicker
                   value={formData.startDate}
-                  onChange={(e) => {
-                    const newStart = e.target.value;
+                  onChange={(newStart) => {
                     handleFormDataChange("startDate", newStart);
-                    if (formData.dueDate && newStart && newStart > formData.dueDate) {
-                      handleFormDataChange("dueDate", "");
+                    if (formData.dueDate && newStart) {
+                      const sd = new Date(newStart.includes('T') ? newStart : newStart + 'T00:00');
+                      const dd = new Date(formData.dueDate.includes('T') ? formData.dueDate : formData.dueDate + 'T23:59');
+                      if (sd > dd) {
+                        handleFormDataChange("dueDate", "");
+                      }
                     }
                   }}
-                  max={formData.dueDate || undefined}
-                  onClick={(e) => {
-                    const target = e.target as HTMLInputElement;
-                    target.showPicker?.();
-                  }}
-                  className="w-full border-[var(--border)] bg-[var(--background)] cursor-pointer [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:mt-1"
-                  style={{
-                    colorScheme: "dark",
-                  }}
+                  placeholder={t("selectDate", "Select date")}
                 />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="dueDate">{t("dueDate")}</Label>
-                <Input
-                  id="dueDate"
-                  name="dueDate"
-                  type="date"
+                <DateTimePicker
                   value={formData.dueDate}
-                  min={formData.startDate || undefined}
-                  onChange={(e) => handleFormDataChange("dueDate", e.target.value)}
-                  onClick={(e) => {
-                    const target = e.target as HTMLInputElement;
-                    target.showPicker?.();
+                  onChange={(newDueDate) => {
+                    if (formData.startDate && newDueDate) {
+                      const sd = new Date(formData.startDate.includes('T') ? formData.startDate : formData.startDate + 'T00:00');
+                      const dd = new Date(newDueDate.includes('T') ? newDueDate : newDueDate + 'T23:59');
+                      if (dd < sd) {
+                        toast.error("Due date cannot be before start date");
+                        return;
+                      }
+                    }
+                    handleFormDataChange("dueDate", newDueDate);
                   }}
-                  className="w-full border-[var(--border)] bg-[var(--background)] cursor-pointer [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:mt-1"
-                  style={{
-                    colorScheme: "dark",
-                  }}
+                  placeholder={t("selectDate", "Select date")}
                 />
               </div>
 

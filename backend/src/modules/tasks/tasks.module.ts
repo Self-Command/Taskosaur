@@ -14,6 +14,7 @@ import { QueueModule } from '../queue/queue.module';
 import { BulkTaskImportProcessor } from './bulk-task-import.processor';
 import { TaskRanksModule } from '../task-ranks/task-ranks.module';
 import { S3Module } from '../storage/s3.module';
+import { TaskReminderModule } from '../task-reminder/task-reminder.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { S3Module } from '../storage/s3.module';
     QueueModule.registerQueue({ name: 'bulk-task-import' }),
     TaskRanksModule,
     S3Module,
+    TaskReminderModule,
   ],
   controllers: [TasksController, TaskSharesController],
   providers: [

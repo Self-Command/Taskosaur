@@ -6,6 +6,7 @@ import LanguageSection from "@/components/settings/LanguageSection";
 import ResetPasswordSection from "@/components/settings/ResetPasswordSection";
 import DangerZoneSection from "@/components/settings/DangerZoneSection";
 import AISettingsModal from "@/components/settings/AISettings";
+import PushGoSettingsSection from "@/components/settings/PushGoSettingsSection";
 import { useState } from "react";
 import ActionButton from "@/components/common/ActionButton";
 import { PageHeader } from "@/components/common/PageHeader";
@@ -62,6 +63,7 @@ export default function ProfilePage() {
         {/* Settings Sections */}
         <div className="space-y-4">
           <ProfileSection />
+          <PushGoSettingsSection />
           <LanguageSection />
           <ResetPasswordSection />
           <DangerZoneSection />

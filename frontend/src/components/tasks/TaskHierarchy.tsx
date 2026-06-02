@@ -3,7 +3,7 @@ import { Task } from "@/types/tasks";
 import UserAvatar from "@/components/ui/avatars/UserAvatar";
 import { Button } from "@/components/ui";
 import ConfirmationModal from "@/components/modals/ConfirmationModal";
-import { formatDateForDisplay } from "@/utils/date";
+import { formatDateTimeForDisplay } from "@/utils/date";
 
 interface TaskHierarchyProps {
   task: Task;
@@ -208,7 +208,7 @@ export default function TaskHierarchy({
                       </span>
                       {subtask.dueDate && (
                         <span className="text-xs text-gray-500 dark:text-gray-400">
-                          Due: {formatDateForDisplay(subtask.dueDate)}
+                          Due: {formatDateTimeForDisplay(subtask.dueDate)}
                         </span>
                       )}
                     </div>

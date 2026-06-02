@@ -551,8 +551,15 @@ export const MCP_TOOL_DEFINITIONS: MCPToolDefinition[] = [
           enum: ['LOWEST', 'LOW', 'MEDIUM', 'HIGH', 'HIGHEST'],
           description: 'Priority',
         },
-        startDate: { type: 'string', description: 'Start date (ISO 8601)' },
-        dueDate: { type: 'string', description: 'Due date (ISO 8601)' },
+        startDate: {
+          type: 'string',
+          description:
+            'Start date (ISO 8601). Supports time: "2024-01-15" or "2024-01-15T09:00:00Z"',
+        },
+        dueDate: {
+          type: 'string',
+          description: 'Due date (ISO 8601). Supports time: "2024-01-30" or "2024-01-30T17:00:00Z"',
+        },
         storyPoints: { type: 'number', description: 'Story points' },
         originalEstimate: { type: 'number', description: 'Time estimate in minutes' },
         remainingEstimate: { type: 'number', description: 'Remaining estimate in minutes' },
@@ -593,8 +600,15 @@ export const MCP_TOOL_DEFINITIONS: MCPToolDefinition[] = [
         },
         priority: { type: 'string', enum: ['LOWEST', 'LOW', 'MEDIUM', 'HIGH', 'HIGHEST'] },
         statusId: { type: 'string', description: 'New status ID / 新状态 ID' },
-        startDate: { type: 'string' },
-        dueDate: { type: 'string' },
+        startDate: {
+          type: 'string',
+          description:
+            'Start date (ISO 8601). Supports time: "2024-01-15" or "2024-01-15T09:00:00Z"',
+        },
+        dueDate: {
+          type: 'string',
+          description: 'Due date (ISO 8601). Supports time: "2024-01-30" or "2024-01-30T17:00:00Z"',
+        },
         completedAt: { type: 'string', description: 'Set to mark as done' },
         storyPoints: { type: 'number' },
         originalEstimate: { type: 'number' },
@@ -1088,9 +1102,18 @@ export const MCP_TOOL_DEFINITIONS: MCPToolDefinition[] = [
       type: 'object',
       properties: {
         taskId: { type: 'string', description: 'Target task ID (UUID)' },
-        fileUrl: { type: 'string', description: 'URL of the file to attach (from chat upload or any accessible URL)' },
-        fileName: { type: 'string', description: 'Original file name (e.g. report.pdf, photo.png)' },
-        mimeType: { type: 'string', description: 'MIME type (e.g. image/png, application/pdf, text/plain)' },
+        fileUrl: {
+          type: 'string',
+          description: 'URL of the file to attach (from chat upload or any accessible URL)',
+        },
+        fileName: {
+          type: 'string',
+          description: 'Original file name (e.g. report.pdf, photo.png)',
+        },
+        mimeType: {
+          type: 'string',
+          description: 'MIME type (e.g. image/png, application/pdf, text/plain)',
+        },
       },
       required: ['taskId', 'fileUrl', 'fileName'],
     },
@@ -1104,7 +1127,10 @@ export const MCP_TOOL_DEFINITIONS: MCPToolDefinition[] = [
     input_schema: {
       type: 'object',
       properties: {
-        attachmentId: { type: 'string', description: 'Attachment ID (UUID) from list_task_attachments' },
+        attachmentId: {
+          type: 'string',
+          description: 'Attachment ID (UUID) from list_task_attachments',
+        },
       },
       required: ['attachmentId'],
     },

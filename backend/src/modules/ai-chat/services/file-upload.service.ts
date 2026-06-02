@@ -14,19 +14,44 @@ const mammoth = require('mammoth');
 const UPLOAD_DIR = path.resolve(process.cwd(), 'uploads', 'chat');
 const MAX_TEXT_LEN = 50000;
 
-const IMAGE_MIMES = new Set([
-  'image/png', 'image/jpeg', 'image/gif', 'image/webp',
-]);
+const IMAGE_MIMES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 
 const CODE_EXTS = new Set([
-  '.ts', '.tsx', '.js', '.jsx', '.py', '.java', '.go', '.rs', '.rb',
-  '.c', '.cpp', '.h', '.cs', '.swift', '.kt', '.sql', '.sh', '.yaml',
-  '.yml', '.xml', '.html', '.css', '.scss', '.less', '.toml', '.ini',
+  '.ts',
+  '.tsx',
+  '.js',
+  '.jsx',
+  '.py',
+  '.java',
+  '.go',
+  '.rs',
+  '.rb',
+  '.c',
+  '.cpp',
+  '.h',
+  '.cs',
+  '.swift',
+  '.kt',
+  '.sql',
+  '.sh',
+  '.yaml',
+  '.yml',
+  '.xml',
+  '.html',
+  '.css',
+  '.scss',
+  '.less',
+  '.toml',
+  '.ini',
 ]);
 
 const TEXT_MIMES = new Set([
-  'text/plain', 'text/markdown', 'text/csv', 'text/html',
-  'application/json', 'application/xml',
+  'text/plain',
+  'text/markdown',
+  'text/csv',
+  'text/html',
+  'application/json',
+  'application/xml',
 ]);
 
 export interface FileAttachment {
@@ -39,7 +64,9 @@ export interface FileAttachment {
 
 @Injectable()
 export class FileUploadService {
-  isImageMime(mime: string): boolean { return IMAGE_MIMES.has(mime); }
+  isImageMime(mime: string): boolean {
+    return IMAGE_MIMES.has(mime);
+  }
 
   storagePath(url: string): string {
     return path.join(UPLOAD_DIR, decodeURIComponent(path.basename(url)));
@@ -69,14 +96,18 @@ export class FileUploadService {
       try {
         if (mime === 'application/pdf') {
           extractedText = await this.parsePdf(file.buffer);
-        } else if (mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-          || ext === '.docx') {
+        } else if (
+          mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+          ext === '.docx'
+        ) {
           extractedText = await this.parseDocx(file.buffer);
         } else if (isText || isCode) {
           extractedText = file.buffer.toString('utf8').slice(0, MAX_TEXT_LEN);
         }
       } catch (err: any) {
-        console.error('[FileUpload] Extraction failed for ' + originalName + ': ' + (err?.message || err));
+        console.error(
+          '[FileUpload] Extraction failed for ' + originalName + ': ' + (err?.message || err),
+        );
       }
     }
 

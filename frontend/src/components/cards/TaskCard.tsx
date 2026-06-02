@@ -1,5 +1,5 @@
 import React from "react";
-import { formatDateForDisplay } from "@/utils/date";
+import { formatDateTimeForDisplay } from "@/utils/date";
 import Link from "next/link";
 import { isValidSlug } from "@/utils/slugUtils";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -62,7 +62,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         <CardContent>
           <div className="taskcard-due-date">
             <HiClock size={12} className="taskcard-due-icon" />
-            Due {formatDateForDisplay(task.dueDate)}
+            Due {formatDateTimeForDisplay(task.dueDate)}
           </div>
         </CardContent>
       </Card>

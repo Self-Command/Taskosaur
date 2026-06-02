@@ -5,7 +5,7 @@ import { Button } from "@/components/ui";
 import TaskDependencies from "./TaskDependencies";
 import TaskHierarchy from "./TaskHierarchy";
 import TimeTracking from "./TimeTracking";
-import { formatDateForDisplay } from "@/utils/date";
+import { formatDateTimeForDisplay } from "@/utils/date";
 
 interface TaskDetailModalProps {
   task: Task;
@@ -316,7 +316,7 @@ export default function TaskDetailModal({
                     )}
                     {task.dueDate && (
                       <p>
-                        <strong>{t("detail.dueDateColon")}</strong> {formatDateForDisplay(task.dueDate)}
+                        <strong>{t("detail.dueDateColon")}</strong> {formatDateTimeForDisplay(task.dueDate)}
                       </p>
                     )}
                     {task.storyPoints && (

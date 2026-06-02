@@ -44,6 +44,8 @@ import { EmailModule } from './modules/email/email.module';
 import { QueueModule } from './modules/queue/queue.module';
 import { EditorImagesModule } from './modules/editor-images/editor-images.module';
 import { TaskRanksModule } from './modules/task-ranks/task-ranks.module';
+import { OpenAICompatModule } from './modules/openai-compat/openai-compat.module';
+import { TaskReminderModule } from './modules/task-reminder/task-reminder.module';
 
 import { PublicModule } from './modules/public/public.module';
 import { HealthModule } from './modules/health/health.module';
@@ -101,10 +103,13 @@ import { SlugModule } from './common/slug.module';
           QueueModule,
           EditorImagesModule,
           TaskRanksModule,
+          TaskReminderModule,
           AdminModule,
         ],
       },
     ]),
+    OpenAICompatModule,
+    TaskReminderModule,
     PrismaModule,
     AuthModule,
     UsersModule,

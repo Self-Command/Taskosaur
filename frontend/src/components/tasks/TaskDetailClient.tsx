@@ -30,7 +30,8 @@ import TaskActivities from "./TaskActivities";
 import ShareTaskDialog from "./ShareTaskDialog";
 import { TaskPriorities } from "@/utils/data/taskData";
 import { formatDateForApi } from "@/utils/handleDateChange";
-import { formatDateForDisplay } from "@/utils/date";
+import { formatDateForDisplay, formatDateTimeForDisplay, formatDateAsCountdown } from "@/utils/date";
+import DateTimePicker from "@/components/common/DateTimePicker";
 import MemberSelect from "../common/MemberSelect";
 import Divider from "../common/Divider";
 import { ToggleSwitch } from "../common/ToggleButton";
@@ -59,6 +60,25 @@ function sanitizeSlug(slug: string | string[] | undefined): string {
   if (!slug || typeof slug !== 'string') return '';
   return slug;
 }
+
+function toDatetimeLocalValue(isoString: string | null | undefined): string {
+  if (!isoString) return '';
+  // Date-only (midnight UTC or YYYY-MM-DD) — return date only
+  if (/^\d{4}-\d{2}-\d{2}$/.test(isoString) ||
+      /^\d{4}-\d{2}-\d{2}T00:00:00\.000Z$/.test(isoString)) {
+    return isoString.substring(0, 10);
+  }
+  // Has a specific time — convert to local time for datetime-local input
+  const d = new Date(isoString);
+  if (isNaN(d.getTime())) return '';
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
 
 interface TaskDetailClientProps {
   task: any;
@@ -161,8 +181,8 @@ export default function TaskDetailClient({
     title: task?.title || "",
     description: task?.description || "",
     priority: typeof task?.priority === "object" ? task?.priority?.name : task?.priority || "",
-    dueDate: task?.dueDate ? task.dueDate.split("T")[0] : "",
-    startDate: task?.startDate ? task.startDate.split("T")[0] : "",
+    dueDate: toDatetimeLocalValue(task?.dueDate),
+    startDate: toDatetimeLocalValue(task?.startDate),
     taskType: task?.type || task?.taskType || "",
     sprintId: task?.sprintId || "",
   });
@@ -171,14 +191,12 @@ export default function TaskDetailClient({
   const hasUnsavedChanges =
     editTaskData.title !== (task?.title || "") ||
     editTaskData.description !== (task?.description || "") ||
-    editTaskData.dueDate !== (task?.dueDate ? task.dueDate.split("T")[0] : "");
+    editTaskData.dueDate !== toDatetimeLocalValue(task?.dueDate);
 
   const handleStartDateChange = (newStartDate: string) => {
     // Validate that start date is not after due date
     if (newStartDate && editTaskData.dueDate) {
-      const startDate = new Date(newStartDate + "T00:00:00");
-      const dueDate = new Date(editTaskData.dueDate + "T00:00:00");
-      if (startDate > dueDate) {
+      if (new Date(newStartDate) > new Date(editTaskData.dueDate)) {
         toast.error(t("detail.startDateError"));
         return;
       }
@@ -191,7 +209,7 @@ export default function TaskDetailClient({
   const saveStartDate = async (newStartDate: string) => {
     try {
       const updateData: UpdateTaskRequest = {
-        startDate: formatDateForApi(newStartDate) || undefined,
+        startDate: formatDateForApi(newStartDate) || null,
       };
       await updateTask(taskId, updateData);
       onTaskRefetch && onTaskRefetch();
@@ -199,7 +217,7 @@ export default function TaskDetailClient({
     } catch (error) {
       toast.error(t("detail.updateStartDateError"));
       // Revert on error
-      handleTaskFieldChange("startDate", task.startDate ? task.startDate.split("T")[0] : "");
+      handleTaskFieldChange("startDate", toDatetimeLocalValue(task.startDate));
     }
   };
 
@@ -355,9 +373,7 @@ export default function TaskDetailClient({
   const handleDueDateChange = (newDueDate: string) => {
     // Validate that due date is not before start date
     if (newDueDate && editTaskData.startDate) {
-      const dueDate = new Date(newDueDate + "T00:00:00");
-      const startDate = new Date(editTaskData.startDate + "T00:00:00");
-      if (dueDate < startDate) {
+      if (new Date(newDueDate) < new Date(editTaskData.startDate)) {
         toast.error(t("detail.dueDateError"));
         return;
       }
@@ -370,7 +386,7 @@ export default function TaskDetailClient({
   const saveDueDate = async (newDueDate: string) => {
     try {
       const updateData: UpdateTaskRequest = {
-        dueDate: formatDateForApi(newDueDate) || undefined,
+        dueDate: formatDateForApi(newDueDate) || null,
       };
 
       await updateTask(taskId, updateData);
@@ -379,7 +395,7 @@ export default function TaskDetailClient({
     } catch (error) {
       toast.error(t("detail.updateDueDateError"));
       // Revert on error
-      handleTaskFieldChange("dueDate", task.dueDate ? task.dueDate.split("T")[0] : "");
+      handleTaskFieldChange("dueDate", toDatetimeLocalValue(task.dueDate));
     }
   };
 
@@ -848,7 +864,7 @@ export default function TaskDetailClient({
     const hasChanges =
       editTaskData.title !== task.title ||
       editTaskData.description !== task.description ||
-      editTaskData.dueDate !== (task.dueDate ? task.dueDate.split("T")[0] : "");
+      editTaskData.dueDate !== toDatetimeLocalValue(task.dueDate);
 
     if (hasChanges) {
       setConfirmModal({
@@ -861,8 +877,8 @@ export default function TaskDetailClient({
             title: task.title,
             description: task.description,
             priority: typeof task.priority === "object" ? task.priority?.name : task.priority,
-            dueDate: task.dueDate ? task.dueDate.split("T")[0] : "",
-            startDate: task.startDate ? task.startDate.split("T")[0] : "",
+            dueDate: toDatetimeLocalValue(task.dueDate),
+            startDate: toDatetimeLocalValue(task.startDate),
             taskType: task.type || task.taskType || "",
             sprintId: task.sprintId || "",
           });
@@ -1732,40 +1748,15 @@ export default function TaskDetailClient({
                       {t("detail.startDate")}
                     </Label>
                     {isEditingTask.startDate ? (
-                      <div className="relative">
-                        <Input
-                          type="date"
-                          value={editTaskData.startDate}
-                          max={editTaskData.dueDate || undefined}
-                          onChange={(e) => {
-                            handleStartDateChange(e.target.value);
-                          }}
-                          onBlur={(e) => {
-                            if (
-                              e.target.value !==
-                              (task.startDate ? task.startDate.split("T")[0] : "")
-                            ) {
-                              saveStartDate(e.target.value);
-                            }
-                          }}
-                          className="text-xs bg-[var(--background)] border-[var(--border)] w-full cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
-                          placeholder={t("detail.placeholderSelectStartDate")}
-                        />
-                        {editTaskData.startDate && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleStartDateChange("");
-                              saveStartDate("");
-                            }}
-                            className="absolute right-2 top-1/2 transform -translate-y-1/2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] text-xs z-10"
-                            title={t("detail.placeholderSelectStartDate")}
-                          >
-                            ✕
-                          </button>
-                        )}
-                      </div>
+                      <DateTimePicker
+                        value={editTaskData.startDate}
+                        max={editTaskData.dueDate || undefined}
+                        onChange={(value) => {
+                          handleStartDateChange(value);
+                          saveStartDate(value);
+                        }}
+                        placeholder={t("detail.placeholderSelectStartDate")}
+                      />
                     ) : (
                       <Badge
                         data-testid="start-date-badge"
@@ -1780,7 +1771,7 @@ export default function TaskDetailClient({
                         className="text-[13px] min-w-[120px] min-h-[29.33px] rounded-2xl  px-1.5 py-0.5 bg-[var(--muted)] border-[var(--border)] flex-shrink-0 cursor-pointer"
                       >
                         {editTaskData.startDate
-                          ? formatDateForDisplay(editTaskData.startDate)
+                          ? formatDateTimeForDisplay(editTaskData.startDate, 'MMM D, HH:mm')
                           : t("detail.noStartDate")}
                       </Badge>
                     )}
@@ -1792,39 +1783,15 @@ export default function TaskDetailClient({
                       {t("detail.dueDate")}
                     </Label>
                     {isEditingTask.dueDate ? (
-                      <div className="relative">
-                        <Input
-                          type="date"
-                          value={editTaskData.dueDate}
-                          min={editTaskData.startDate || undefined}
-                          onChange={(e) => {
-                            handleDueDateChange(e.target.value);
-                          }}
-                          onBlur={(e) => {
-                            if (
-                              e.target.value !== (task.dueDate ? task.dueDate.split("T")[0] : "")
-                            ) {
-                              saveDueDate(e.target.value);
-                            }
-                          }}
-                          className="text-xs bg-[var(--background)] border-[var(--border)] w-full cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
-                          placeholder={t("detail.placeholderSelectDueDate")}
-                        />
-                        {editTaskData.dueDate && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDueDateChange("");
-                              saveDueDate("");
-                            }}
-                            className="absolute right-2 top-1/2 transform -translate-y-1/2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] text-xs z-10"
-                            title={t("detail.placeholderSelectDueDate")}
-                          >
-                            ✕
-                          </button>
-                        )}
-                      </div>
+                      <DateTimePicker
+                        value={editTaskData.dueDate}
+                        min={editTaskData.startDate || undefined}
+                        onChange={(value) => {
+                          handleDueDateChange(value);
+                          saveDueDate(value);
+                        }}
+                        placeholder={t("detail.placeholderSelectDueDate")}
+                      />
                     ) : (
                       <Badge
                         data-testid="due-date-badge"
@@ -1843,7 +1810,7 @@ export default function TaskDetailClient({
                         )}
                       >
                         {editTaskData.dueDate
-                          ? formatDateForDisplay(editTaskData.dueDate)
+                          ? formatDateTimeForDisplay(editTaskData.dueDate, 'MMM D, HH:mm')
                           : t("detail.noDueDate")}
                       </Badge>
                     )}

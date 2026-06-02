@@ -5,7 +5,7 @@ import UserAvatar from "@/components/ui/avatars/UserAvatar";
 import TaskDetailModal from "./TaskDetailModal";
 import { HiEnvelope } from "react-icons/hi2";
 import RecurringBadge from "@/components/common/RecurringBadge";
-import { getRelativeDateLabel, isDateOverdue as checkDateOverdue, formatDateForDisplay } from "@/utils/date";
+import { formatDateAsCountdown, isDatePast } from "@/utils/date";
 
 interface TaskCardProps {
   task: Task;
@@ -77,46 +77,13 @@ export default function TaskCard({
   };
 
   const formatDueDate = (dateString: string) => {
-    const label = getRelativeDateLabel(dateString);
-    const overdue = checkDateOverdue(dateString, task.completedAt);
+    const countdown = formatDateAsCountdown(dateString);
+    const past = isDatePast(dateString) && !task.completedAt;
 
-    if (overdue) {
-      return {
-        text: label,
-        color: "text-red-600",
-        bgColor: "bg-red-100 dark:bg-red-900/20",
-      };
+    if (past) {
+      return { text: countdown, color: "text-red-600", bgColor: "bg-red-100 dark:bg-red-900/20" };
     }
-
-    if (label === "Today") {
-      return {
-        text: "Due today",
-        color: "text-orange-600",
-        bgColor: "bg-orange-100 dark:bg-orange-900/20",
-      };
-    }
-
-    if (label === "Tomorrow") {
-      return {
-        text: "Due tomorrow",
-        color: "text-yellow-600",
-        bgColor: "bg-yellow-100 dark:bg-yellow-900/20",
-      };
-    }
-
-    if (label.includes("In ") && label.includes(" days")) {
-      return {
-        text: `Due ${label.toLowerCase()}`,
-        color: "text-yellow-600",
-        bgColor: "bg-yellow-100 dark:bg-yellow-900/20",
-      };
-    }
-
-    return {
-      text: formatDateForDisplay(dateString),
-      color: "text-gray-600",
-      bgColor: "bg-gray-100 dark:bg-gray-900/20",
-    };
+    return { text: countdown, color: "text-gray-600", bgColor: "bg-gray-100 dark:bg-gray-900/20" };
   };
 
   const handleDragStart = (e: React.DragEvent) => {
