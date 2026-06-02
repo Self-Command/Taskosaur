@@ -52,8 +52,8 @@ export class TaskReminderWorker implements OnModuleInit {
         });
         if (!task || task.completedAt) return;
 
-        const channelId = await this.getUserSetting(userId, 'pushgo_channel_id');
-        const channelPwd = await this.getUserSetting(userId, 'pushgo_channel_password');
+        const channelId = process.env.PUSHGO_CHANNEL_ID || await this.getUserSetting(userId, 'pushgo_channel_id');
+        const channelPwd = process.env.PUSHGO_CHANNEL_PASSWORD || await this.getUserSetting(userId, 'pushgo_channel_password');
         if (!channelId || !channelPwd) {
           this.logger.warn(`User ${userId} has no PushGo config`);
           return;
@@ -72,7 +72,8 @@ export class TaskReminderWorker implements OnModuleInit {
             .join(', ') || '未分配';
 
         const action = type === 'start' ? 'start-reminder' : 'complete-reminder';
-        const callbackUrl = `http://10.90.61.109:3000/api/tasks/${task.id}/${action}?userId=${userId}`;
+        const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/api\/?$/, '') || process.env.FRONTEND_URL || 'http://localhost:3000';
+const callbackUrl = `${apiBase}/api/tasks/${task.id}/${action}?userId=${userId}`;
 
         const priorityLabel: Record<string, string> = {
           LOWEST: '最低',
