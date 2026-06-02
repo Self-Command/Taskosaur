@@ -84,6 +84,7 @@ export class TaskReminderController {
     });
     if (!task) return res.send(resultHtml('任务未找到', false));
 
+    console.log(`[CHECKIN] task=${taskId} photo=${!!photo} size=${photo?.size} name=${photo?.originalname}`);
     if (photo) {
       await this.prisma.taskAttachment.create({
         data: {
@@ -105,7 +106,11 @@ export class TaskReminderController {
       if (cat === 'DONE') data.completedAt = new Date();
       await this.prisma.task.update({ where: { id: taskId }, data });
     }
-    return res.send(resultHtml(cat === 'IN_PROGRESS' ? '✅ 已开始处理' : '✅ 已完成', true));
+    const now = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+    const photoName = photo?.originalname || '';
+    const photoSize = photo ? (photo.size / 1024 / 1024).toFixed(1) + 'MB' : '';
+    return res.send(detailHtml(cat === 'IN_PROGRESS' ? '已开始处理' : '已完成', now, photoName, photoSize));
+  }
   }
 
   private async getFullTask(taskId: string) {
@@ -143,6 +148,28 @@ function names(arr: any[]) {
       .filter(Boolean)
       .join(', ') || '未分配'
   );
+}
+
+function detailHtml(status: string, time: string, photoName: string, photoSize: string) {
+  const photoInfo = photoName
+    ? `<div class="row"><span class="lbl">📸 照片</span><span class="val">${photoName} (${photoSize})</span></div>`
+    : `<div class="row"><span class="lbl">📸 照片</span><span class="val" style="color:#999">未上传</span></div>`;
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:-apple-system,sans-serif;background:#f0fdf4;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+    .card{background:#fff;border-radius:20px;padding:32px 24px;max-width:360px;width:100%;box-shadow:0 4px 24px rgba(0,0,0,.06);text-align:center}
+    .icon{font-size:56px;margin-bottom:12px}
+    .title{font-size:20px;font-weight:700;color:#16a34a;margin-bottom:4px}
+    .sub{font-size:13px;color:#666;margin-bottom:20px}
+    .row{display:flex;justify-content:space-between;padding:8px 0;font-size:14px;color:#333;border-bottom:1px solid #f5f5f5}
+    .lbl{color:#999}.val{color:#333;font-weight:500}
+    </style></head><body><div class="card">
+    <div class="icon">✅</div>
+    <div class="title">${status}</div>
+    <div class="sub">打卡提交成功</div>
+    <div class="row"><span class="lbl">提交时间</span><span class="val">${time}</span></div>
+    ${photoInfo}
+    </div></body></html>`;
 }
 
 function resultHtml(msg: string, ok: boolean) {
@@ -199,22 +226,17 @@ function checkinHtml(t: any, userId: string, type: string) {
     </div>
     <div class="card">
       <h2>📸 拍照打卡</h2>
-      <div class="photo-area" onclick="document.getElementById('p').click()"><div style="font-size:40px">📷</div><div style="font-size:14px;color:#999;margin-top:4px">点击拍照或选择照片</div></div>
-      <input type="file" id="p" accept="image/*" capture="environment" class="hidden" onchange="prev(this)">
+      <div class="photo-area" onclick="document.getElementById('pf').click()"><div style="font-size:40px">📷</div><div style="font-size:14px;color:#999;margin-top:4px">点击拍照或选择照片</div></div>
       <img id="pv" class="photo-preview">
     </div>
-    <button class="btn btn-primary" id="sb" onclick="go(false)">${label}</button>
-    <button class="btn btn-secondary" onclick="go(true)">跳过拍照</button>
+    <form id="cf" action="/api/tasks/${t.id}/checkin?userId=${userId}&type=${type}" method="POST" enctype="multipart/form-data">
+    <input type="file" id="pf" name="photo" accept="image/*" capture="environment" style="position:absolute;opacity:0;pointer-events:none" onchange="prev(this)">
+    <button type="submit" class="btn btn-primary" id="sb">${label}</button>
+    </form>
+    <button class="btn btn-secondary" onclick="document.getElementById('pf').value='';document.getElementById('pv').style.display='none';document.getElementById('cf').submit()">跳过拍照</button>
     <div style="text-align:center;padding:8px;font-size:13px;color:#666" id="st"></div>
     <script>
-      let pf=null;
-      function prev(e){const f=e.target.files[0];if(!f)return;pf=f;const i=document.getElementById('pv');i.src=URL.createObjectURL(f);i.style.display='block'}
-      async function go(skip){if(skip)pf=null;const b=document.getElementById('sb');const s=document.getElementById('st');
-        b.classList.add('loading');b.textContent='提交中...';s.textContent=pf?'正在上传照片...':'';
-        const fd=new FormData();if(pf)fd.append('photo',pf);
-        try{const ctrl=new AbortController();setTimeout(()=>ctrl.abort(),60000);
-        const r=await fetch('/api/tasks/${t.id}/checkin?userId=${userId}&type=${type}',{method:'POST',body:fd,signal:ctrl.signal});
-        if(r.ok){document.body.innerHTML=await r.text()}else{s.textContent='提交失败('+r.status+')，重试';b.classList.remove('loading');b.textContent='${label}'}}
-        catch(e){s.textContent='网络错误，重试';b.classList.remove('loading');b.textContent='${label}'}}
+      function prev(e){const f=e.target.files[0];if(!f)return;const i=document.getElementById('pv');i.src=URL.createObjectURL(f);i.style.display='block'}
+      document.getElementById('cf').onsubmit=function(){document.getElementById('sb').textContent='提交中...';document.getElementById('st').textContent='正在上传...'}
     </script></body></html>`;
 }
