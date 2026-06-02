@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Worker, Job } from 'bullmq';
 import { PrismaService } from '../../prisma/prisma.service';
+import { SettingsService } from '../settings/settings.service';
 
 const QUEUE = 'task-reminders';
 const PUSHGO_URL = 'https://gateway.pushgo.cn/message';
@@ -21,6 +22,7 @@ export class TaskReminderWorker implements OnModuleInit {
   constructor(
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
+    private readonly settingsService: SettingsService,
   ) {}
 
   async onModuleInit() {
@@ -52,8 +54,9 @@ export class TaskReminderWorker implements OnModuleInit {
         });
         if (!task || task.completedAt) return;
 
-        const channelId = process.env.PUSHGO_CHANNEL_ID || await this.getUserSetting(userId, 'pushgo_channel_id');
-        const channelPwd = process.env.PUSHGO_CHANNEL_PASSWORD || await this.getUserSetting(userId, 'pushgo_channel_password');
+        // 从数据库读取用户设置（前端设置页面可修改）
+        const channelId = await this.getUserSetting(userId, 'pushgo_channel_id');
+        const channelPwd = await this.getUserSetting(userId, 'pushgo_channel_password');
         if (!channelId || !channelPwd) {
           this.logger.warn(`User ${userId} has no PushGo config`);
           return;
@@ -92,11 +95,10 @@ const callbackUrl = `${apiBase}/api/tasks/${task.id}/${action}?userId=${userId}`
           `报告人: ${joinNames(task.reporters)}`,
         ];
         if (task.description) {
-          const desc =
-            task.description.length > 150
-              ? task.description.slice(0, 150) + '...'
-              : task.description;
+          const desc = task.description.length > 150 ? task.description.slice(0, 150) + '...' : task.description;
           lines.push(`描述: ${desc}`);
+        } else {
+          lines.push('描述: 无');
         }
         lines.push('');
         lines.push(type === 'start' ? '👆 点击通知开始处理任务' : '👆 点击通知标记任务完成');
@@ -139,10 +141,7 @@ const callbackUrl = `${apiBase}/api/tasks/${task.id}/${action}?userId=${userId}`
   }
 
   private async getUserSetting(userId: string, key: string): Promise<string | null> {
-    const s = await this.prisma.settings.findFirst({
-      where: { userId, key },
-      select: { value: true },
-    });
-    return s?.value || null;
+    // 通过 SettingsService 读取，自动处理加密字段解密
+    return this.settingsService.get(key, userId);
   }
 }

@@ -388,10 +388,12 @@ export default function CreateTask({ projectSlug, workspace, projects }: CreateT
       else toast.error("Please fill in all required fields.");
       return;
     }
-    // 提交前校验日期
-    if (formData.startDate && formData.dueDate) {
-      const sd = new Date(formData.startDate.includes('T') ? formData.startDate : formData.startDate + 'T00:00');
-      const dd = new Date(formData.dueDate.includes('T') ? formData.dueDate : formData.dueDate + 'T23:59');
+    // 提交前校验日期（考虑默认值：startDate默认今天）
+    const effectiveStart = formData.startDate || getTodayDate();
+    const effectiveDue = formData.dueDate;
+    if (effectiveDue) {
+      const sd = new Date(effectiveStart.includes('T') ? effectiveStart : effectiveStart + 'T00:00');
+      const dd = new Date(effectiveDue.includes('T') ? effectiveDue : effectiveDue + 'T23:59');
       if (sd > dd) { toast.error("开始时间不能晚于截止时间"); return; }
     }
 

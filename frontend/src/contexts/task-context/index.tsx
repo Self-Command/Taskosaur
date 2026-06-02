@@ -332,20 +332,12 @@ export function TaskProvider({ children }: TaskProviderProps) {
 
       return result;
     } catch (error: any) {
-      const errorMessage = error?.response?.data?.message || error?.message || "An error occurred";
-      // 400 错误 toast 提示，不设全局 error（避免全页报错）
+      const msg = error?.response?.data?.message || error?.message || "An error occurred";
       if (error?.response?.status === 400) {
+        // 400 Bad Request — 不设全局error，由组件层处理
         setTaskState((prev) => ({ ...prev, isLoading: false }));
-        const { toast } = await import("sonner");
-        toast.error(errorMessage);
-        throw error;
-      }
-      if (setGlobalError) {
-        setTaskState((prev) => ({
-          ...prev,
-          isLoading: false,
-          error: errorMessage,
-        }));
+      } else if (setGlobalError) {
+        setTaskState((prev) => ({ ...prev, isLoading: false, error: msg }));
       } else {
         setTaskState((prev) => ({ ...prev, isLoading: false }));
       }

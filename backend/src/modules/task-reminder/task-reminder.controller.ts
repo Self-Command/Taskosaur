@@ -211,7 +211,7 @@ function checkinHtml(t: any, userId: string, type: string) {
       <div class="row"><span class="lbl">附件</span><span class="val">${t._count.attachments}</span></div>
       <div class="row"><span class="lbl">执行人</span><span class="val">${names(t.assignees)}</span></div>
       <div class="row"><span class="lbl">报告人</span><span class="val">${names(t.reporters)}</span></div>
-      ${t.description ? `<div class="desc">📝 ${desc}</div>` : ''}
+      <div class="desc">📝 ${desc}</div>
     </div>
     <div class="card">
       <h2>📸 拍照打卡</h2>
