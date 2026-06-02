@@ -22,8 +22,9 @@ export default function PushGoSettingsSection() {
     try {
       const c = await api.get("/settings/pushgo_channel_id") as any;
       const p = await api.get("/settings/pushgo_channel_password") as any;
-      setChannelId(c?.value || "");
-      setPassword(p?.value || "");
+      // api.get returns AxiosResponse — value is in .data
+      setChannelId(c?.data?.value || c?.value || "");
+      setPassword(p?.data?.value || p?.value || "");
     } catch {
       // silently fail — user needs to configure
     }

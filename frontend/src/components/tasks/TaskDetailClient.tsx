@@ -193,16 +193,19 @@ export default function TaskDetailClient({
     editTaskData.description !== (task?.description || "") ||
     editTaskData.dueDate !== toDatetimeLocalValue(task?.dueDate);
 
-  const handleStartDateChange = (newStartDate: string) => {
+  const handleStartDateChange = (newStartDate: string): boolean => {
     if (newStartDate && editTaskData.dueDate) {
       const sd = new Date(newStartDate.includes('T') ? newStartDate : newStartDate + 'T00:00');
       const dd = new Date(editTaskData.dueDate.includes('T') ? editTaskData.dueDate : editTaskData.dueDate + 'T23:59');
       if (sd > dd) {
         toast.error("开始时间不能晚于截止时间，已清空截止时间");
         handleTaskFieldChange("dueDate", "");
+        handleTaskFieldChange("startDate", newStartDate);
+        return false;
       }
     }
     handleTaskFieldChange("startDate", newStartDate);
+    return true;
   };
 
   const saveStartDate = async (newStartDate: string) => {
@@ -369,16 +372,17 @@ export default function TaskDetailClient({
     fetchSprints();
   }, [projectSlug, task?.project?.slug, isAuth]);
 
-  const handleDueDateChange = (newDueDate: string) => {
+  const handleDueDateChange = (newDueDate: string): boolean => {
     if (newDueDate && editTaskData.startDate) {
       const sd = new Date(editTaskData.startDate.includes('T') ? editTaskData.startDate : editTaskData.startDate + 'T00:00');
       const dd = new Date(newDueDate.includes('T') ? newDueDate : newDueDate + 'T23:59');
       if (dd < sd) {
         toast.error("截止时间不能早于开始时间");
-        return;
+        return false;
       }
     }
     handleTaskFieldChange("dueDate", newDueDate);
+    return true;
   };
 
   const saveDueDate = async (newDueDate: string) => {
@@ -1750,8 +1754,7 @@ export default function TaskDetailClient({
                         value={editTaskData.startDate}
                         max={editTaskData.dueDate || undefined}
                         onChange={(value) => {
-                          handleStartDateChange(value);
-                          saveStartDate(value);
+                          if (handleStartDateChange(value)) saveStartDate(value);
                         }}
                         placeholder={t("detail.placeholderSelectStartDate")}
                       />
@@ -1785,8 +1788,7 @@ export default function TaskDetailClient({
                         value={editTaskData.dueDate}
                         min={editTaskData.startDate || undefined}
                         onChange={(value) => {
-                          handleDueDateChange(value);
-                          saveDueDate(value);
+                          if (handleDueDateChange(value)) saveDueDate(value);
                         }}
                         placeholder={t("detail.placeholderSelectDueDate")}
                       />
