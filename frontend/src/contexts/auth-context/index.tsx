@@ -162,10 +162,25 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const AI_SETTINGS_CACHE_KEY = '__ais';
+  const AI_SETTINGS_TTL = 30 * 60 * 1000; // 30 minutes
+
   // Function to load and update user AI settings after login
   const loadUserAISettings = useCallback(async () => {
     try {
-      // Load AI settings
+      // Use cached value if fresh
+      try {
+        const raw = localStorage.getItem(AI_SETTINGS_CACHE_KEY);
+        if (raw) {
+          const cached = JSON.parse(raw);
+          if (Date.now() - cached.ts < AI_SETTINGS_TTL) {
+            localStorage.setItem("aiEnabled", cached.enabled);
+            return;
+          }
+        }
+      } catch {}
+
+      // Load AI settings from API
       const aiSettings = await settingsApi.getAll("ai");
 
       // Update localStorage with new values
@@ -173,6 +188,9 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
       if (aiEnabledSetting) {
         const isEnabled = aiEnabledSetting.value === 'true';
         localStorage.setItem("aiEnabled", isEnabled.toString());
+        try {
+          localStorage.setItem(AI_SETTINGS_CACHE_KEY, JSON.stringify({ enabled: isEnabled.toString(), ts: Date.now() }));
+        } catch {}
 
         // Dispatch event to notify other components about AI settings change
         window.dispatchEvent(

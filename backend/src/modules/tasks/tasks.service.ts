@@ -2819,7 +2819,7 @@ export class TasksService {
           priority: updateData.priority ?? taskFromAccess.priority,
           startDate: 'startDate' in updateData ? updateData.startDate : taskFromAccess.startDate,
           dueDate: 'dueDate' in updateData ? updateData.dueDate : taskFromAccess.dueDate,
-          createdBy: (updateData as any).updatedBy ?? taskFromAccess.createdBy,
+          createdBy: updateData.updatedBy ?? taskFromAccess.createdBy,
         })
         .catch((e) => this.logger.error(`Reminder schedule failed: ${e.message}`));
       return this.flattenTaskRelations(updatedTask);
