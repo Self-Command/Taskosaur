@@ -378,6 +378,7 @@ export class TaskAttachmentsService implements OnModuleInit {
     // Set response headers
     res.setHeader('Content-Type', attachment.mimeType);
     res.setHeader('Content-Length', attachment.fileSize);
+    res.setHeader('Cache-Control', `public, max-age=${isDownload ? 0 : 86400}`);
     const encodedName = encodeURIComponent(attachment.fileName);
     res.setHeader(
       'Content-Disposition',
