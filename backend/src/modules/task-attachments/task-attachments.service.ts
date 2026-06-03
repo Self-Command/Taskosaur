@@ -145,6 +145,11 @@ export class TaskAttachmentsService implements OnModuleInit {
     }
 
     try {
+      // Fix multer's latin1-decoded filename for non-ASCII characters
+      const safeName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+      // Update the file object so storage layer also gets the corrected name
+      file.originalname = safeName;
+
       // Use StorageService to save file (handles both S3 and local storage)
       const { url, key, size } = await this.storageService.saveFile(file, `tasks/${taskId}`);
 
@@ -152,7 +157,7 @@ export class TaskAttachmentsService implements OnModuleInit {
       const attachment = await this.prisma.taskAttachment.create({
         data: {
           taskId: taskId,
-          fileName: file.originalname,
+          fileName: safeName,
           fileSize: size,
           mimeType: file.mimetype,
           url: url, // Will be null for S3, static path for local
@@ -373,11 +378,12 @@ export class TaskAttachmentsService implements OnModuleInit {
     // Set response headers
     res.setHeader('Content-Type', attachment.mimeType);
     res.setHeader('Content-Length', attachment.fileSize);
+    const encodedName = encodeURIComponent(attachment.fileName);
     res.setHeader(
       'Content-Disposition',
       isDownload
-        ? `attachment; filename="${attachment.fileName}"`
-        : `inline; filename="${attachment.fileName}"`,
+        ? `attachment; filename*=UTF-8''${encodedName}`
+        : `inline; filename*=UTF-8''${encodedName}`,
     );
 
     // Check if using S3 or local storage

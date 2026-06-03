@@ -727,7 +727,7 @@ export class TasksService {
           return tx.taskAttachment.create({
             data: {
               taskId: createdTask.id,
-              fileName: file.originalname,
+              fileName: Buffer.from(file.originalname, 'latin1').toString('utf8'),
               fileSize: size,
               mimeType: file.mimetype,
               url: url, // Static/local or pre-signed path

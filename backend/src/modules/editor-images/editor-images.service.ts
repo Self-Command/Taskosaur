@@ -71,7 +71,9 @@ export class EditorImagesService {
     this.validateImageFile(file);
 
     // Generate unique filename
-    const uniqueFilename = this.generateUniqueFilename(file.originalname);
+    // Fix multer's latin1-decoded filename for non-ASCII characters
+    const safeName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+    const uniqueFilename = this.generateUniqueFilename(safeName);
 
     // Store in flat editor-images folder (no userId)
     const folder = `editor-images`;

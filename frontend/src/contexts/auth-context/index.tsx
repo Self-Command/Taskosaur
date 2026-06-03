@@ -210,12 +210,12 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
             await setupUserOrganization(freshUser.id);
           }
 
-          await loadUserAISettings();
-
           const token = localStorage.getItem("access_token");
-          if (token) {
-            initializeSocket(token);
-          }
+
+          await Promise.all([
+            loadUserAISettings(),
+            token ? Promise.resolve(initializeSocket(token)) : Promise.resolve(),
+          ]);
         }
       } catch (error) {
         console.error("Error initializing auth:", error);

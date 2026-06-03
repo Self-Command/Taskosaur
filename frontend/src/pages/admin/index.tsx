@@ -105,12 +105,13 @@ function AdminDashboardContent() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const data = await adminApi.getDashboard();
+        const [data, config] = await Promise.all([
+          adminApi.getDashboard(),
+          adminApi.getConfig().catch(() => null),
+        ]);
         setStats(data);
 
-        // Load config status
-        try {
-          const config = await adminApi.getConfig();
+        if (config) {
           const settings = config?.settings || config;
           const settingsMap: Record<string, string> = {};
           if (Array.isArray(settings)) {
@@ -128,7 +129,7 @@ function AdminDashboardContent() {
             smtpConfigured,
             ssoEnabled: settingsMap["sso_enabled"] === "true",
           });
-        } catch {
+        } else {
           setConfigStatus(null);
         }
       } catch (error) {

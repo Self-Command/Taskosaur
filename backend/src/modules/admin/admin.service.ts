@@ -24,41 +24,44 @@ export class AdminService {
     const startOfWeek = new Date(now);
     startOfWeek.setDate(now.getDate() - 7);
 
-    const [
-      totalUsers,
-      totalOrganizations,
-      totalWorkspaces,
-      totalProjects,
-      totalTasks,
-      newUsersThisWeek,
-      newOrgsThisWeek,
-      newProjectsThisWeek,
-      newTasksThisWeek,
-      activeUsers,
-    ] = await Promise.all([
-      this.prisma.user.count(),
-      this.prisma.organization.count(),
-      this.prisma.workspace.count(),
-      this.prisma.project.count(),
-      this.prisma.task.count(),
-      this.prisma.user.count({ where: { createdAt: { gte: startOfWeek } } }),
-      this.prisma.organization.count({ where: { createdAt: { gte: startOfWeek } } }),
-      this.prisma.project.count({ where: { createdAt: { gte: startOfWeek } } }),
-      this.prisma.task.count({ where: { createdAt: { gte: startOfWeek } } }),
-      this.prisma.user.count({ where: { status: UserStatus.ACTIVE } }),
-    ]);
+    const result: Array<{
+      total_users: bigint;
+      total_organizations: bigint;
+      total_workspaces: bigint;
+      total_projects: bigint;
+      total_tasks: bigint;
+      new_users_this_week: bigint;
+      new_orgs_this_week: bigint;
+      new_projects_this_week: bigint;
+      new_tasks_this_week: bigint;
+      active_users: bigint;
+    }> = await this.prisma.$queryRaw`
+      SELECT
+        (SELECT COUNT(*) FROM users WHERE deleted_at IS NULL)::bigint AS total_users,
+        (SELECT COUNT(*) FROM organizations WHERE deleted_at IS NULL)::bigint AS total_organizations,
+        (SELECT COUNT(*) FROM workspaces WHERE deleted_at IS NULL)::bigint AS total_workspaces,
+        (SELECT COUNT(*) FROM projects WHERE deleted_at IS NULL)::bigint AS total_projects,
+        (SELECT COUNT(*) FROM tasks WHERE deleted_at IS NULL)::bigint AS total_tasks,
+        (SELECT COUNT(*) FROM users WHERE deleted_at IS NULL AND created_at >= ${startOfWeek})::bigint AS new_users_this_week,
+        (SELECT COUNT(*) FROM organizations WHERE deleted_at IS NULL AND created_at >= ${startOfWeek})::bigint AS new_orgs_this_week,
+        (SELECT COUNT(*) FROM projects WHERE deleted_at IS NULL AND created_at >= ${startOfWeek})::bigint AS new_projects_this_week,
+        (SELECT COUNT(*) FROM tasks WHERE deleted_at IS NULL AND created_at >= ${startOfWeek})::bigint AS new_tasks_this_week,
+        (SELECT COUNT(*) FROM users WHERE deleted_at IS NULL AND status = ${UserStatus.ACTIVE}::"UserStatus")::bigint AS active_users
+    `;
+
+    const r = result[0];
 
     return {
-      totalUsers,
-      totalOrganizations,
-      totalWorkspaces,
-      totalProjects,
-      totalTasks,
-      newUsersThisWeek,
-      newOrgsThisWeek,
-      newProjectsThisWeek,
-      newTasksThisWeek,
-      activeUsers,
+      totalUsers: Number(r.total_users),
+      totalOrganizations: Number(r.total_organizations),
+      totalWorkspaces: Number(r.total_workspaces),
+      totalProjects: Number(r.total_projects),
+      totalTasks: Number(r.total_tasks),
+      newUsersThisWeek: Number(r.new_users_this_week),
+      newOrgsThisWeek: Number(r.new_orgs_this_week),
+      newProjectsThisWeek: Number(r.new_projects_this_week),
+      newTasksThisWeek: Number(r.new_tasks_this_week),
+      activeUsers: Number(r.active_users),
     };
   }
 

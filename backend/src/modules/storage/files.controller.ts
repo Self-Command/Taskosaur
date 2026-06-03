@@ -86,7 +86,7 @@ export class FilesController {
     // Set appropriate headers
     res.set({
       'Content-Type': this.getMimeType(safeFilename),
-      'Content-Disposition': `inline; filename="${safeFilename}"`,
+      'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(safeFilename)}`,
     });
 
     fileStream.pipe(res);

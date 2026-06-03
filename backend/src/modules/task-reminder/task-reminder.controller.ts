@@ -13,14 +13,23 @@ import { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Public } from '../auth/decorators/public.decorator';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ConfigService } from '@nestjs/config';
 import { diskStorage } from 'multer';
 import { extname, basename } from 'path';
+import * as path from 'path';
 import * as fs from 'fs';
 
 @Controller('tasks')
 export class TaskReminderController {
   private readonly logger = new Logger(TaskReminderController.name);
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly uploadDir: string;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly configService: ConfigService,
+  ) {
+    this.uploadDir = this.configService.get('UPLOAD_DEST', './uploads');
+  }
 
   @Public()
   @Get(':taskId/start-reminder')
@@ -54,7 +63,8 @@ export class TaskReminderController {
     FileInterceptor('photo', {
       storage: diskStorage({
         destination: (_, __, cb) => {
-          const d = './uploads/checkin';
+          const base = process.env['UPLOAD_DEST'] || './uploads';
+          const d = path.join(base, 'checkin');
           if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
           cb(null, d);
         },
@@ -89,15 +99,18 @@ export class TaskReminderController {
       `[CHECKIN] task=${taskId} photo=${!!photo} size=${photo?.size} name=${photo?.originalname}`,
     );
     if (photo) {
+      const safeName = Buffer.from(photo.originalname, 'latin1').toString('utf8');
       const diskFileName = basename(photo.path);
+      const relPath = `checkin/${diskFileName}`;
       await this.prisma.taskAttachment.create({
         data: {
           taskId,
-          fileName: photo.originalname,
+          fileName: safeName,
           filePath: photo.path.replace(/\\/g, '/'),
           mimeType: photo.mimetype,
           fileSize: photo.size,
-          url: `/checkin/${diskFileName}`,
+          url: `/${relPath}`,
+          storageKey: relPath,
           createdBy: userId,
         },
       });

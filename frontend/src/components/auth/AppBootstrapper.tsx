@@ -53,6 +53,7 @@ export default function AppBootstrapper({ children }: AppBootstrapperProps) {
   const handleSystemCheck = async () => {
     const skipRoutes = ["/login", "/register", "/forgot-password", "/reset-password", "/terms-of-service", "/privacy-policy", "/public/"];
     if (skipRoutes.some(r => router.pathname.startsWith(r)) || router.pathname === "/setup") {
+      setIsRedirecting(false);
       return true;
     }
 
@@ -64,29 +65,22 @@ export default function AppBootstrapper({ children }: AppBootstrapperProps) {
         setCachedUsersExist(exists);
       }
       if (!exists) {
-        setIsRedirecting(true);
         router.replace("/setup");
         return false;
       }
     } catch {
+      // API call failed — if we have a cached value or any sign of prior login, trust it
+      if (getCachedUsersExist() === true) return true;
+      const hasToken = typeof window !== "undefined" && !!localStorage.getItem("access_token");
+      if (hasToken) return true;
+      // Last resort: ask the dedicated setup endpoint; if that also fails, show login (not setup)
       try {
         const setupStatus = await authApi.checkSetupStatus();
         if (setupStatus?.required) {
-          setIsRedirecting(true);
           router.replace("/setup");
           return false;
         }
-      } catch {
-        const hasToken = typeof window !== "undefined" && (
-          localStorage.getItem("access_token") ||
-          document.cookie.includes("access_token")
-        );
-        if (!hasToken) {
-          setIsRedirecting(true);
-          router.replace("/setup");
-          return false;
-        }
-      }
+      } catch {}
     }
     return true;
   };
@@ -123,6 +117,9 @@ export default function AppBootstrapper({ children }: AppBootstrapperProps) {
 
       if (isPublicRoute) {
         const authPages = ["/login", "/register", "/forgot-password", "/reset-password", "/setup"];
+        if (router.pathname === "/setup") {
+          return { isAuth: true, redirectPath: "/dashboard", isOrg: true };
+        }
         if (!authPages.includes(router.pathname)) {
           return { isAuth: true, isOrg: true };
         }

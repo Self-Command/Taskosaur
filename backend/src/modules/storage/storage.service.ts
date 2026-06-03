@@ -120,8 +120,9 @@ export class StorageService implements OnModuleInit {
   ): Promise<{ url: string | null; key: string; size: number }> {
     // Sanitize folder and fileName to prevent path injection
     const safeFolder = this.sanitizeFolderPath(folder);
-    const fileName = file.originalname;
-    const safeFileName = this.sanitizePathComponent(fileName);
+    // Fix multer's latin1-decoded filename for non-ASCII characters
+    const safeOriginalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+    const safeFileName = this.sanitizePathComponent(safeOriginalName);
 
     const key = `${safeFolder}/${safeFileName}`;
 

@@ -37,24 +37,25 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.prod
+      args:
+        APT_MIRROR: ${APT_MIRROR:-}
+        NPM_REGISTRY: ${NPM_REGISTRY:-}
     environment:
       # Node Environment
       NODE_ENV: production
 
       # Database Configuration (connect to internal PostgreSQL)
-      # Note: Explicitly set to use 'postgres' hostname for Docker network
       DATABASE_URL: postgresql://${POSTGRES_USER:-taskosaur}:${POSTGRES_PASSWORD:-taskosaur}@postgres:5432/${POSTGRES_DB:-taskosaur}
 
       # Redis Configuration (connect to internal Redis)
-      # Note: Explicitly set to use 'redis' hostname for Docker network
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
 
       # Application URLs
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
-      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:3000/api}
+      FRONTEND_URL: http://10.90.61.109:9700
+      CORS_ORIGINS: http://10.90.61.109:9700,http://localhost:9700
+      NEXT_PUBLIC_API_BASE_URL: http://10.90.61.109:9700/api
 
       # Security (must be set via .env file or environment variables)
       JWT_SECRET: ${JWT_SECRET}
@@ -84,8 +85,8 @@ services:
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       AWS_REGION: ${AWS_REGION:-}
       AWS_BUCKET_NAME: ${AWS_BUCKET_NAME:-}
-    ports:
-      - "${APP_PORT:-9700}:3000"
+    expose:
+      - "3000"
     volumes:
       - app_uploads:/app/uploads
       - app_logs:/app/logs
@@ -104,6 +105,21 @@ services:
       retries: 3
       start_period: 40s
 
+  # Nginx reverse proxy — gzip compression + static file caching
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "${APP_PORT:-9700}:80"
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - nginx_cache:/var/cache/nginx
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - taskosaur-network
+    restart: unless-stopped
+
 volumes:
   postgres_data:
     driver: local
@@ -112,6 +128,8 @@ volumes:
   app_uploads:
     driver: local
   app_logs:
+    driver: local
+  nginx_cache:
     driver: local
 
 networks:
