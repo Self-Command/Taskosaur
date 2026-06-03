@@ -376,6 +376,9 @@ export function TaskProvider({ children }: TaskProviderProps) {
           throw new Error("No organization selected. Please select an organization first.");
         }
 
+        if (!params.parentTaskId) {
+          setTaskState((prev) => ({ ...prev, tasks: [], isLoading: true }));
+        }
         const result = await handleApiOperation(
           () =>
             taskApi.getFilteredTasks({
@@ -399,9 +402,8 @@ export function TaskProvider({ children }: TaskProviderProps) {
             ...prev,
             tasks: result.data,
             taskResponse: result,
+            isLoading: false,
             currentSort: {
-              // Note: getFilteredTasks doesn't currently take sortBy/sortOrder from params,
-              // but we store them anyway for consistency if added later.
               sortBy: undefined,
               sortOrder: undefined,
             },
@@ -588,11 +590,13 @@ export function TaskProvider({ children }: TaskProviderProps) {
           groupBy?: string;
         }
       ): Promise<PaginatedTaskResponse> => {
+        setTaskState((prev) => ({ ...prev, tasks: [], isLoading: true }));
         const result = await taskApi.getAllTasks(organizationId, params);
         setTaskState((prev) => ({
           ...prev,
           tasks: result.data,
           taskResponse: result,
+          isLoading: false,
           currentSort: {
             sortBy: params?.sortBy,
             sortOrder: params?.sortOrder,

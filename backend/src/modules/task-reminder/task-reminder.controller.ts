@@ -85,7 +85,9 @@ export class TaskReminderController {
     });
     if (!task) return res.send(resultHtml('任务未找到', false));
 
-    console.log(`[CHECKIN] task=${taskId} photo=${!!photo} size=${photo?.size} name=${photo?.originalname}`);
+    console.log(
+      `[CHECKIN] task=${taskId} photo=${!!photo} size=${photo?.size} name=${photo?.originalname}`,
+    );
     if (photo) {
       const diskFileName = basename(photo.path);
       await this.prisma.taskAttachment.create({
@@ -118,10 +120,17 @@ export class TaskReminderController {
       const buf = fs.readFileSync(photo.path);
       photoDataUrl = `data:${photo.mimetype};base64,${buf.toString('base64')}`;
     }
-    return res.send(detailHtml(
-      cat === 'IN_PROGRESS' ? '已开始处理' : '已完成',
-      task.slug, task.title || '任务', now, photoName, photoSize, photoDataUrl,
-    ));
+    return res.send(
+      detailHtml(
+        cat === 'IN_PROGRESS' ? '已开始处理' : '已完成',
+        task.slug,
+        task.title || '任务',
+        now,
+        photoName,
+        photoSize,
+        photoDataUrl,
+      ),
+    );
   }
 
   private async getFullTask(taskId: string) {
@@ -236,7 +245,11 @@ function detailHtml(
 }
 
 function escHtml(s: string) {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 function resultHtml(msg: string, ok: boolean) {
@@ -249,9 +262,10 @@ function resultHtml(msg: string, ok: boolean) {
     .text{font-size:17px;font-weight:600;color:#1e293b;margin-bottom:4px}
     .sub{font-size:13px;color:#94a3b8}
     </style></head><body><div class="card">
-    <div class="icon-wrap">${ok
-      ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
-      : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'
+    <div class="icon-wrap">${
+      ok
+        ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+        : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'
     }</div>
     <div class="text">${escHtml(msg)}</div>
     <div class="sub">${ok ? '操作成功' : '请稍后重试'}</div>
@@ -262,8 +276,11 @@ function checkinHtml(t: any, userId: string, type: string) {
   const label = type === 'start-reminder' ? '开始处理' : '标记完成';
   const btnLabel = type === 'start-reminder' ? '确认开始处理' : '确认标记完成';
   const priorityColor =
-    t.priority === 'HIGHEST' || t.priority === 'HIGH' ? '#ef4444' :
-    t.priority === 'MEDIUM' ? '#f59e0b' : '#6b7280';
+    t.priority === 'HIGHEST' || t.priority === 'HIGH'
+      ? '#ef4444'
+      : t.priority === 'MEDIUM'
+        ? '#f59e0b'
+        : '#6b7280';
   const desc = t.description
     ? t.description.length > 200
       ? t.description.slice(0, 200) + '...'

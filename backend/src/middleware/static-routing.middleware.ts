@@ -115,7 +115,11 @@ export class StaticRoutingMiddleware {
 
   middleware = (req: Request, res: Response, next: NextFunction): void => {
     // Skip if route starts with /api, /ai-chat, /v1 (API routes)
-    if (req.path.startsWith('/api') || req.path.startsWith('/ai-chat') || req.path.startsWith('/v1')) {
+    if (
+      req.path.startsWith('/api') ||
+      req.path.startsWith('/ai-chat') ||
+      req.path.startsWith('/v1')
+    ) {
       return next();
     }
 

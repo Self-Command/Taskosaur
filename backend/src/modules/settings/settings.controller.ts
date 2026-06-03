@@ -77,7 +77,14 @@ export class SettingsController {
     if (existing) return { apiKey: existing, regenerated: false };
     // 自动生成唯一Key
     const key = 'tsk_' + crypto.randomBytes(16).toString('hex');
-    await this.settingsService.set('user_api_key', key, user.id, 'OpenAI-compatible API key', 'api_key', false);
+    await this.settingsService.set(
+      'user_api_key',
+      key,
+      user.id,
+      'OpenAI-compatible API key',
+      'api_key',
+      false,
+    );
     return { apiKey: key, regenerated: true };
   }
 
@@ -85,7 +92,14 @@ export class SettingsController {
   @Post('api-key/regenerate')
   async regenerateApiKey(@CurrentUser() user: User) {
     const key = 'tsk_' + crypto.randomBytes(16).toString('hex');
-    await this.settingsService.set('user_api_key', key, user.id, 'OpenAI-compatible API key', 'api_key', false);
+    await this.settingsService.set(
+      'user_api_key',
+      key,
+      user.id,
+      'OpenAI-compatible API key',
+      'api_key',
+      false,
+    );
     return { apiKey: key };
   }
 }

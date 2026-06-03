@@ -38,9 +38,15 @@ export class OpenAICompatController {
       if (!apiKey) return res.status(401).json({ error: { message: 'Missing API key' } });
 
       // 用 API Key 查 settings 表找到 userId
-      const setting = await this.prisma.settings.findFirst({ where: { key: 'user_api_key', value: apiKey }, select: { userId: true } });
+      const setting = await this.prisma.settings.findFirst({
+        where: { key: 'user_api_key', value: apiKey },
+        select: { userId: true },
+      });
       const userId = setting?.userId;
-      if (!userId) return res.status(401).json({ error: { message: 'Invalid API key. Get your key from Settings page.' } });
+      if (!userId)
+        return res
+          .status(401)
+          .json({ error: { message: 'Invalid API key. Get your key from Settings page.' } });
 
       const user = await this.prisma.user.findUnique({ where: { id: userId } });
       if (!user) return res.status(401).json({ error: { message: 'User not found' } });

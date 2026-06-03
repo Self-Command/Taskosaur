@@ -48,11 +48,11 @@ export class TaskReminderWorker implements OnModuleInit {
             sprint: { select: { name: true } },
             assignees: { select: { user: { select: { firstName: true, lastName: true } } } },
             reporters: { select: { user: { select: { firstName: true, lastName: true } } } },
-            status: { select: { name: true } },
+            status: { select: { name: true, category: true } },
             _count: { select: { childTasks: true, comments: true, attachments: true } },
           },
         });
-        if (!task || task.completedAt) return;
+        if (!task || task.completedAt || task.status?.category === 'DONE') return;
 
         // 从数据库读取用户设置（前端设置页面可修改）
         const channelId = await this.getUserSetting(userId, 'pushgo_channel_id');
@@ -75,8 +75,11 @@ export class TaskReminderWorker implements OnModuleInit {
             .join(', ') || '未分配';
 
         const action = type === 'start' ? 'start-reminder' : 'complete-reminder';
-        const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/api\/?$/, '') || process.env.FRONTEND_URL || 'http://localhost:3000';
-const callbackUrl = `${apiBase}/api/tasks/${task.id}/${action}?userId=${userId}`;
+        const apiBase =
+          process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/api\/?$/, '') ||
+          process.env.FRONTEND_URL ||
+          'http://localhost:3000';
+        const callbackUrl = `${apiBase}/api/tasks/${task.id}/${action}?userId=${userId}`;
 
         const priorityLabel: Record<string, string> = {
           LOWEST: '最低',
@@ -95,7 +98,10 @@ const callbackUrl = `${apiBase}/api/tasks/${task.id}/${action}?userId=${userId}`
           `报告人: ${joinNames(task.reporters)}`,
         ];
         if (task.description) {
-          const desc = task.description.length > 150 ? task.description.slice(0, 150) + '...' : task.description;
+          const desc =
+            task.description.length > 150
+              ? task.description.slice(0, 150) + '...'
+              : task.description;
           lines.push(`描述: ${desc}`);
         } else {
           lines.push('描述: 无');
@@ -118,7 +124,6 @@ const callbackUrl = `${apiBase}/api/tasks/${task.id}/${action}?userId=${userId}`
               body,
               severity,
               url: callbackUrl,
-              op_id: `reminder-${task.id}-${type}`,
               ttl,
             }),
           });

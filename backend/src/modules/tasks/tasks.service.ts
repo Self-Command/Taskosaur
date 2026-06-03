@@ -2813,7 +2813,14 @@ export class TasksService {
       });
 
       this.reminderService
-        .schedule(updatedTask)
+        .schedule({
+          id: updatedTask.id,
+          title: updatedTask.title,
+          priority: updateData.priority ?? taskFromAccess.priority,
+          startDate: 'startDate' in updateData ? updateData.startDate : taskFromAccess.startDate,
+          dueDate: 'dueDate' in updateData ? updateData.dueDate : taskFromAccess.dueDate,
+          createdBy: (updateData as any).updatedBy ?? taskFromAccess.createdBy,
+        })
         .catch((e) => this.logger.error(`Reminder schedule failed: ${e.message}`));
       return this.flattenTaskRelations(updatedTask);
     } catch (error: any) {
