@@ -74,10 +74,8 @@ export class TaskReminderWorker implements OnModuleInit {
             .filter(Boolean)
             .join(', ') || '未分配';
 
-        const action = type === 'start' ? 'start-reminder' : 'complete-reminder';
         const apiBase =
-          process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/api\/?$/, '') ||
-          process.env.FRONTEND_URL ||
+          this.configService.get('FRONTEND_URL') ||
           'http://localhost:3000';
         const callbackUrl = `${apiBase}/api/tasks/${task.id}/${action}?userId=${userId}`;
 
