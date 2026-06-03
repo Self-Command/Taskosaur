@@ -8,10 +8,10 @@ const QUEUE = 'task-reminders';
 const PUSHGO_URL = 'https://gateway.pushgo.cn/message';
 
 const SEVERITY_MAP: Record<string, string> = {
-  LOWEST: 'info',
-  LOW: 'info',
-  MEDIUM: 'warning',
-  HIGH: 'critical',
+  LOWEST: 'low',
+  LOW: 'low',
+  MEDIUM: 'normal',
+  HIGH: 'high',
   HIGHEST: 'critical',
 };
 
@@ -107,6 +107,7 @@ const callbackUrl = `${apiBase}/api/tasks/${task.id}/${action}?userId=${userId}`
         const severity = SEVERITY_MAP[task.priority] || 'info';
 
         try {
+          const ttl = Date.now() + 24 * 60 * 60 * 1000; // 24h TTL — prevent stale message pile-up
           const res = await fetch(PUSHGO_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -117,6 +118,8 @@ const callbackUrl = `${apiBase}/api/tasks/${task.id}/${action}?userId=${userId}`
               body,
               severity,
               url: callbackUrl,
+              op_id: `reminder-${task.id}-${type}`,
+              ttl,
             }),
           });
           const json = await res.json();

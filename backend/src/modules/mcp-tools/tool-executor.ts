@@ -808,6 +808,11 @@ export class ToolExecutor {
     if (!project) return { success: false, error: `Project not found. Use list_projects first.` };
     const typeErr = this.validateTaskType(params.type);
     if (typeErr) return { success: false, error: typeErr };
+    const startDate = this.safeDate(params.startDate);
+    const dueDate = this.safeDate(params.dueDate);
+    if (startDate && dueDate && startDate > dueDate) {
+      return { success: false, error: '开始时间不能晚于截止时间' };
+    }
     const taskNumber = project._count.tasks + 1;
     const slug = `${project.taskPrefix || 'TASK'}-${taskNumber}`;
     const task = await this.prisma.task.create({
@@ -818,8 +823,8 @@ export class ToolExecutor {
         priority: params.priority || 'MEDIUM',
         taskNumber,
         slug,
-        startDate: this.safeDate(params.startDate),
-        dueDate: this.safeDate(params.dueDate),
+        startDate,
+        dueDate,
         storyPoints: params.storyPoints ? +params.storyPoints : null,
         customFields: params.customFields || null,
         projectId: params.projectId,
@@ -861,6 +866,17 @@ export class ToolExecutor {
     const typeErr = this.validateTaskType(params.type);
     if (typeErr) return { success: false, error: typeErr };
     const { taskId, ...data } = params;
+    // Validate date range: merge with existing task dates if partial update
+    const existing = await this.prisma.task.findUnique({
+      where: { id: taskId },
+      select: { startDate: true, dueDate: true },
+    });
+    if (!existing) return { success: false, error: 'Task not found' };
+    const effectiveStart = this.safeDate(data.startDate) ?? existing.startDate;
+    const effectiveDue = this.safeDate(data.dueDate) ?? existing.dueDate;
+    if (effectiveStart && effectiveDue && effectiveStart > effectiveDue) {
+      return { success: false, error: '开始时间不能晚于截止时间' };
+    }
     const updateData: any = { updatedBy: userId };
     const strFields = [
       'title',

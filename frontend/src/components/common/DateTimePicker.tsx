@@ -39,6 +39,12 @@ interface DateTimePickerProps {
 /* ── helpers ── */
 function strToDate(s: string): Date | null {
   if (!s) return null;
+  // YYYY-MM-DD format: parse as local to avoid UTC offset issues
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(s);
+  if (dateOnly) {
+    const [y, m, d] = s.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
   const d = new Date(s);
   return isNaN(d.getTime()) ? null : d;
 }
@@ -48,6 +54,8 @@ function pad(n: number) { return String(n).padStart(2, "0"); }
 function dateToStr(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(getHours(d))}:${pad(getMinutes(d))}`;
 }
+
+function startOfDay(d: Date): Date { return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
 
 const DAY_NAMES = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 
@@ -64,6 +72,19 @@ export default function DateTimePicker({
   const [open, setOpen] = useState(false);
 
   const selected = useMemo(() => strToDate(value), [value]);
+  const minDate = useMemo(() => strToDate(_min || ""), [_min]);
+  const maxDate = useMemo(() => strToDate(_max || ""), [_max]);
+
+  /* check if a day is within [min, max] range */
+  const isOutOfRange = useCallback(
+    (day: Date) => {
+      const d = startOfDay(day);
+      if (minDate && d < startOfDay(minDate)) return true;
+      if (maxDate && d > startOfDay(maxDate)) return true;
+      return false;
+    },
+    [minDate, maxDate]
+  );
 
   /* calendar navigation */
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(selected || new Date()));
@@ -100,14 +121,14 @@ export default function DateTimePicker({
 
   const handleDayClick = useCallback(
     (day: Date) => {
+      if (isOutOfRange(day)) return;
       emit(day, timeInput);
       setOpen(false);
     },
-    [timeInput, emit]
+    [timeInput, emit, isOutOfRange]
   );
 
   const handleTimeBlur = useCallback(() => {
-    // validate HH:MM
     const m = /^(\d{1,2}):(\d{2})$/.exec(timeInput);
     let fixed = timeInput;
     if (!m) fixed = "12:00";
@@ -199,15 +220,18 @@ export default function DateTimePicker({
             const inMonth = isSameMonth(day, viewMonth);
             const isSel = selected && isSameDay(day, selected);
             const isTdy = isToday(day);
+            const outOfRange = isOutOfRange(day);
             return (
               <button
                 key={day.toISOString()}
                 type="button"
                 onClick={() => handleDayClick(day)}
+                disabled={outOfRange}
                 className={cn(
                   "size-9 flex items-center justify-center text-sm rounded-full",
                   "hover:bg-[var(--hover-bg)] transition-colors",
                   !inMonth && "text-[var(--muted-foreground)]/40",
+                  outOfRange && "opacity-30 cursor-not-allowed",
                   isSel && "bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary)]/90",
                   isTdy && !isSel && "text-[var(--primary)] font-semibold"
                 )}
@@ -239,12 +263,14 @@ export default function DateTimePicker({
             type="button"
             onClick={() => {
               const now = new Date();
+              if (isOutOfRange(now)) return;
               const t = `${pad(getHours(now))}:${pad(getMinutes(now))}`;
               setTimeInput(t);
               emit(now, t);
               setOpen(false);
             }}
             className="text-sm text-[var(--primary)] hover:underline"
+            disabled={isOutOfRange(new Date())}
           >
             Today
           </button>

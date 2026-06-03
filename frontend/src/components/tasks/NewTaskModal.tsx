@@ -511,7 +511,6 @@ export function NewTaskModal({
             ? formData.type
             : "TASK",
           storyPoints: formData.storyPoints ? parseInt(formData.storyPoints) : undefined,
-          startDate: formatDateForApi(getTodayDate()) ?? undefined,
           dueDate: formData.dueDate ? (formatDateForApi(formData.dueDate, { endOfDay: true }) ?? undefined) : undefined,
           projectId: formData.project!.id,
           statusId: defaultStatus?.id,

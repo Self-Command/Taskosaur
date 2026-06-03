@@ -388,12 +388,10 @@ export default function CreateTask({ projectSlug, workspace, projects }: CreateT
       else toast.error("Please fill in all required fields.");
       return;
     }
-    // 提交前校验日期（考虑默认值：startDate默认今天）
-    const effectiveStart = formData.startDate || getTodayDate();
-    const effectiveDue = formData.dueDate;
-    if (effectiveDue) {
-      const sd = new Date(effectiveStart.includes('T') ? effectiveStart : effectiveStart + 'T00:00');
-      const dd = new Date(effectiveDue.includes('T') ? effectiveDue : effectiveDue + 'T23:59');
+    // 提交前校验日期：仅当两者都填写时才校验
+    if (formData.startDate && formData.dueDate) {
+      const sd = new Date(formData.startDate.includes('T') ? formData.startDate : formData.startDate + 'T00:00');
+      const dd = new Date(formData.dueDate.includes('T') ? formData.dueDate : formData.dueDate + 'T23:59');
       if (sd > dd) { toast.error("开始时间不能晚于截止时间"); return; }
     }
 
@@ -410,11 +408,8 @@ export default function CreateTask({ projectSlug, workspace, projects }: CreateT
         priority: formData.priority.toUpperCase() as "LOW" | "MEDIUM" | "HIGH" | "HIGHEST",
         type: formData.type as "TASK" | "HABIT" | "STUDY" | "WORK" | "LIFE" | "GOAL" | "EVENT" | "NOTE" | "PROJECT" | "SUBTASK",
         storyPoints: formData.storyPoints ? parseInt(formData.storyPoints) : undefined,
-        startDate: formData.startDate ? formatDateForApi(formData.startDate)
-          : formatDateForApi(getTodayDate()),
-        dueDate: formData.dueDate
-          ? formatDateForApi(formData.dueDate, { endOfDay: true })
-          : formatDateForApi(getTodayDate(), { endOfDay: true }),
+        startDate: formData.startDate ? formatDateForApi(formData.startDate) : undefined,
+        dueDate: formData.dueDate ? formatDateForApi(formData.dueDate, { endOfDay: true }) : undefined,
         projectId: selectedProject.id,
         statusId: formData.status || defaultStatus?.id,
       };
@@ -940,16 +935,17 @@ export default function CreateTask({ projectSlug, workspace, projects }: CreateT
                 <Label htmlFor="startDate">{t("startDate")}</Label>
                 <DateTimePicker
                   value={formData.startDate}
+                  max={formData.dueDate || undefined}
                   onChange={(newStart) => {
-                    handleFormDataChange("startDate", newStart);
                     if (formData.dueDate && newStart) {
                       const sd = new Date(newStart.includes('T') ? newStart : newStart + 'T00:00');
                       const dd = new Date(formData.dueDate.includes('T') ? formData.dueDate : formData.dueDate + 'T23:59');
                       if (sd > dd) {
-                        toast.error("开始时间不能晚于截止时间，已清空截止时间");
-                        handleFormDataChange("dueDate", "");
+                        toast.error("开始时间不能晚于截止时间");
+                        return;
                       }
                     }
+                    handleFormDataChange("startDate", newStart);
                   }}
                   placeholder={t("selectDate", "Select date")}
                 />
@@ -959,6 +955,7 @@ export default function CreateTask({ projectSlug, workspace, projects }: CreateT
                 <Label htmlFor="dueDate">{t("dueDate")}</Label>
                 <DateTimePicker
                   value={formData.dueDate}
+                  min={formData.startDate || undefined}
                   onChange={(newDueDate) => {
                     if (formData.startDate && newDueDate) {
                       const sd = new Date(formData.startDate.includes('T') ? formData.startDate : formData.startDate + 'T00:00');

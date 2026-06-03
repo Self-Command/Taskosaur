@@ -198,9 +198,7 @@ export default function TaskDetailClient({
       const sd = new Date(newStartDate.includes('T') ? newStartDate : newStartDate + 'T00:00');
       const dd = new Date(editTaskData.dueDate.includes('T') ? editTaskData.dueDate : editTaskData.dueDate + 'T23:59');
       if (sd > dd) {
-        toast.error("开始时间不能晚于截止时间，已清空截止时间");
-        handleTaskFieldChange("dueDate", "");
-        handleTaskFieldChange("startDate", newStartDate);
+        toast.error("开始时间不能晚于截止时间");
         return false;
       }
     }

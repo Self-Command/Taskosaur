@@ -16,6 +16,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { TaskType, TaskPriority } from '@prisma/client';
 import { Transform, Type, plainToInstance } from 'class-transformer';
 import { RecurrenceConfigDto } from './recurrence-config.dto';
+import { StartBeforeDue } from '../../../common/validators/start-before-due.validator';
 
 export class CreateTaskDto {
   @ApiProperty({
@@ -79,6 +80,7 @@ export class CreateTaskDto {
   })
   @IsDateString()
   @IsOptional()
+  @StartBeforeDue()
   dueDate?: string;
 
   @ApiProperty({
