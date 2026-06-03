@@ -53,9 +53,9 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
 
       # Application URLs
-      FRONTEND_URL: http://10.90.61.109:9700
-      CORS_ORIGINS: http://10.90.61.109:9700,http://localhost:9700
-      NEXT_PUBLIC_API_BASE_URL: http://10.90.61.109:9700/api
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:9700}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:9700}
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:9700/api}
 
       # Security (must be set via .env file or environment variables)
       JWT_SECRET: ${JWT_SECRET}
