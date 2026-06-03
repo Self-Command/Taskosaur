@@ -13,6 +13,7 @@ import { OrganizationMembersModule } from '../organization-members/organization-
 import { WorkspaceMembersModule } from '../workspace-members/workspace-members.module';
 import { ProjectMembersModule } from '../project-members/project-members.module';
 import { S3Module } from '../storage/s3.module';
+import { TaskReminderModule } from '../task-reminder/task-reminder.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { S3Module } from '../storage/s3.module';
     WorkspaceMembersModule,
     ProjectMembersModule,
     S3Module,
+    TaskReminderModule,
   ],
   controllers: [McpToolsController],
   providers: [McpToolsService, ToolExecutor, McpLoggerService],
