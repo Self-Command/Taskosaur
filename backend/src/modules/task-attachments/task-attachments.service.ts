@@ -387,13 +387,22 @@ export class TaskAttachmentsService implements OnModuleInit {
         : `inline; filename*=UTF-8''${encodedName}`,
     );
 
+    // For image preview (not download), try serving thumbnail if available
+    let serveUrl = attachment.url;
+    if (!isDownload && attachment.mimeType?.startsWith('image/') && serveUrl) {
+      const thumbPath = serveUrl.replace(/(\.[^.]+)$/, '_thumb.jpg');
+      if (this.storageService.thumbExists(thumbPath)) {
+        serveUrl = thumbPath;
+      }
+    }
+
     // Check if using S3 or local storage
-    if (!attachment.url && attachment.storageKey) {
+    if (!serveUrl && attachment.storageKey) {
       // Stream from S3
       await this.storageService.streamFromS3(attachment.storageKey, res);
-    } else if (attachment.url) {
+    } else if (serveUrl) {
       // Stream from local storage
-      this.storageService.streamFromLocal(attachment.url, res);
+      this.storageService.streamFromLocal(serveUrl, res);
     } else {
       throw new NotFoundException('Attachment not found');
     }

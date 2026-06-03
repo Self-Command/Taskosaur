@@ -11,6 +11,7 @@ import { S3Service } from './s3.service';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Response } from 'express';
+import sharp from 'sharp';
 
 @Injectable()
 export class StorageService implements OnModuleInit {
@@ -146,12 +147,32 @@ export class StorageService implements OnModuleInit {
       const filePath = path.join(localPath, safeFileName);
       fs.writeFileSync(filePath, file.buffer);
 
+      // Generate thumbnail for images
+      if (file.mimetype?.startsWith('image/')) {
+        const thumbName = safeFileName.replace(/(\.[^.]+)$/, '_thumb.jpg');
+        const thumbPath = path.join(localPath, thumbName);
+        try {
+          await sharp(file.buffer)
+            .resize(1920, 1920, { fit: 'inside', withoutEnlargement: true })
+            .jpeg({ quality: 75 })
+            .toFile(thumbPath);
+          this.logger.debug(`Thumbnail generated: ${thumbPath}`);
+        } catch (err: any) {
+          this.logger.warn(`Thumbnail generation failed: ${err.message}`);
+        }
+      }
+
       return {
         url: `/${safeFolder}/${safeFileName}`,
         key: `${safeFolder}/${safeFileName}`,
         size: file.size,
       };
     }
+  }
+
+  thumbExists(relativePath: string): boolean {
+    const filePath = path.join(this.uploadDir, relativePath);
+    return fs.existsSync(filePath);
   }
 
   async deleteFile(key: string, inCloud: boolean): Promise<void> {
