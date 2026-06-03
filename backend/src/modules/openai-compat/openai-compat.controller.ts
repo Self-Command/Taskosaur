@@ -52,11 +52,12 @@ export class OpenAICompatController {
       if (!user) return res.status(401).json({ error: { message: 'User not found' } });
 
       const tz = (user as any).timezone || 'UTC';
-      const systemMsg = {
+      const ctxMsg = {
         role: 'system',
-        content: `Today is ${new Intl.DateTimeFormat('zh-CN', { timeZone: tz, dateStyle: 'full', timeStyle: 'short' }).format(new Date())} (${tz}).`,
+        content: `Today is ${new Intl.DateTimeFormat('zh-CN', { timeZone: tz, dateStyle: 'full', timeStyle: 'short' }).format(new Date())} (${tz}). Current user ID: ${userId}.`,
       };
-      const allMessages = [systemMsg, ...messages.filter((m: any) => m.role !== 'system')];
+      // Preserve caller's system messages — they contain project context; just prepend timezone
+      const allMessages = [ctxMsg, ...messages.filter((m: any) => m.role === 'system'), ...messages.filter((m: any) => m.role !== 'system')];
 
       const config = await (this.aiChatService as any).resolveChatConfig(userId);
       const tools = this.mcpToolsService.getOpenAITools();
