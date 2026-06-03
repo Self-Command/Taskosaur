@@ -12,6 +12,7 @@ import { EventsGateway } from '../../gateway/events.gateway';
 import { TaskType } from '@prisma/client';
 import { SlugService } from '../../common/slug.service';
 import { StorageService } from '../storage/storage.service';
+import { TaskReminderService } from '../task-reminder/task-reminder.service';
 import * as crypto from 'crypto';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -84,6 +85,7 @@ export class ToolExecutor {
     private eventsGateway: EventsGateway,
     private slugService: SlugService,
     private storageService: StorageService,
+    private reminderService: TaskReminderService,
   ) {}
 
   // ---- helpers ----
@@ -846,6 +848,7 @@ export class ToolExecutor {
         status: { select: { name: true, color: true } },
       },
     });
+    this.reminderService.schedule(task).catch(() => {});
     return {
       success: true,
       task,
@@ -911,6 +914,7 @@ export class ToolExecutor {
       data: updateData,
       include: { project: { select: { name: true } }, status: { select: { name: true } } },
     });
+    this.reminderService.schedule(task).catch(() => {});
     return { success: true, task, message: `Task "${task.title}" updated` };
   }
 
