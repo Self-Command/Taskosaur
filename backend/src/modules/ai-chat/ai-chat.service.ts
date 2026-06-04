@@ -399,6 +399,56 @@ export class AiChatService {
         messages.splice(1, 0, ...historyEntries);
       }
 
+      // ── Web Search (DuckDuckGo HTML, free, no API key) ──
+      const searchResults: any[] = [];
+      if (chatRequest.enableWebSearch) {
+        try {
+          const q = encodeURIComponent(chatRequest.message);
+          const ddgRes = await fetch(`https://html.duckduckgo.com/html/?q=${q}`, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            },
+            signal: AbortSignal.timeout(10000),
+          });
+          const html = await ddgRes.text();
+          const blocks = html.split('class="result__body"');
+          for (let i = 1; i < blocks.length && searchResults.length < 5; i++) {
+            const b = blocks[i];
+            const tm = b.match(/class="result__a"[^>]*href="([^"]*)"[^>]*>([^<]*)<\//);
+            const sm = b.match(/class="result__snippet"[^>]*>([\s\S]*?)<\/a>/);
+            if (tm)
+              searchResults.push({
+                title: tm[2].replace(/<[^>]*>/g, '').trim(),
+                url: tm[1],
+                snippet: sm ? sm[1].replace(/<[^>]*>/g, '').trim() : '',
+              });
+          }
+          if (searchResults.length > 0) {
+            messages.push({
+              role: 'system',
+              content:
+                "[Web Search Results] — Use these real-time search results to answer the user's question. Cite sources by their [N] number.\n\n" +
+                searchResults
+                  .map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.snippet}`)
+                  .join('\n\n'),
+            });
+          } else {
+            messages.push({
+              role: 'system',
+              content:
+                '[Web Search Results] — No results were returned for this query. Tell the user the search completed but found nothing relevant, and offer to answer from your own knowledge instead.',
+            });
+          }
+        } catch (e) {
+          console.error('[SEARCH]', e);
+          messages.push({
+            role: 'system',
+            content:
+              '[Web Search Results] — The search request failed due to a network or service error. Tell the user the search could not be completed at this moment and offer to answer from your own knowledge.',
+          });
+        }
+      }
+
       // Kick off title generation early so it runs in parallel with tool execution
       let titlePromise: Promise<void> | null = null;
       if (conversation?.title === 'New Chat') {
@@ -576,14 +626,25 @@ export class AiChatService {
             messages.push({
               role: 'system',
               content:
-                'Web results:\n' +
+                "[Web Search Results] — Use these real-time search results to answer the user's question. Cite sources by their [N] number.\n\n" +
                 searchResults
                   .map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.snippet}`)
                   .join('\n\n'),
             });
+          } else {
+            messages.push({
+              role: 'system',
+              content:
+                '[Web Search Results] — No results were returned for this query. Tell the user the search completed but found nothing relevant, and offer to answer from your own knowledge instead.',
+            });
           }
         } catch (e) {
           console.error('[SEARCH]', e);
+          messages.push({
+            role: 'system',
+            content:
+              '[Web Search Results] — The search request failed due to a network or service error. Tell the user the search could not be completed at this moment and offer to answer from your own knowledge.',
+          });
         }
         yield { t: 'se', n: searchResults.length };
       }
@@ -888,6 +949,54 @@ export class AiChatService {
             }
           })
           .catch(() => {});
+      }
+
+      // ── Web Search (DuckDuckGo HTML, free, no API key) ──
+      if (chatRequest.enableWebSearch) {
+        try {
+          const qq = encodeURIComponent(chatRequest.message);
+          const ddgRes = await fetch(`https://html.duckduckgo.com/html/?q=${qq}`, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            },
+            signal: AbortSignal.timeout(10000),
+          });
+          const html = await ddgRes.text();
+          const blocks = html.split('class="result__body"');
+          const results: any[] = [];
+          for (let i = 1; i < blocks.length && results.length < 5; i++) {
+            const b = blocks[i];
+            const tm = b.match(/class="result__a"[^>]*href="([^"]*)"[^>]*>([^<]*)<\//);
+            const sm = b.match(/class="result__snippet"[^>]*>([\s\S]*?)<\/a>/);
+            if (tm)
+              results.push({
+                title: tm[2].replace(/<[^>]*>/g, '').trim(),
+                url: tm[1],
+                snippet: sm ? sm[1].replace(/<[^>]*>/g, '').trim() : '',
+              });
+          }
+          if (results.length > 0) {
+            messages.push({
+              role: 'system',
+              content:
+                "[Web Search Results] — Use these real-time search results to answer the user's question. Cite sources by their [N] number.\n\n" +
+                results.map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.snippet}`).join('\n\n'),
+            });
+          } else {
+            messages.push({
+              role: 'system',
+              content:
+                '[Web Search Results] — No results were returned for this query. Tell the user the search completed but found nothing relevant, and offer to answer from your own knowledge instead.',
+            });
+          }
+        } catch (e) {
+          console.error('[SEARCH BG]', e);
+          messages.push({
+            role: 'system',
+            content:
+              '[Web Search Results] — The search request failed due to a network or service error. Tell the user the search could not be completed at this moment and offer to answer from your own knowledge.',
+          });
+        }
       }
 
       let finalResponse = '';
