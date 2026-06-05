@@ -38,14 +38,14 @@ export class AdminService {
     }> = await this.prisma.$queryRaw`
       SELECT
         (SELECT COUNT(*) FROM users WHERE deleted_at IS NULL)::bigint AS total_users,
-        (SELECT COUNT(*) FROM organizations WHERE deleted_at IS NULL)::bigint AS total_organizations,
-        (SELECT COUNT(*) FROM workspaces WHERE deleted_at IS NULL)::bigint AS total_workspaces,
-        (SELECT COUNT(*) FROM projects WHERE deleted_at IS NULL)::bigint AS total_projects,
-        (SELECT COUNT(*) FROM tasks WHERE deleted_at IS NULL)::bigint AS total_tasks,
+        (SELECT COUNT(*) FROM organizations WHERE archive = false)::bigint AS total_organizations,
+        (SELECT COUNT(*) FROM workspaces WHERE archive = false)::bigint AS total_workspaces,
+        (SELECT COUNT(*) FROM projects WHERE archive = false)::bigint AS total_projects,
+        (SELECT COUNT(*) FROM tasks WHERE is_archived = false)::bigint AS total_tasks,
         (SELECT COUNT(*) FROM users WHERE deleted_at IS NULL AND created_at >= ${startOfWeek})::bigint AS new_users_this_week,
-        (SELECT COUNT(*) FROM organizations WHERE deleted_at IS NULL AND created_at >= ${startOfWeek})::bigint AS new_orgs_this_week,
-        (SELECT COUNT(*) FROM projects WHERE deleted_at IS NULL AND created_at >= ${startOfWeek})::bigint AS new_projects_this_week,
-        (SELECT COUNT(*) FROM tasks WHERE deleted_at IS NULL AND created_at >= ${startOfWeek})::bigint AS new_tasks_this_week,
+        (SELECT COUNT(*) FROM organizations WHERE archive = false AND created_at >= ${startOfWeek})::bigint AS new_orgs_this_week,
+        (SELECT COUNT(*) FROM projects WHERE archive = false AND created_at >= ${startOfWeek})::bigint AS new_projects_this_week,
+        (SELECT COUNT(*) FROM tasks WHERE is_archived = false AND created_at >= ${startOfWeek})::bigint AS new_tasks_this_week,
         (SELECT COUNT(*) FROM users WHERE deleted_at IS NULL AND status = ${UserStatus.ACTIVE}::"UserStatus")::bigint AS active_users
     `;
 
