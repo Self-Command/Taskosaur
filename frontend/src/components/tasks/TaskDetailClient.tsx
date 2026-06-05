@@ -188,6 +188,25 @@ export default function TaskDetailClient({
     sprintId: task?.sprintId || "",
   });
 
+  // Sync editTaskData when the underlying task changes (e.g. after a save
+  // updates the context). This keeps the display in sync without closing
+  // the panel or forcing a full page reload.
+  useEffect(() => {
+    if (task) {
+      setEditTaskData((prev) => ({
+        ...prev,
+        title: task.title || prev.title,
+        description: task.description || prev.description,
+        priority: typeof task.priority === "object" ? task.priority?.name : task.priority || prev.priority,
+        dueDate: toDatetimeLocalValue(task.dueDate),
+        startDate: toDatetimeLocalValue(task.startDate),
+        taskType: task.type || task.taskType || prev.taskType,
+        sprintId: task.sprintId || prev.sprintId,
+      }));
+    }
+  }, [task?.title, task?.description, task?.dueDate, task?.startDate,
+      task?.statusId, task?.priority, task?.type, task?.sprintId]);
+
   // Track if there are unsaved changes
   const hasUnsavedChanges =
     editTaskData.title !== (task?.title || "") ||
@@ -213,11 +232,9 @@ export default function TaskDetailClient({
         startDate: formatDateForApi(newStartDate) || null,
       };
       await updateTask(taskId, updateData);
-      onTaskRefetch && onTaskRefetch();
       toast.success(t("detail.updateStartDateSuccess"));
     } catch (error) {
       toast.error(t("detail.updateStartDateError"));
-      // Revert on error
       handleTaskFieldChange("startDate", toDatetimeLocalValue(task.startDate));
     }
   };
@@ -272,7 +289,6 @@ export default function TaskDetailClient({
       setCurrentStatus(item);
       // Update the task object's status
       task.status = item;
-      if (!isAIActive()) { onTaskRefetch && onTaskRefetch(); }
       toast.success(t("detail.updateStatusSuccess"));
       handleAIAutoClose();
     } catch (error) {
@@ -389,13 +405,10 @@ export default function TaskDetailClient({
       const updateData: UpdateTaskRequest = {
         dueDate: formatDateForApi(newDueDate, { endOfDay: true }) || null,
       };
-
       await updateTask(taskId, updateData);
-      onTaskRefetch && onTaskRefetch();
       toast.success(t("detail.updateDueDateSuccess"));
     } catch (error) {
       toast.error(t("detail.updateDueDateError"));
-      // Revert on error
       handleTaskFieldChange("dueDate", toDatetimeLocalValue(task.dueDate));
     }
   };
@@ -680,8 +693,6 @@ export default function TaskDetailClient({
         color,
         projectId,
       });
-
-      onTaskRefetch && onTaskRefetch();
       setAvailableLabels([...availableLabels, newLabel]);
 
       await assignLabelToTask({
@@ -706,8 +717,6 @@ export default function TaskDetailClient({
           return label.id !== labelId && label.labelId !== labelId;
         })
       );
-
-      onTaskRefetch && onTaskRefetch();
       toast.success(t("detail.labelRemoveSuccess"));
     } catch (error) {
       toast.error(t("detail.labelRemoveError"));
@@ -722,9 +731,6 @@ export default function TaskDetailClient({
       });
 
       setLabels([...labels, label]);
-
-      onTaskRefetch && onTaskRefetch();
-
       toast.success(t("detail.labelAssignSuccess"));
     } catch (error) {
       toast.error(t("detail.labelAssignError"));
@@ -849,7 +855,6 @@ export default function TaskDetailClient({
         recurrence: false,
         sprint: false,
       });
-      onTaskRefetch && onTaskRefetch();
       toast.success(t("detail.updateTaskSuccess"));
     } catch (error) {
       toast.error(t("detail.updateTaskError"));
@@ -1308,7 +1313,7 @@ export default function TaskDetailClient({
                               ...prev,
                               taskType: false,
                             }));
-                            if (!isAIActive()) { onTaskRefetch && onTaskRefetch(); }
+                            // field saved — context will sync via useEffect
                             toast.success(t("detail.updateTypeSuccess"));
                             handleAIAutoClose();
                           } catch (error) {
@@ -1450,7 +1455,7 @@ export default function TaskDetailClient({
                               ...prev,
                               sprint: false,
                             }));
-                            if (!isAIActive()) { onTaskRefetch && onTaskRefetch(); }
+                            // field saved — context will sync via useEffect
                             toast.success(t("detail.updateSprintSuccess"));
                             handleAIAutoClose();
                           } catch (error) {
@@ -1588,7 +1593,7 @@ export default function TaskDetailClient({
                               ...prev,
                               priority: false,
                             }));
-                            if (!isAIActive()) { onTaskRefetch && onTaskRefetch(); }
+                            // field saved — context will sync via useEffect
                             toast.success(t("detail.updatePrioritySuccess"));
                             handleAIAutoClose();
                           } catch (error) {
@@ -1848,7 +1853,7 @@ export default function TaskDetailClient({
                               task.recurringConfig = { ...task.recurringConfig, ...editRecurrenceConfig };
                               setIsEditingTask((prev) => ({ ...prev, recurrence: false }));
                               toast.success(t("detail.updateRecurrenceSuccess"));
-                              if (onTaskRefetch) onTaskRefetch();
+                              // context will sync via useEffect
                             } catch (error) {
                               toast.error(t("detail.updateRecurrenceError"));
                             }
@@ -1954,7 +1959,7 @@ export default function TaskDetailClient({
                                     task.isRecurring = false;
                                     task.recurringConfig = null;
                                     toast.success(t("detail.stopRecurrenceSuccess"));
-                                    if (onTaskRefetch) onTaskRefetch();
+                                    // context will sync via useEffect
                                   } catch (error) {
                                     toast.error(t("detail.stopRecurrenceError"));
                                   }
@@ -2005,7 +2010,7 @@ export default function TaskDetailClient({
                               task.recurringConfig = editRecurrenceConfig;
                               setIsEditingTask((prev) => ({ ...prev, recurrence: false }));
                               toast.success(t("detail.addRecurrenceSuccess"));
-                              if (onTaskRefetch) onTaskRefetch();
+                              // context will sync via useEffect
                             } catch (error) {
                               toast.error(t("detail.addRecurrenceError"));
                             }
@@ -2067,7 +2072,7 @@ export default function TaskDetailClient({
                         taskId,
                         newAssignees.map((a) => a.id)
                       );
-                      if (!isAIActive()) { onTaskRefetch && onTaskRefetch(); }
+                      // field saved — context will sync via useEffect
                       toast.success(t("detail.updateAssigneesSuccess"));
                       handleAIAutoClose();
                     } catch {
@@ -2091,7 +2096,6 @@ export default function TaskDetailClient({
                       await updateTask(taskId, {
                         reporterIds: newReporters.map((r) => r.id),
                       });
-                      onTaskRefetch && onTaskRefetch();
                       toast.success(t("detail.updateReportersSuccess"));
                     } catch {
                       toast.error(t("detail.updateReportersError"));
