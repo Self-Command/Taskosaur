@@ -72,6 +72,8 @@
         "to-ico": "^1.1.5"
     },
     "dependencies": {
+        "@azure/arm-cognitiveservices": "^8.1.0",
+        "@azure/identity": "^4.13.1",
         "@opentelemetry/api": "^1.9.1"
     }
 }

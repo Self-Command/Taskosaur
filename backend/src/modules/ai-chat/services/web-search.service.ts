@@ -31,8 +31,9 @@ function httpGet(url: string, timeout: number): Promise<string> {
       hostname: u.hostname,
       path: u.pathname + u.search,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9',
         'Accept-Encoding': 'identity',
         'Cache-Control': 'no-cache',
@@ -41,10 +42,13 @@ function httpGet(url: string, timeout: number): Promise<string> {
     if (proxyUrl) opts.agent = new HttpsProxyAgent(proxyUrl);
     const req = https.request(opts, (res) => {
       let d = '';
-      res.on('data', c => d += c);
+      res.on('data', (c) => (d += c));
       res.on('end', () => resolve(d));
     });
-    req.setTimeout(timeout, () => { req.destroy(); reject(new Error('Request timeout')); });
+    req.setTimeout(timeout, () => {
+      req.destroy();
+      reject(new Error('Request timeout'));
+    });
     req.on('error', reject);
     req.end();
   });
@@ -126,14 +130,16 @@ export class WebSearchService {
    * Returns empty array if search is disabled or fails.
    */
   async search(query: string, userId: string): Promise<SearchResult[]> {
-    const providerName = await this.settingsService.get('web_search_provider', userId) || 'ddg';
+    const providerName = (await this.settingsService.get('web_search_provider', userId)) || 'ddg';
     const apiKey = await this.settingsService.get('web_search_api_key', userId);
     const provider = PROVIDERS[providerName] || ddgProvider;
 
     const timeout = providerName === 'ddg' ? 15000 : 5000;
     const config: SearchConfig = { apiKey: apiKey || undefined, timeout };
 
-    this.logger.log(`[search] provider=${provider.name} query="${query.slice(0, 60)}" timeout=${timeout}ms`);
+    this.logger.log(
+      `[search] provider=${provider.name} query="${query.slice(0, 60)}" timeout=${timeout}ms`,
+    );
     const t0 = Date.now();
 
     try {
@@ -141,7 +147,9 @@ export class WebSearchService {
       this.logger.log(`[search] done results=${results.length} took=${Date.now() - t0}ms`);
       return results;
     } catch (e: any) {
-      this.logger.warn(`[search] failed provider=${provider.name} error="${e.message?.slice(0, 120)}" took=${Date.now() - t0}ms`);
+      this.logger.warn(
+        `[search] failed provider=${provider.name} error="${e.message?.slice(0, 120)}" took=${Date.now() - t0}ms`,
+      );
       return [];
     }
   }

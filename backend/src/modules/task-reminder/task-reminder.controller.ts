@@ -47,26 +47,38 @@ export class TaskReminderController {
     if (!t) return res.send(resultHtml('任务未找到', false, '请确认链接是否正确'));
 
     if (t.isArchived) return res.send(resultHtml('任务已归档', false, '该任务已被归档，无法打卡'));
-    if (t.project?.archive) return res.send(resultHtml('项目已归档', false, '所属项目已被归档，无法打卡'));
+    if (t.project?.archive)
+      return res.send(resultHtml('项目已归档', false, '所属项目已被归档，无法打卡'));
 
-    if (t.completedAt) return res.send(resultHtml('任务已完成', true, '该任务已在 ' + fmt(t.completedAt) + ' 完成'));
+    if (t.completedAt)
+      return res.send(resultHtml('任务已完成', true, '该任务已在 ' + fmt(t.completedAt) + ' 完成'));
 
     // Must be TODO to start
     if (t.status?.category !== 'TODO') {
-      const msg = t.status?.category === 'IN_PROGRESS'
-        ? '任务已处于进行中状态，无需重复打卡'
-        : '开始打卡要求任务状态为待办，当前状态：' + (t.status?.name || t.status?.category || '-');
+      const msg =
+        t.status?.category === 'IN_PROGRESS'
+          ? '任务已处于进行中状态，无需重复打卡'
+          : '开始打卡要求任务状态为待办，当前状态：' +
+            (t.status?.name || t.status?.category || '-');
       const ok = t.status?.category === 'IN_PROGRESS';
-      return res.send(ok
-        ? alreadyHtml('开始任务打卡已完成', t.slug, t.title, msg)
-        : resultHtml('任务状态不正确', false, msg));
+      return res.send(
+        ok
+          ? alreadyHtml('开始任务打卡已完成', t.slug, t.title, msg)
+          : resultHtml('任务状态不正确', false, msg),
+      );
     }
 
     if (t.startDate) {
       const deadline = new Date(t.startDate);
       deadline.setHours(deadline.getHours() + CHECKIN_WINDOW_HOURS);
       if (Date.now() > deadline.getTime()) {
-        return res.send(resultHtml('打卡已超时', false, '开始时间 ' + fmt(t.startDate) + '，已超过' + CHECKIN_WINDOW_HOURS + '小时'));
+        return res.send(
+          resultHtml(
+            '打卡已超时',
+            false,
+            '开始时间 ' + fmt(t.startDate) + '，已超过' + CHECKIN_WINDOW_HOURS + '小时',
+          ),
+        );
       }
     }
 
@@ -84,26 +96,49 @@ export class TaskReminderController {
     if (!t) return res.send(resultHtml('任务未找到', false, '请确认链接是否正确'));
 
     if (t.isArchived) return res.send(resultHtml('任务已归档', false, '该任务已被归档，无法打卡'));
-    if (t.project?.archive) return res.send(resultHtml('项目已归档', false, '所属项目已被归档，无法打卡'));
+    if (t.project?.archive)
+      return res.send(resultHtml('项目已归档', false, '所属项目已被归档，无法打卡'));
 
     if (t.completedAt) {
-      return res.send(alreadyHtml('结束任务打卡已完成', t.slug, t.title, '任务已于 ' + fmt(t.completedAt) + ' 完成'));
+      return res.send(
+        alreadyHtml(
+          '结束任务打卡已完成',
+          t.slug,
+          t.title,
+          '任务已于 ' + fmt(t.completedAt) + ' 完成',
+        ),
+      );
     }
 
     if (t.status?.category === 'DONE') {
-      return res.send(alreadyHtml('结束任务打卡已完成', t.slug, t.title, '任务已完成，无需重复打卡'));
+      return res.send(
+        alreadyHtml('结束任务打卡已完成', t.slug, t.title, '任务已完成，无需重复打卡'),
+      );
     }
 
     // Must be TODO or IN_PROGRESS to complete
     if (!CHECKIN_WAITLIST.includes(t.status?.category || '')) {
-      return res.send(resultHtml('任务状态不正确', false, '结束打卡要求任务状态为待办或进行中，当前状态：' + (t.status?.name || t.status?.category || '-')));
+      return res.send(
+        resultHtml(
+          '任务状态不正确',
+          false,
+          '结束打卡要求任务状态为待办或进行中，当前状态：' +
+            (t.status?.name || t.status?.category || '-'),
+        ),
+      );
     }
 
     if (t.dueDate) {
       const deadline = new Date(t.dueDate);
       deadline.setHours(deadline.getHours() + CHECKIN_WINDOW_HOURS);
       if (Date.now() > deadline.getTime()) {
-        return res.send(resultHtml('打卡已超时', false, '截止时间 ' + fmt(t.dueDate) + '，已超过' + CHECKIN_WINDOW_HOURS + '小时'));
+        return res.send(
+          resultHtml(
+            '打卡已超时',
+            false,
+            '截止时间 ' + fmt(t.dueDate) + '，已超过' + CHECKIN_WINDOW_HOURS + '小时',
+          ),
+        );
       }
     }
 
@@ -156,21 +191,45 @@ export class TaskReminderController {
 
     // ── Server-side guard: already completed ──
     if (task.completedAt) {
-      return res.send(alreadyHtml('结束任务打卡已完成', task.slug, task.title, '任务已于 ' + fmt(task.completedAt) + ' 完成'));
+      return res.send(
+        alreadyHtml(
+          '结束任务打卡已完成',
+          task.slug,
+          task.title,
+          '任务已于 ' + fmt(task.completedAt) + ' 完成',
+        ),
+      );
     }
 
     // ── Server-side guard: correct status for this action ──
     if (type === 'start-reminder' && task.status?.category !== 'TODO') {
       const isInProgress = task.status?.category === 'IN_PROGRESS';
-      return res.send(isInProgress
-        ? alreadyHtml('开始任务打卡已完成', task.slug, task.title, '任务已处于进行中状态，无需重复打卡')
-        : resultHtml('任务状态不正确', false, '开始打卡要求任务状态为待办，当前状态：' + (task.status?.name || '-')));
+      return res.send(
+        isInProgress
+          ? alreadyHtml(
+              '开始任务打卡已完成',
+              task.slug,
+              task.title,
+              '任务已处于进行中状态，无需重复打卡',
+            )
+          : resultHtml(
+              '任务状态不正确',
+              false,
+              '开始打卡要求任务状态为待办，当前状态：' + (task.status?.name || '-'),
+            ),
+      );
     }
     if (type === 'complete-reminder' && !CHECKIN_WAITLIST.includes(task.status?.category || '')) {
       const isDone = task.status?.category === 'DONE';
-      return res.send(isDone
-        ? alreadyHtml('结束任务打卡已完成', task.slug, task.title, '任务已完成，无需重复打卡')
-        : resultHtml('任务状态不正确', false, '结束打卡要求任务状态为待办或进行中，当前状态：' + (task.status?.name || '-')));
+      return res.send(
+        isDone
+          ? alreadyHtml('结束任务打卡已完成', task.slug, task.title, '任务已完成，无需重复打卡')
+          : resultHtml(
+              '任务状态不正确',
+              false,
+              '结束打卡要求任务状态为待办或进行中，当前状态：' + (task.status?.name || '-'),
+            ),
+      );
     }
 
     // ── Server-side guard: timeout ──
@@ -178,14 +237,26 @@ export class TaskReminderController {
       const deadline = new Date(task.startDate);
       deadline.setHours(deadline.getHours() + CHECKIN_WINDOW_HOURS);
       if (Date.now() > deadline.getTime()) {
-        return res.send(resultHtml('打卡已超时', false, '开始时间 ' + fmt(task.startDate) + '，已超过' + CHECKIN_WINDOW_HOURS + '小时'));
+        return res.send(
+          resultHtml(
+            '打卡已超时',
+            false,
+            '开始时间 ' + fmt(task.startDate) + '，已超过' + CHECKIN_WINDOW_HOURS + '小时',
+          ),
+        );
       }
     }
     if (type === 'complete-reminder' && task.dueDate) {
       const deadline = new Date(task.dueDate);
       deadline.setHours(deadline.getHours() + CHECKIN_WINDOW_HOURS);
       if (Date.now() > deadline.getTime()) {
-        return res.send(resultHtml('打卡已超时', false, '截止时间 ' + fmt(task.dueDate) + '，已超过' + CHECKIN_WINDOW_HOURS + '小时'));
+        return res.send(
+          resultHtml(
+            '打卡已超时',
+            false,
+            '截止时间 ' + fmt(task.dueDate) + '，已超过' + CHECKIN_WINDOW_HOURS + '小时',
+          ),
+        );
       }
     }
 

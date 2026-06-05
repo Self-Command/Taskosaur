@@ -404,7 +404,10 @@ export class AiChatService {
       // ── Web Search (pluggable: DDG / Bing) ──
       if (chatRequest.enableWebSearch) {
         const results = await this.webSearchService.search(chatRequest.message, userId);
-        messages.push({ role: 'system', content: this.webSearchService.formatSystemMessage(results) });
+        messages.push({
+          role: 'system',
+          content: this.webSearchService.formatSystemMessage(results),
+        });
       }
 
       // Kick off title generation early so it runs in parallel with tool execution
@@ -558,8 +561,13 @@ export class AiChatService {
       if (chatRequest.enableWebSearch) {
         yield { t: 'ss', q: chatRequest.message };
         const results = await this.webSearchService.search(chatRequest.message, userId);
-        if (results.length > 0) { yield { t: 'sr', r: results }; }
-        messages.push({ role: 'system', content: this.webSearchService.formatSystemMessage(results) });
+        if (results.length > 0) {
+          yield { t: 'sr', r: results };
+        }
+        messages.push({
+          role: 'system',
+          content: this.webSearchService.formatSystemMessage(results),
+        });
         yield { t: 'se', n: results.length };
       }
 
@@ -868,7 +876,10 @@ export class AiChatService {
       // ── Web Search (pluggable: DDG / Bing) ──
       if (chatRequest.enableWebSearch) {
         const results = await this.webSearchService.search(chatRequest.message, userId);
-        messages.push({ role: 'system', content: this.webSearchService.formatSystemMessage(results) });
+        messages.push({
+          role: 'system',
+          content: this.webSearchService.formatSystemMessage(results),
+        });
       }
 
       let finalResponse = '';

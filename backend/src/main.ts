@@ -56,7 +56,12 @@ async function bootstrap() {
   }
 
   const app = await NestFactory.create(AppModule, {
-    cors: { origin: true, methods: 'GET,POST,PUT,DELETE,PATCH,OPTIONS', allowedHeaders: ['Content-Type', 'Authorization', 'X-Organization-Id', 'X-Requested-With'], credentials: true },
+    cors: {
+      origin: true,
+      methods: 'GET,POST,PUT,DELETE,PATCH,OPTIONS',
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Organization-Id', 'X-Requested-With'],
+      credentials: true,
+    },
   });
   const configService = app.get(ConfigService);
 

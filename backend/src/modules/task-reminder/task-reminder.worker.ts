@@ -57,7 +57,12 @@ export class TaskReminderWorker implements OnModuleInit {
         if (type === 'start' && task.status?.category !== 'TODO') return;
 
         // ── Due reminder: task must be TODO or IN_PROGRESS ──
-        if (type === 'due' && task.status?.category !== 'TODO' && task.status?.category !== 'IN_PROGRESS') return;
+        if (
+          type === 'due' &&
+          task.status?.category !== 'TODO' &&
+          task.status?.category !== 'IN_PROGRESS'
+        )
+          return;
 
         // 从数据库读取用户设置（前端设置页面可修改）
         const channelId = await this.getUserSetting(userId, 'pushgo_channel_id');
@@ -81,7 +86,10 @@ export class TaskReminderWorker implements OnModuleInit {
             .join(', ') || '未分配';
 
         const action = type === 'start' ? 'start-reminder' : 'complete-reminder';
-        const apiBase = this.configService.get('BACKEND_URL') || this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+        const apiBase =
+          this.configService.get('BACKEND_URL') ||
+          this.configService.get('FRONTEND_URL') ||
+          'http://localhost:3000';
         const callbackUrl = `${apiBase}/api/tasks/${task.id}/${action}?userId=${userId}`;
 
         const priorityLabel: Record<string, string> = {
@@ -101,7 +109,9 @@ export class TaskReminderWorker implements OnModuleInit {
           `执行: ${joinNames(task.assignees)}`,
           `⏱ ${timeLabel}: ${timeValue}`,
           task.description
-            ? (task.description.length > 120 ? task.description.slice(0, 120) + '...' : task.description)
+            ? task.description.length > 120
+              ? task.description.slice(0, 120) + '...'
+              : task.description
             : '',
         ].filter(Boolean);
         lines.push('');

@@ -114,7 +114,9 @@ export class AiChatController {
     res.flushHeaders();
 
     let aborted = false;
-    const onClose = () => { aborted = true; };
+    const onClose = () => {
+      aborted = true;
+    };
     res.on('close', onClose);
 
     try {

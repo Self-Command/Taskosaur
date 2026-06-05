@@ -60,7 +60,11 @@ export class OpenAICompatController {
         content: `Today is ${new Intl.DateTimeFormat('zh-CN', { timeZone: tz, dateStyle: 'full', timeStyle: 'short' }).format(new Date())} (${tz}). Current user ID: ${userId}.`,
       };
       // Preserve caller's system messages — they contain project context; just prepend timezone
-      const allMessages = [ctxMsg, ...messages.filter((m: any) => m.role === 'system'), ...messages.filter((m: any) => m.role !== 'system')];
+      const allMessages = [
+        ctxMsg,
+        ...messages.filter((m: any) => m.role === 'system'),
+        ...messages.filter((m: any) => m.role !== 'system'),
+      ];
 
       const config = await (this.aiChatService as any).resolveChatConfig(userId);
       const tools = this.mcpToolsService.getOpenAITools();
@@ -91,7 +95,7 @@ export class OpenAICompatController {
       };
 
       if (stream) {
-        var self = this;
+        const self = this;
         res.status(200);
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -99,74 +103,132 @@ export class OpenAICompatController {
         res.flushHeaders();
 
         // ── Build full system prompt (like sidebar AI) ──
-        var allMsgs: any[] = [];
+        const allMsgs: any[] = [];
         allMsgs.push({ role: 'system', content: getMCPSystemPrompt(tz) });
-        // Preserve caller system messages
-        var callerSystemMsgs = (body.messages || []).filter(function(m: any) { return m.role === 'system'; });
-        for (var si = 0; si < callerSystemMsgs.length; si++) allMsgs.push(callerSystemMsgs[si]);
+        // Preserve caller system messages — but filter out ChatBox tool descriptions
+        // ChatBox injects web_search/parse_link tool instructions that conflict with our MCP tools
+        const callerSystemMsgs = (body.messages || []).filter(function (m: any) {
+          return m.role === 'system' && !/web_search|parse_link|function call|tool.*call|available functions/i.test(m.content || '');
+        });
+        for (let si = 0; si < callerSystemMsgs.length; si++) allMsgs.push(callerSystemMsgs[si]);
         // Add time context
-        allMsgs.push({ role: 'system', content: 'Today is ' + new Intl.DateTimeFormat('zh-CN', { timeZone: tz, dateStyle: 'full', timeStyle: 'short' }).format(new Date()) + ' (' + tz + '). Current user ID: ' + userId + '.' });
+        allMsgs.push({
+          role: 'system',
+          content:
+            'Today is ' +
+            new Intl.DateTimeFormat('zh-CN', {
+              timeZone: tz,
+              dateStyle: 'full',
+              timeStyle: 'short',
+            }).format(new Date()) +
+            ' (' +
+            tz +
+            '). Current user ID: ' +
+            userId +
+            '.',
+        });
         // Page context from request
         if (body.organizationId || body.workspaceId || body.projectId) {
-          var ctxParts: string[] = [];
+          const ctxParts: string[] = [];
           if (body.organizationId) ctxParts.push('organizationId: ' + body.organizationId);
           if (body.workspaceId) ctxParts.push('workspaceId: ' + body.workspaceId);
           if (body.projectId) ctxParts.push('projectId: ' + body.projectId);
           allMsgs.push({ role: 'system', content: '[Current page: ' + ctxParts.join(', ') + ']' });
         }
         // User + assistant messages
-        var convMsgs = (body.messages || []).filter(function(m: any) { return m.role !== 'system'; });
-        for (var ci = 0; ci < convMsgs.length; ci++) allMsgs.push(convMsgs[ci]);
+        const convMsgs = (body.messages || []).filter(function (m: any) {
+          return m.role !== 'system';
+        });
+        for (let ci = 0; ci < convMsgs.length; ci++) allMsgs.push(convMsgs[ci]);
 
         // ── Web search detection ──
-        var clientTools = (body.tools || []);
-        var hasWebSearch = clientTools.some(function(t: any) { return (t && t.function && t.function.name === 'web_search') || (t && t.type === 'web_search'); });
-        var userMsg = (body.messages || []).filter(function(m: any) { return m.role === 'user'; }).pop();
-        var userText = (userMsg && typeof userMsg.content === 'string') ? userMsg.content : '';
-        if (!userText && userMsg && (userMsg as any).content) userText = JSON.stringify((userMsg as any).content);
-        var isSearchQuery = hasWebSearch && !/^(列出|创建|删除|更新|修改|查看|给我|帮我|显示|打开)/.test(userText);
-        var doSearch = !!(body.enableWebSearch || body.enable_web_search || isSearchQuery);
+        const clientTools = body.tools || [];
+        const hasWebSearch = clientTools.some(function (t: any) {
+          return (
+            (t && t.function && t.function.name === 'web_search') || (t && t.type === 'web_search')
+          );
+        });
+        const userMsg = (body.messages || [])
+          .filter(function (m: any) {
+            return m.role === 'user';
+          })
+          .pop();
+        let userText = userMsg && typeof userMsg.content === 'string' ? userMsg.content : '';
+        if (!userText && userMsg && userMsg.content) userText = JSON.stringify(userMsg.content);
+        const isSearchQuery =
+          hasWebSearch && !/^(列出|创建|删除|更新|修改|查看|给我|帮我|显示|打开)/.test(userText);
+        const doSearch = !!(body.enableWebSearch || body.enable_web_search || isSearchQuery);
 
         // ── Non-blocking background search ──
         if (doSearch) {
           emitText('\n\n🔍 搜索: ' + userText.slice(0, 40) + '\n');
-          self.webSearchService.search(userText, userId).then(function(results: any) {
-            if (results && results.length > 0) {
-              var tbl = '| # | 来源 |\n|---|------|\n';
-              results.forEach(function(r: any, i: number) { tbl += '| ' + (i+1) + ' | [' + r.title + '](' + r.url + ') |\n'; });
-              (allMsgs as any)._searchMsg = { role: 'system', content: self.webSearchService.formatSystemMessage(results) };
-              (allMsgs as any)._searchTable = tbl;
-              (allMsgs as any)._searchReady = true;
-            }
-          }).catch(function() {});
+          self.webSearchService
+            .search(userText, userId)
+            .then(function (results: any) {
+              if (results && results.length > 0) {
+                let tbl = '| # | 来源 |\n|---|------|\n';
+                results.forEach(function (r: any, i: number) {
+                  tbl += '| ' + (i + 1) + ' | [' + r.title + '](' + r.url + ') |\n';
+                });
+                (allMsgs as any)._searchMsg = {
+                  role: 'system',
+                  content: self.webSearchService.formatSystemMessage(results),
+                };
+                (allMsgs as any)._searchTable = tbl;
+                (allMsgs as any)._searchReady = true;
+              }
+            })
+            .catch(function () {});
         }
 
         // ── Inline guarded executor (like makeGuardedExecutor) ──
-        var toolExecutions: any[] = [];
-        var seenCalls = new Map<string, number>();
-        var toolFailCount = new Map<string, number>();
-        var blocked = false;
-        var executeGuarded = async function(toolName: string, params: any, uid: string): Promise<any> {
-          var isReadOnly = toolName.startsWith('list_') || toolName.startsWith('get_');
+        const toolExecutions: any[] = [];
+        const seenCalls = new Map<string, number>();
+        const toolFailCount = new Map<string, number>();
+        let blocked = false;
+        const executeGuarded = async function (
+          toolName: string,
+          params: any,
+          uid: string,
+        ): Promise<any> {
+          const isReadOnly = toolName.startsWith('list_') || toolName.startsWith('get_');
           if (isReadOnly) {
-            var sk = JSON.stringify(params, Object.keys(params).sort());
-            var key = toolName + '::' + sk;
+            const sk = JSON.stringify(params, Object.keys(params).sort());
+            const key = toolName + '::' + sk;
             if (seenCalls.has(key)) {
-              var times = (seenCalls.get(key) || 0) + 1;
+              const times = (seenCalls.get(key) || 0) + 1;
               seenCalls.set(key, times);
-              return { success: false, _guard: true, error: 'DUPLICATE BLOCKED: ' + toolName + ' already called ' + times + ' times with these exact params. You have the data — take ACTION.' };
+              return {
+                success: false,
+                _guard: true,
+                error:
+                  'DUPLICATE BLOCKED: ' +
+                  toolName +
+                  ' already called ' +
+                  times +
+                  ' times with these exact params. You have the data — take ACTION.',
+              };
             }
             seenCalls.set(key, 1);
           } else {
             seenCalls.clear();
           }
           // Fail-fast: same tool failed 2+ times this round → block
-          var fc = toolFailCount.get(toolName) || 0;
+          const fc = toolFailCount.get(toolName) || 0;
           if (fc >= 2) {
             blocked = true;
-            return { success: false, _guard: true, error: 'TOOL RETRY ABORTED: ' + toolName + ' already failed ' + fc + ' times. Do NOT retry. Use the error information and try a DIFFERENT approach.' };
+            return {
+              success: false,
+              _guard: true,
+              error:
+                'TOOL RETRY ABORTED: ' +
+                toolName +
+                ' already failed ' +
+                fc +
+                ' times. Do NOT retry. Use the error information and try a DIFFERENT approach.',
+            };
           }
-          var result = await self.mcpToolsService.executeTool(toolName, params, uid);
+          const result = await self.mcpToolsService.executeTool(toolName, params, uid);
           if (result && result.success === false) {
             toolFailCount.set(toolName, fc + 1);
           }
@@ -174,8 +236,8 @@ export class OpenAICompatController {
         };
 
         try {
-          var allMsgsTools = tools; // outer scope tools
-          for (var round = 0; round < 10; round++) {
+          const allMsgsTools = tools; // outer scope tools
+          for (let round = 0; round < 10; round++) {
             // Inject search results between rounds
             if ((allMsgs as any)._searchReady) {
               emitText((allMsgs as any)._searchTable + '\n');
@@ -185,11 +247,14 @@ export class OpenAICompatController {
               delete (allMsgs as any)._searchMsg;
             }
 
-            var apiRes: any = await this.fetchWithTimeout(
+            const apiRes: any = await this.fetchWithTimeout(
               config.apiUrl + '/chat/completions',
               {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + config.apiKey },
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: 'Bearer ' + config.apiKey,
+                },
                 body: JSON.stringify({
                   model: config.model,
                   messages: allMsgs,
@@ -202,7 +267,9 @@ export class OpenAICompatController {
             );
 
             if (!apiRes.ok) {
-              var errText = await apiRes.text().catch(function() { return ''; });
+              const errText = await apiRes.text().catch(function () {
+                return '';
+              });
               this.logger.error('AI API ' + apiRes.status + ': ' + errText.slice(0, 200));
               emitText('\nAPI error ' + apiRes.status + '.\n');
               emitDone();
@@ -210,37 +277,42 @@ export class OpenAICompatController {
             }
 
             // ── Parse SSE stream with heartbeat ──
-            var reader = apiRes.body.getReader();
-            var decoder = new TextDecoder();
-            var buf = '';
-            var fullContent = '';
-            var fullReasoning = '';
-            var hasToolCalls = false;
-            var toolAcc: any = new Map();
+            const reader = apiRes.body.getReader();
+            const decoder = new TextDecoder();
+            let buf = '';
+            let fullContent = '';
+            let fullReasoning = '';
+            let hasToolCalls = false;
+            const toolAcc: any = new Map();
             var lastDataTime = Date.now();
-            var hbTimer = setInterval(function() {
+            const hbTimer = setInterval(function () {
               if (Date.now() - lastDataTime >= 10000) {
                 emitText('\n'); // keepalive newline
               }
             }, 10000);
 
             while (true) {
-              var chunk = await this.readStreamChunk(reader);
+              const chunk = await this.readStreamChunk(reader);
               if (chunk.done) break;
               buf += decoder.decode(chunk.value, { stream: true });
-              var lines = buf.split('\n');
+              const lines = buf.split('\n');
               buf = lines.pop() || '';
 
-              for (var li = 0; li < lines.length; li++) {
-                var line = lines[li].trim();
+              for (let li = 0; li < lines.length; li++) {
+                const line = lines[li].trim();
                 if (!line || !line.startsWith('data: ')) continue;
-                var json = line.slice(6);
+                const json = line.slice(6);
                 if (json === '[DONE]') break;
                 try {
-                  var parsed = JSON.parse(json);
-                  var delta = parsed && parsed.choices && parsed.choices[0] && parsed.choices[0].delta;
+                  const parsed = JSON.parse(json);
+                  const delta =
+                    parsed && parsed.choices && parsed.choices[0] && parsed.choices[0].delta;
                   if (!delta) continue;
-                  if (delta.content) { fullContent += delta.content; emitText(delta.content); lastDataTime = Date.now(); }
+                  if (delta.content) {
+                    fullContent += delta.content;
+                    emitText(delta.content);
+                    lastDataTime = Date.now();
+                  }
                   if (delta.reasoning_content) {
                     fullReasoning += delta.reasoning_content;
                     emitText(delta.reasoning_content); // emit as text
@@ -248,11 +320,11 @@ export class OpenAICompatController {
                   }
                   if (delta.tool_calls) {
                     hasToolCalls = true;
-                    for (var ti = 0; ti < delta.tool_calls.length; ti++) {
+                    for (let ti = 0; ti < delta.tool_calls.length; ti++) {
                       var tc = delta.tool_calls[ti];
-                      var idx = tc.index != null ? tc.index : 0;
+                      const idx = tc.index != null ? tc.index : 0;
                       if (!toolAcc.has(idx)) toolAcc.set(idx, { id: '', name: '', args: '' });
-                      var a = toolAcc.get(idx);
+                      const a = toolAcc.get(idx);
                       if (tc.id) a.id = tc.id;
                       if (tc.function && tc.function.name) a.name += tc.function.name;
                       if (tc.function && tc.function.arguments) a.args += tc.function.arguments;
@@ -270,21 +342,23 @@ export class OpenAICompatController {
             }
 
             // ── Execute tools with guards ──
-            var tcList = Array.from(toolAcc.values());
+            const tcList = Array.from(toolAcc.values());
             if (tcList.length > 1) emitText('\n\n---\n### 🔧 执行 ' + tcList.length + ' 个工具\n');
-            for (var tci = 0; tci < tcList.length; tci++) {
+            for (let tci = 0; tci < tcList.length; tci++) {
               var tc: any = tcList[tci];
-              var toolName = tc.name.replace(/_/g, ' ');
+              const toolName = tc.name.replace(/_/g, ' ');
               if (tcList.length > 1) emitText('\n🔄 ' + toolName + '...\n');
               else emitText('\n\n---\n### 🔧 ' + toolName + '\n');
 
               try {
-                var params = JSON.parse(tc.args || '{}');
-                var result = await executeGuarded(tc.name, params, userId);
-                var ok = result && result.success !== false;
-                var resultStr = JSON.stringify(result, null, 2);
+                const params = JSON.parse(tc.args || '{}');
+                const result = await executeGuarded(tc.name, params, userId);
+                const ok = result && result.success !== false;
+                let resultStr = JSON.stringify(result, null, 2);
                 if (resultStr.length > 2000) resultStr = resultStr.slice(0, 2000) + '\n...';
-                emitText((ok ? '✅' : '❌') + ' ' + toolName + '\n\`\`\`json\n' + resultStr + '\n\`\`\`\n');
+                emitText(
+                  (ok ? '✅' : '❌') + ' ' + toolName + '\n\`\`\`json\n' + resultStr + '\n\`\`\`\n',
+                );
 
                 if (tc.name === 'navigate' && result && result.path) {
                   emitText('🔗 [打开页面](' + result.path + ')\n');
@@ -292,32 +366,82 @@ export class OpenAICompatController {
 
                 toolExecutions.push({ tool: tc.name, params: params, result: result });
 
-                var assistantMsg: any = { role: 'assistant', tool_calls: [{ id: tc.id, type: 'function', function: { name: tc.name, arguments: tc.args } }] };
+                const assistantMsg: any = {
+                  role: 'assistant',
+                  tool_calls: [
+                    {
+                      id: tc.id,
+                      type: 'function',
+                      function: { name: tc.name, arguments: tc.args },
+                    },
+                  ],
+                };
                 if (fullContent) assistantMsg.content = fullContent;
                 if (fullReasoning) assistantMsg.reasoning_content = fullReasoning;
                 allMsgs.push(assistantMsg);
-                allMsgs.push({ role: 'tool', content: JSON.stringify(result), tool_call_id: tc.id });
+                allMsgs.push({
+                  role: 'tool',
+                  content: JSON.stringify(result),
+                  tool_call_id: tc.id,
+                });
 
                 if (blocked) break;
               } catch (err: any) {
-                emitText('❌ ' + toolName + '\n\`\`\`\n' + (err.message || String(err)) + '\n\`\`\`\n');
-                var errAssistantMsg: any = { role: 'assistant', tool_calls: [{ id: tc.id, type: 'function', function: { name: tc.name, arguments: tc.args } }] };
+                emitText(
+                  '❌ ' + toolName + '\n\`\`\`\n' + (err.message || String(err)) + '\n\`\`\`\n',
+                );
+                const errAssistantMsg: any = {
+                  role: 'assistant',
+                  tool_calls: [
+                    {
+                      id: tc.id,
+                      type: 'function',
+                      function: { name: tc.name, arguments: tc.args },
+                    },
+                  ],
+                };
                 if (fullContent) errAssistantMsg.content = fullContent;
                 if (fullReasoning) errAssistantMsg.reasoning_content = fullReasoning;
                 allMsgs.push(errAssistantMsg);
-                allMsgs.push({ role: 'tool', content: JSON.stringify({ error: err.message || String(err) }), tool_call_id: tc.id });
+                allMsgs.push({
+                  role: 'tool',
+                  content: JSON.stringify({ error: err.message || String(err) }),
+                  tool_call_id: tc.id,
+                });
               }
             }
 
             if (blocked) {
-              var fallback = '';
-              var actions = toolExecutions.filter(function(te: any) { return /^(create_|delete_|update_|add_|remove_|navigate)/.test(te.tool); });
-              var queries = toolExecutions.filter(function(te: any) { return /^(list_|get_)/.test(te.tool); });
+              let fallback = '';
+              const actions = toolExecutions.filter(function (te: any) {
+                return /^(create_|delete_|update_|add_|remove_|navigate)/.test(te.tool);
+              });
+              const queries = toolExecutions.filter(function (te: any) {
+                return /^(list_|get_)/.test(te.tool);
+              });
               if (actions.length > 0) {
-                fallback = actions.map(function(te: any) { return te.result && te.result.message ? te.result.message : te.tool.replace(/_/g, ' ') + ' done'; }).filter(Boolean).join('\n');
+                fallback = actions
+                  .map(function (te: any) {
+                    return te.result && te.result.message
+                      ? te.result.message
+                      : te.tool.replace(/_/g, ' ') + ' done';
+                  })
+                  .filter(Boolean)
+                  .join('\n');
               } else if (queries.length > 0) {
-                var uniqueTools = Array.from(new Set(queries.map(function(te: any) { return te.tool; })));
-                fallback = 'Executed ' + queries.length + ' read-only queries (' + uniqueTools.join(', ') + ') but took NO action. To complete the request, use: delete_task / update_task / create_task.';
+                const uniqueTools = Array.from(
+                  new Set(
+                    queries.map(function (te: any) {
+                      return te.tool;
+                    }),
+                  ),
+                );
+                fallback =
+                  'Executed ' +
+                  queries.length +
+                  ' read-only queries (' +
+                  uniqueTools.join(', ') +
+                  ') but took NO action. To complete the request, use: delete_task / update_task / create_task.';
               }
               if (fallback) emitText('\n\n' + fallback + '\n');
               emitDone();
@@ -331,7 +455,8 @@ export class OpenAICompatController {
           emitDone();
           res.write('data: [DONE]\n\n');
         }
-        res.end();      } else {
+        res.end();
+      } else {
         // Non-streaming
         const result = await this.processNonStreaming(allMessages, tools, userId, config);
         return res.status(200).json({

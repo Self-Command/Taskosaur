@@ -180,14 +180,22 @@ export class ToolExecutor {
     };
   }
 
-  async execute(toolName: string, params: Record<string, any>, userId: string, timeoutMs = 15000): Promise<any> {
+  async execute(
+    toolName: string,
+    params: Record<string, any>,
+    userId: string,
+    timeoutMs = 15000,
+  ): Promise<any> {
     const startTime = Date.now();
     this.mcpLogger.logToolCall(toolName, userId, params);
     try {
       const result = await Promise.race([
         this.executeInternal(toolName, params, userId),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error(`Tool "${toolName}" timed out after ${timeoutMs / 1000}s`)), timeoutMs),
+          setTimeout(
+            () => reject(new Error(`Tool "${toolName}" timed out after ${timeoutMs / 1000}s`)),
+            timeoutMs,
+          ),
         ),
       ]);
       this.mcpLogger.logToolSuccess(toolName, userId, Date.now() - startTime);
@@ -978,22 +986,47 @@ export class ToolExecutor {
     for (const item of tasks) {
       try {
         if (!item.title || !item.projectId || !item.statusId) {
-          results.push({ success: false, error: 'Missing required fields: title, projectId, statusId' });
+          results.push({
+            success: false,
+            error: 'Missing required fields: title, projectId, statusId',
+          });
           continue;
         }
-        const err = this.requireUUID(item.projectId, 'projectId') || this.requireUUID(item.statusId, 'statusId');
-        if (err) { results.push({ success: false, error: err }); continue; }
+        const err =
+          this.requireUUID(item.projectId, 'projectId') ||
+          this.requireUUID(item.statusId, 'statusId');
+        if (err) {
+          results.push({ success: false, error: err });
+          continue;
+        }
         const { taskNumber, taskSlug } = await this.getNextBatchTaskNumber(item.projectId);
         const data: any = {
-          title: item.title, description: item.description, projectId: item.projectId,
-          statusId: item.statusId, type: item.type, priority: item.priority,
-          startDate: item.startDate, dueDate: item.dueDate, storyPoints: item.storyPoints,
-          createdBy: userId, taskNumber, slug: taskSlug,
+          title: item.title,
+          description: item.description,
+          projectId: item.projectId,
+          statusId: item.statusId,
+          type: item.type,
+          priority: item.priority,
+          startDate: item.startDate,
+          dueDate: item.dueDate,
+          storyPoints: item.storyPoints,
+          createdBy: userId,
+          taskNumber,
+          slug: taskSlug,
         };
-        if (item.assigneeIds?.length) data.assignees = { create: item.assigneeIds.map((id: string) => ({ userId: id })) };
-        if (item.labelIds?.length) data.labels = { create: item.labelIds.map((id: string) => ({ labelId: id })) };
-        const task = await this.prisma.task.create({ data, select: { id: true, title: true, slug: true } });
-        results.push({ taskId: task.id, success: true, task: { title: task.title, slug: task.slug } });
+        if (item.assigneeIds?.length)
+          data.assignees = { create: item.assigneeIds.map((id: string) => ({ userId: id })) };
+        if (item.labelIds?.length)
+          data.labels = { create: item.labelIds.map((id: string) => ({ labelId: id })) };
+        const task = await this.prisma.task.create({
+          data,
+          select: { id: true, title: true, slug: true },
+        });
+        results.push({
+          taskId: task.id,
+          success: true,
+          task: { title: task.title, slug: task.slug },
+        });
       } catch (e: any) {
         results.push({ success: false, error: e.message?.slice(0, 200) || 'Unknown error' });
       }
@@ -1009,11 +1042,23 @@ export class ToolExecutor {
     const results: any[] = [];
     for (const item of updates) {
       try {
-        if (!item.taskId) { results.push({ taskId: null, success: false, error: 'taskId is required' }); continue; }
+        if (!item.taskId) {
+          results.push({ taskId: null, success: false, error: 'taskId is required' });
+          continue;
+        }
         const err = this.requireUUID(item.taskId, 'taskId');
-        if (err) { results.push({ taskId: item.taskId, success: false, error: err }); continue; }
-        const existing = await this.prisma.task.findUnique({ where: { id: item.taskId }, select: { id: true, title: true } });
-        if (!existing) { results.push({ taskId: item.taskId, success: false, error: 'Task not found' }); continue; }
+        if (err) {
+          results.push({ taskId: item.taskId, success: false, error: err });
+          continue;
+        }
+        const existing = await this.prisma.task.findUnique({
+          where: { id: item.taskId },
+          select: { id: true, title: true },
+        });
+        if (!existing) {
+          results.push({ taskId: item.taskId, success: false, error: 'Task not found' });
+          continue;
+        }
         const data: any = { updatedBy: userId };
         if (item.title !== undefined) data.title = item.title;
         if (item.description !== undefined) data.description = item.description;
@@ -1023,12 +1068,32 @@ export class ToolExecutor {
         if (item.dueDate !== undefined) data.dueDate = item.dueDate;
         if (item.storyPoints !== undefined) data.storyPoints = item.storyPoints;
         if (item.sprintId !== undefined) data.sprintId = item.sprintId;
-        if (item.assigneeIds) data.assignees = { deleteMany: {}, create: item.assigneeIds.map((id: string) => ({ userId: id })) };
-        if (item.labelIds) data.labels = { deleteMany: {}, create: item.labelIds.map((id: string) => ({ labelId: id })) };
-        const task = await this.prisma.task.update({ where: { id: item.taskId }, data, select: { id: true, title: true, slug: true } });
-        results.push({ taskId: task.id, success: true, task: { title: task.title, slug: task.slug } });
+        if (item.assigneeIds)
+          data.assignees = {
+            deleteMany: {},
+            create: item.assigneeIds.map((id: string) => ({ userId: id })),
+          };
+        if (item.labelIds)
+          data.labels = {
+            deleteMany: {},
+            create: item.labelIds.map((id: string) => ({ labelId: id })),
+          };
+        const task = await this.prisma.task.update({
+          where: { id: item.taskId },
+          data,
+          select: { id: true, title: true, slug: true },
+        });
+        results.push({
+          taskId: task.id,
+          success: true,
+          task: { title: task.title, slug: task.slug },
+        });
       } catch (e: any) {
-        results.push({ taskId: item.taskId || null, success: false, error: e.message?.slice(0, 200) || 'Unknown error' });
+        results.push({
+          taskId: item.taskId || null,
+          success: false,
+          error: e.message?.slice(0, 200) || 'Unknown error',
+        });
       }
     }
     return { success: true, count: results.length, results };
@@ -1043,13 +1108,26 @@ export class ToolExecutor {
     for (const taskId of taskIds) {
       try {
         const err = this.requireUUID(taskId, 'taskId');
-        if (err) { results.push({ taskId, success: false, error: err }); continue; }
-        const t = await this.prisma.task.findUnique({ where: { id: taskId }, select: { title: true } });
-        if (!t) { results.push({ taskId, success: false, error: 'Task not found' }); continue; }
+        if (err) {
+          results.push({ taskId, success: false, error: err });
+          continue;
+        }
+        const t = await this.prisma.task.findUnique({
+          where: { id: taskId },
+          select: { title: true },
+        });
+        if (!t) {
+          results.push({ taskId, success: false, error: 'Task not found' });
+          continue;
+        }
         await this.prisma.task.delete({ where: { id: taskId } });
         results.push({ taskId, success: true, task: { title: t.title } });
       } catch (e: any) {
-        results.push({ taskId, success: false, error: e.message?.slice(0, 200) || 'Unknown error' });
+        results.push({
+          taskId,
+          success: false,
+          error: e.message?.slice(0, 200) || 'Unknown error',
+        });
       }
     }
     return { success: true, count: results.length, results };
