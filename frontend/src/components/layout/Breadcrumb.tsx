@@ -246,7 +246,7 @@ export default function Breadcrumb() {
     buildBreadcrumbFromSegments(segments);
   }, [pathToUse]);
 
-  const workspaceRoutes = ["projects", "members", "activities", "tasks", "analytics", "settings", "sprints", "calendar"];
+  const workspaceRoutes = ["projects", "members", "activities", "tasks", "analytics", "settings", "sprints", "calendar", "users", "admin", "login", "register", "intro", "profile", "notifications"];
 
   const buildBreadcrumbFromSegments = async (segments: string[]) => {
     const baseItems: BreadcrumbItem[] = [];
