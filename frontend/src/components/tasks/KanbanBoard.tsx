@@ -197,10 +197,6 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
   };
 
   const handleTaskRefetch = useCallback(() => {
-    // Close the modal first
-    setIsEditModalOpen(false);
-    setSelectedTask(null);
-
     onRefresh?.();
   }, [onRefresh]);
 
