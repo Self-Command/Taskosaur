@@ -14,12 +14,14 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { Public } from '../auth/decorators/public.decorator';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
+import { TaskReminderService } from './task-reminder.service';
 import { diskStorage } from 'multer';
 import { extname, basename } from 'path';
 import * as path from 'path';
 import * as fs from 'fs';
 
 const CHECKIN_WINDOW_HOURS = 24; // check-in link valid for 24h after deadline
+const CHECKIN_WAITLIST = ['TODO', 'IN_PROGRESS']; // statuses allowed to complete-reminder
 
 @Controller('tasks')
 export class TaskReminderController {
@@ -29,6 +31,7 @@ export class TaskReminderController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
+    private readonly reminderService: TaskReminderService,
   ) {
     this.uploadDir = this.configService.get('UPLOAD_DEST', './uploads');
   }
@@ -43,24 +46,27 @@ export class TaskReminderController {
     const t = await this.getFullTask(taskId);
     if (!t) return res.send(resultHtml('任务未找到', false, '请确认链接是否正确'));
 
-    // Already completed
+    if (t.isArchived) return res.send(resultHtml('任务已归档', false, '该任务已被归档，无法打卡'));
+    if (t.project?.archive) return res.send(resultHtml('项目已归档', false, '所属项目已被归档，无法打卡'));
+
     if (t.completedAt) return res.send(resultHtml('任务已完成', true, '该任务已在 ' + fmt(t.completedAt) + ' 完成'));
 
-    // Already IN_PROGRESS — user already checked in for start
-    if (t.status?.category === 'IN_PROGRESS') {
-      return res.send(
-        alreadyHtml('开始任务打卡已完成', t.slug, t.title, '任务已处于进行中状态，无需重复打卡'),
-      );
+    // Must be TODO to start
+    if (t.status?.category !== 'TODO') {
+      const msg = t.status?.category === 'IN_PROGRESS'
+        ? '任务已处于进行中状态，无需重复打卡'
+        : '开始打卡要求任务状态为待办，当前状态：' + (t.status?.name || t.status?.category || '-');
+      const ok = t.status?.category === 'IN_PROGRESS';
+      return res.send(ok
+        ? alreadyHtml('开始任务打卡已完成', t.slug, t.title, msg)
+        : resultHtml('任务状态不正确', false, msg));
     }
 
-    // Timeout: startDate + window has passed
     if (t.startDate) {
       const deadline = new Date(t.startDate);
       deadline.setHours(deadline.getHours() + CHECKIN_WINDOW_HOURS);
       if (Date.now() > deadline.getTime()) {
-        return res.send(
-          resultHtml('打卡已超时', false, '开始时间 ' + fmt(t.startDate) + '，已超过' + CHECKIN_WINDOW_HOURS + '小时'),
-        );
+        return res.send(resultHtml('打卡已超时', false, '开始时间 ' + fmt(t.startDate) + '，已超过' + CHECKIN_WINDOW_HOURS + '小时'));
       }
     }
 
@@ -77,28 +83,27 @@ export class TaskReminderController {
     const t = await this.getFullTask(taskId);
     if (!t) return res.send(resultHtml('任务未找到', false, '请确认链接是否正确'));
 
-    // Already completed
+    if (t.isArchived) return res.send(resultHtml('任务已归档', false, '该任务已被归档，无法打卡'));
+    if (t.project?.archive) return res.send(resultHtml('项目已归档', false, '所属项目已被归档，无法打卡'));
+
     if (t.completedAt) {
-      return res.send(
-        alreadyHtml('结束任务打卡已完成', t.slug, t.title, '任务已于 ' + fmt(t.completedAt) + ' 完成'),
-      );
+      return res.send(alreadyHtml('结束任务打卡已完成', t.slug, t.title, '任务已于 ' + fmt(t.completedAt) + ' 完成'));
     }
 
-    // Already DONE status
     if (t.status?.category === 'DONE') {
-      return res.send(
-        alreadyHtml('结束任务打卡已完成', t.slug, t.title, '任务已完成，无需重复打卡'),
-      );
+      return res.send(alreadyHtml('结束任务打卡已完成', t.slug, t.title, '任务已完成，无需重复打卡'));
     }
 
-    // Timeout: dueDate + window has passed
+    // Must be TODO or IN_PROGRESS to complete
+    if (!CHECKIN_WAITLIST.includes(t.status?.category || '')) {
+      return res.send(resultHtml('任务状态不正确', false, '结束打卡要求任务状态为待办或进行中，当前状态：' + (t.status?.name || t.status?.category || '-')));
+    }
+
     if (t.dueDate) {
       const deadline = new Date(t.dueDate);
       deadline.setHours(deadline.getHours() + CHECKIN_WINDOW_HOURS);
       if (Date.now() > deadline.getTime()) {
-        return res.send(
-          resultHtml('打卡已超时', false, '截止时间 ' + fmt(t.dueDate) + '，已超过' + CHECKIN_WINDOW_HOURS + '小时'),
-        );
+        return res.send(resultHtml('打卡已超时', false, '截止时间 ' + fmt(t.dueDate) + '，已超过' + CHECKIN_WINDOW_HOURS + '小时'));
       }
     }
 
@@ -136,31 +141,36 @@ export class TaskReminderController {
         slug: true,
         title: true,
         projectId: true,
+        isArchived: true,
         startDate: true,
         dueDate: true,
         completedAt: true,
-        status: { select: { category: true } },
+        project: { select: { archive: true } },
+        status: { select: { category: true, name: true } },
       },
     });
     if (!task) return res.send(resultHtml('任务未找到', false, '请确认链接是否正确'));
 
+    if (task.isArchived) return res.send(resultHtml('任务已归档', false, '无法提交'));
+    if (task.project?.archive) return res.send(resultHtml('项目已归档', false, '无法提交'));
+
     // ── Server-side guard: already completed ──
     if (task.completedAt) {
-      return res.send(
-        alreadyHtml('结束任务打卡已完成', task.slug, task.title, '任务已于 ' + fmt(task.completedAt) + ' 完成'),
-      );
+      return res.send(alreadyHtml('结束任务打卡已完成', task.slug, task.title, '任务已于 ' + fmt(task.completedAt) + ' 完成'));
     }
 
-    // ── Server-side guard: already in target status ──
-    if (type === 'start-reminder' && task.status?.category === 'IN_PROGRESS') {
-      return res.send(
-        alreadyHtml('开始任务打卡已完成', task.slug, task.title, '任务已处于进行中状态，无需重复打卡'),
-      );
+    // ── Server-side guard: correct status for this action ──
+    if (type === 'start-reminder' && task.status?.category !== 'TODO') {
+      const isInProgress = task.status?.category === 'IN_PROGRESS';
+      return res.send(isInProgress
+        ? alreadyHtml('开始任务打卡已完成', task.slug, task.title, '任务已处于进行中状态，无需重复打卡')
+        : resultHtml('任务状态不正确', false, '开始打卡要求任务状态为待办，当前状态：' + (task.status?.name || '-')));
     }
-    if (type === 'complete-reminder' && task.status?.category === 'DONE') {
-      return res.send(
-        alreadyHtml('结束任务打卡已完成', task.slug, task.title, '任务已完成，无需重复打卡'),
-      );
+    if (type === 'complete-reminder' && !CHECKIN_WAITLIST.includes(task.status?.category || '')) {
+      const isDone = task.status?.category === 'DONE';
+      return res.send(isDone
+        ? alreadyHtml('结束任务打卡已完成', task.slug, task.title, '任务已完成，无需重复打卡')
+        : resultHtml('任务状态不正确', false, '结束打卡要求任务状态为待办或进行中，当前状态：' + (task.status?.name || '-')));
     }
 
     // ── Server-side guard: timeout ──
@@ -168,18 +178,14 @@ export class TaskReminderController {
       const deadline = new Date(task.startDate);
       deadline.setHours(deadline.getHours() + CHECKIN_WINDOW_HOURS);
       if (Date.now() > deadline.getTime()) {
-        return res.send(
-          resultHtml('打卡已超时', false, '开始时间 ' + fmt(task.startDate) + '，已超过' + CHECKIN_WINDOW_HOURS + '小时'),
-        );
+        return res.send(resultHtml('打卡已超时', false, '开始时间 ' + fmt(task.startDate) + '，已超过' + CHECKIN_WINDOW_HOURS + '小时'));
       }
     }
     if (type === 'complete-reminder' && task.dueDate) {
       const deadline = new Date(task.dueDate);
       deadline.setHours(deadline.getHours() + CHECKIN_WINDOW_HOURS);
       if (Date.now() > deadline.getTime()) {
-        return res.send(
-          resultHtml('打卡已超时', false, '截止时间 ' + fmt(task.dueDate) + '，已超过' + CHECKIN_WINDOW_HOURS + '小时'),
-        );
+        return res.send(resultHtml('打卡已超时', false, '截止时间 ' + fmt(task.dueDate) + '，已超过' + CHECKIN_WINDOW_HOURS + '小时'));
       }
     }
 
@@ -211,6 +217,11 @@ export class TaskReminderController {
       const data: any = { statusId: st.id, updatedBy: userId };
       if (cat === 'DONE') data.completedAt = new Date();
       await this.prisma.task.update({ where: { id: taskId }, data });
+
+      // Cancel all pending reminders for this task when completed
+      if (cat === 'DONE') {
+        this.reminderService.cancelTaskReminders(taskId).catch(() => {});
+      }
     }
     const now = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
     const photoName = photo?.originalname || '';
@@ -249,7 +260,8 @@ export class TaskReminderController {
         startDate: true,
         dueDate: true,
         completedAt: true,
-        project: { select: { name: true } },
+        isArchived: true,
+        project: { select: { name: true, archive: true } },
         sprint: { select: { name: true } },
         status: { select: { name: true, category: true } },
         assignees: { select: { user: { select: { firstName: true, lastName: true } } } },
@@ -427,17 +439,8 @@ function checkinHtml(t: any, userId: string, type: string) {
   const btnLabel = isStart ? '确认开始任务' : '确认完成任务';
   const timeLabel = isStart ? '开始时间' : '截止时间';
   const timeValue = isStart ? fmt(t.startDate) : fmt(t.dueDate);
-  const headerGradient = isStart
-    ? 'linear-gradient(135deg,#2563eb 0%,#1d4ed8 100%)'
-    : 'linear-gradient(135deg,#059669 0%,#10b981 50%,#34d399 100%)';
-  const badgeBg = isStart ? '#eff6ff' : '#ecfdf5';
-  const badgeColor = isStart ? '#3b82f6' : '#059669';
-  const primaryBtnBg = isStart
-    ? 'linear-gradient(135deg,#2563eb 0%,#1d4ed8 100%)'
-    : 'linear-gradient(135deg,#059669 0%,#10b981 50%,#34d399 100%)';
-  const primaryBtnShadow = isStart
-    ? '0 2px 8px rgba(37,99,235,.3)'
-    : '0 2px 8px rgba(5,150,105,.3)';
+  const accent = isStart ? '#2563eb' : '#059669';
+  const accentLight = isStart ? '#eff6ff' : '#ecfdf5';
   const priorityColor =
     t.priority === 'HIGHEST' || t.priority === 'HIGH'
       ? '#ef4444'
@@ -449,149 +452,135 @@ function checkinHtml(t: any, userId: string, type: string) {
       ? t.description.slice(0, 200) + '...'
       : t.description
     : '无';
-  return `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>${badge} - ${escHtml(t.title)}</title>
-    <style>
-      *{margin:0;padding:0;box-sizing:border-box}
-      body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;background:linear-gradient(180deg,#f8fafc 0%,#f1f5f9 100%);min-height:100vh;padding:16px;padding-bottom:40px}
-      .wrap{max-width:420px;margin:0 auto}
-      .header{text-align:center;padding:24px 0 12px}
-      .header .badge{display:inline-block;background:${badgeBg};color:${badgeColor};font-size:13px;font-weight:700;padding:6px 16px;border-radius:20px;margin-bottom:10px}
-      .header h1{font-size:19px;color:#1e293b;font-weight:700;margin-bottom:4px}
-      .header .slug{font-size:13px;color:#94a3b8}
-      .header .time-hint{display:inline-flex;align-items:center;gap:4px;margin-top:8px;font-size:12px;color:#64748b;background:#f1f5f9;padding:4px 12px;border-radius:12px}
-      .card{background:#fff;border-radius:16px;padding:20px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.04),0 2px 12px rgba(0,0,0,.04)}
-      .card-header{display:flex;align-items:center;gap:8px;margin-bottom:14px}
-      .card-header .dot{width:8px;height:8px;border-radius:50%;background:${badgeColor}}
-      .card-header h2{font-size:14px;font-weight:600;color:#1e293b}
-      .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 16px}
-      .info-item{display:flex;flex-direction:column;gap:2px}
-      .info-item .lbl{font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:.3px}
-      .info-item .val{font-size:13px;color:#334155;font-weight:500}
-      .desc-box{background:#f8fafc;border-radius:10px;padding:14px;margin-top:12px;font-size:13px;color:#475569;line-height:1.7}
-      .photo-section{margin-bottom:12px}
-      .photo-section .section-title{font-size:14px;font-weight:600;color:#1e293b;margin-bottom:10px;display:flex;align-items:center;gap:6px}
-      .photo-area{position:relative;border:2px dashed #cbd5e1;border-radius:14px;padding:44px 20px;text-align:center;cursor:pointer;transition:all .15s;background:#fafbfc;touch-action:manipulation}
-      .photo-area:active{background:#f1f5f9;border-color:#94a3b8}
-      .photo-area .camera-icon{width:48px;height:48px;border-radius:50%;background:${badgeBg};display:inline-flex;align-items:center;justify-content:center;margin-bottom:10px;pointer-events:none}
-      .photo-area .camera-icon svg{width:24px;height:24px;color:${badgeColor};pointer-events:none}
-      .photo-area .hint{font-size:14px;color:#64748b;font-weight:500;pointer-events:none}
-      .photo-area .sub-hint{font-size:12px;color:#94a3b8;margin-top:4px;pointer-events:none}
-      .photo-preview-wrap{display:none;position:relative}
-      .photo-preview-wrap.active{display:block}
-      .photo-preview-img{width:100%;max-height:320px;object-fit:cover;border-radius:14px;display:block;box-shadow:0 2px 8px rgba(0,0,0,.08)}
-      .photo-info{display:flex;align-items:center;justify-content:space-between;margin-top:8px;font-size:12px;color:#64748b}
-      .photo-info .file-meta{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-      .photo-info .retake-btn{flex-shrink:0;margin-left:12px;padding:4px 12px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;color:#64748b;font-size:12px;cursor:pointer;touch-action:manipulation}
-      .photo-info .retake-btn:active{background:#f1f5f9}
-      .hidden{display:none!important}
-      .btn{width:100%;padding:16px;border:none;border-radius:14px;font-size:16px;font-weight:600;cursor:pointer;transition:all .15s;letter-spacing:.2px;touch-action:manipulation}
-      .btn-primary{background:${primaryBtnBg};color:#fff;margin-top:8px;box-shadow:${primaryBtnShadow}}
-      .btn-primary:active{transform:scale(.98);box-shadow:0 1px 4px rgba(37,99,235,.2)}
-      .btn-secondary{background:#fff;color:#64748b;border:1.5px solid #e2e8f0;margin-top:10px}
-      .btn-secondary:active{background:#f8fafc}
-      .status-bar{text-align:center;padding:8px;font-size:12px;color:#94a3b8}
-      .priority-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
-    </style></head><body>
-    <div class="wrap">
-      <div class="header">
-        <div class="badge">${badge}</div>
-        <h1>${escHtml(t.title)}</h1>
-        <div class="slug">${escHtml(t.slug)}</div>
-        <div class="time-hint">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          ${timeLabel}：${timeValue}
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-header"><div class="dot"></div><h2>任务信息</h2></div>
-        <div class="info-grid">
-          <div class="info-item"><span class="lbl">类型</span><span class="val">${escHtml(t.type || '-')}</span></div>
-          <div class="info-item"><span class="lbl">优先级</span><span class="val"><span class="priority-badge" style="background:${priorityColor}15;color:${priorityColor}">${t.priority || '-'}</span></span></div>
-          <div class="info-item"><span class="lbl">状态</span><span class="val">${escHtml(t.status?.name || '-')}</span></div>
-          <div class="info-item"><span class="lbl">项目</span><span class="val">${escHtml(t.project?.name || '-')}</span></div>
-          <div class="info-item"><span class="lbl">迭代</span><span class="val">${escHtml(t.sprint?.name || '-')}</span></div>
-          <div class="info-item"><span class="lbl">预估</span><span class="val">${t.storyPoints ?? '-'} SP</span></div>
-          <div class="info-item"><span class="lbl">开始时间</span><span class="val">${fmt(t.startDate)}</span></div>
-          <div class="info-item"><span class="lbl">截止时间</span><span class="val">${fmt(t.dueDate)}</span></div>
-          <div class="info-item"><span class="lbl">执行人</span><span class="val">${escHtml(names(t.assignees))}</span></div>
-          <div class="info-item"><span class="lbl">报告人</span><span class="val">${escHtml(names(t.reporters))}</span></div>
-        </div>
-        <div class="desc-box">${escHtml(desc)}</div>
-      </div>
-      <div class="card photo-section">
-        <div class="section-title">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${badgeColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-          拍照打卡
-        </div>
-        <label for="pf" class="photo-area" id="photoArea">
-          <div class="camera-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
-          <div class="hint">点击拍照或选择照片</div>
-          <div class="sub-hint">支持 JPG、PNG，最大 50MB</div>
-        </label>
-        <div class="photo-preview-wrap" id="previewWrap">
-          <img id="pv" class="photo-preview-img" alt="打卡照片预览">
-          <div class="photo-info">
-            <span class="file-meta" id="fileMeta"></span>
-            <button type="button" class="retake-btn" id="retakeBtn">重新选择</button>
-          </div>
-        </div>
-      </div>
-      <form id="cf" action="/api/tasks/${t.id}/checkin?userId=${userId}&type=${type}" method="POST" enctype="multipart/form-data">
-      <input type="file" id="pf" name="photo" accept="image/*" capture="environment" class="hidden" onchange="onPhotoSelected(this)">
-      <button type="submit" class="btn btn-primary" id="sb">${btnLabel}</button>
-      </form>
-      <button class="btn btn-secondary" id="skipBtn" onclick="skipAndSubmit()">跳过拍照，直接提交</button>
-      <div class="status-bar" id="st"></div>
+  return `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>${badge} - ${escHtml(t.title)}</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#f3f4f6;min-height:100vh;padding:16px;padding-bottom:32px}
+.wrap{max-width:420px;margin:0 auto}
+.header{text-align:center;padding:20px 0 14px}
+.header .badge{display:inline-block;background:${accentLight};color:${accent};font-size:13px;font-weight:700;padding:6px 16px;border-radius:20px;margin-bottom:10px}
+.header h1{font-size:18px;color:#1e293b;font-weight:700;margin-bottom:4px;padding:0 8px;word-break:break-all}
+.header .slug{font-size:13px;color:#94a3b8}
+.header .time-hint{display:inline-flex;align-items:center;gap:4px;margin-top:8px;font-size:12px;color:#64748b;background:#f1f5f9;padding:4px 12px;border-radius:12px}
+.card{background:#fff;border-radius:16px;padding:18px;margin-bottom:12px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.card-hd{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.card-hd .dot{width:7px;height:7px;border-radius:50%;background:${accent};flex-shrink:0}
+.card-hd h2{font-size:14px;font-weight:600;color:#1e293b}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px}
+.grid2 .it{display:flex;flex-direction:column;gap:1px}
+.grid2 .it .lbl{font-size:11px;color:#94a3b8;letter-spacing:.2px}
+.grid2 .it .val{font-size:13px;color:#334155;font-weight:500}
+.descr{background:#f8fafc;border-radius:10px;padding:12px;margin-top:10px;font-size:13px;color:#475569;line-height:1.6}
+.badge-prio{display:inline-block;padding:2px 7px;border-radius:8px;font-size:11px;font-weight:600}
+.btn{display:block;width:100%;padding:15px;border:none;border-radius:13px;font-size:16px;font-weight:600;cursor:pointer;text-align:center;-webkit-appearance:none}
+.btn-go{background:${accent};color:#fff;margin-top:12px}
+.btn-go:active{opacity:.85}
+.btn-skip{background:#fff;color:#64748b;border:1.5px solid #e5e7eb;margin-top:10px}
+.btn-skip:active{background:#f9fafb}
+.stbar{text-align:center;padding:10px;font-size:12px;color:#94a3b8;min-height:36px}
+/* upload */
+.up-label{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 16px;border-radius:12px;cursor:pointer;background:#f8fafc;border:1px solid #e5e7eb}
+.up-label input{display:none}
+.up-label svg{margin-bottom:8px}
+.up-label .t{font-size:14px;color:#4b5563;font-weight:500}
+.up-label .s{font-size:12px;color:#9ca3af;margin-top:2px}
+.up-preview{display:none;border-radius:12px;overflow:hidden}
+.up-preview img{width:100%;max-height:300px;object-fit:contain;display:block;background:#f1f5f9;border-radius:12px}
+.up-preview .bar{display:flex;align-items:center;justify-content:space-between;margin-top:8px;font-size:12px;color:#6b7280}
+.up-preview .bar span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.up-preview .bar button{flex-shrink:0;margin-left:10px;padding:5px 12px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;color:#6b7280;font-size:12px;cursor:pointer}
+.hide{display:none!important}
+</style></head><body>
+<div class="wrap">
+  <div class="header">
+    <div class="badge">${badge}</div>
+    <h1>${escHtml(t.title)}</h1>
+    <div class="slug">${escHtml(t.slug)}</div>
+    <div class="time-hint">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      ${timeLabel}：${timeValue}
     </div>
-    <script>
-      var pf=document.getElementById('pf');
-      var pv=document.getElementById('pv');
-      var photoArea=document.getElementById('photoArea');
-      var previewWrap=document.getElementById('previewWrap');
-      var fileMeta=document.getElementById('fileMeta');
-      var st=document.getElementById('st');
-      var sb=document.getElementById('sb');
-      var skipBtn=document.getElementById('skipBtn');
-      var retakeBtn=document.getElementById('retakeBtn');
-
-      function onPhotoSelected(input){
-        var f=input.files[0];
-        if(!f)return;
-        if(f.size>52428800){alert('文件超过50MB限制');input.value='';return;}
-        pv.src=URL.createObjectURL(f);
-        photoArea.classList.add('hidden');
-        previewWrap.classList.add('active');
-        var size=f.size>1048576?(f.size/1048576).toFixed(1)+'MB':(f.size/1024).toFixed(0)+'KB';
-        fileMeta.textContent=f.name+' · '+size;
-        st.textContent='照片已就绪';
-      }
-
-      retakeBtn.onclick=function(e){
-        e.stopPropagation();
-        pf.value='';
-        pv.src='';
-        photoArea.classList.remove('hidden');
-        previewWrap.classList.remove('active');
-        st.textContent='';
-        pf.click();
-      };
-
-      function skipAndSubmit(){
-        pf.value='';
-        pv.src='';
-        photoArea.classList.remove('hidden');
-        previewWrap.classList.remove('active');
-        document.getElementById('cf').submit();
-      }
-
-      document.getElementById('cf').onsubmit=function(){
-        sb.textContent='提交中...';sb.style.opacity='.7';sb.disabled=true;
-        skipBtn.disabled=true;
-        st.innerHTML='<span style="display:inline-block;animation:pulse 1.2s infinite">⏳</span> 正在上传照片，请勿关闭页面...';
-      };
-    </script>
-    <style>
-      @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
-    </style></body></html>`;
+  </div>
+  <div class="card">
+    <div class="card-hd"><div class="dot"></div><h2>任务信息</h2></div>
+    <div class="grid2">
+      <div class="it"><span class="lbl">类型</span><span class="val">${escHtml(t.type || '-')}</span></div>
+      <div class="it"><span class="lbl">优先级</span><span class="val"><span class="badge-prio" style="background:${priorityColor}15;color:${priorityColor}">${t.priority || '-'}</span></span></div>
+      <div class="it"><span class="lbl">状态</span><span class="val">${escHtml(t.status?.name || '-')}</span></div>
+      <div class="it"><span class="lbl">项目</span><span class="val">${escHtml(t.project?.name || '-')}</span></div>
+      <div class="it"><span class="lbl">迭代</span><span class="val">${escHtml(t.sprint?.name || '-')}</span></div>
+      <div class="it"><span class="lbl">预估</span><span class="val">${t.storyPoints ?? '-'} SP</span></div>
+      <div class="it"><span class="lbl">开始时间</span><span class="val">${fmt(t.startDate)}</span></div>
+      <div class="it"><span class="lbl">截止时间</span><span class="val">${fmt(t.dueDate)}</span></div>
+      <div class="it"><span class="lbl">执行人</span><span class="val">${escHtml(names(t.assignees))}</span></div>
+      <div class="it"><span class="lbl">报告人</span><span class="val">${escHtml(names(t.reporters))}</span></div>
+    </div>
+    <div class="descr">${escHtml(desc)}</div>
+  </div>
+  <form id="cf" action="/api/tasks/${t.id}/checkin?userId=${userId}&type=${type}" method="POST" enctype="multipart/form-data">
+  <div class="card">
+    <div class="card-hd"><div class="dot"></div><h2>拍照打卡</h2></div>
+    <label class="up-label" id="upLabel">
+      <input type="file" id="pf" name="photo" accept="image/*" capture="environment" onchange="onPhoto(this)">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="${accent}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      <div class="t">点击拍照或选择照片</div>
+      <div class="s">JPG / PNG，最大 50MB</div>
+    </label>
+    <div class="up-preview" id="upPreview">
+      <img id="pv" alt="">
+      <div class="bar">
+        <span id="fileMeta"></span>
+        <button type="button" id="retakeBtn" onclick="retake()">重选</button>
+      </div>
+    </div>
+  </div>
+  <button type="submit" class="btn btn-go" id="sb">${btnLabel}</button>
+  </form>
+  <button class="btn btn-skip" id="skipBtn" onclick="skip()">跳过拍照，直接提交</button>
+  <div class="stbar" id="st"></div>
+</div>
+<script>
+var pf=document.getElementById('pf');
+var pv=document.getElementById('pv');
+var upLabel=document.getElementById('upLabel');
+var upPreview=document.getElementById('upPreview');
+var fileMeta=document.getElementById('fileMeta');
+var st=document.getElementById('st');
+var sb=document.getElementById('sb');
+var skipBtn=document.getElementById('skipBtn');
+function onPhoto(input){
+  var f=input.files[0];
+  if(!f)return;
+  if(f.size>52428800){alert('文件超过50MB限制');input.value='';return;}
+  pv.src=URL.createObjectURL(f);
+  upLabel.classList.add('hide');
+  upPreview.classList.add('show');
+  upPreview.style.display='block';
+  var s=f.size>1048576?(f.size/1048576).toFixed(1)+'MB':(f.size/1024).toFixed(0)+'KB';
+  fileMeta.textContent=f.name+' · '+s;
+  st.textContent='照片已就绪';
+}
+function retake(){
+  pf.value='';pv.src='';
+  upLabel.classList.remove('hide');
+  upPreview.classList.remove('show');
+  upPreview.style.display='none';
+  st.textContent='';
+  pf.click();
+}
+function skip(){
+  pf.value='';pv.src='';
+  upLabel.classList.remove('hide');
+  upPreview.classList.remove('show');
+  upPreview.style.display='none';
+  document.getElementById('cf').submit();
+}
+document.getElementById('cf').onsubmit=function(){
+  sb.disabled=true;sb.style.opacity='.6';sb.textContent='提交中...';
+  skipBtn.disabled=true;
+  st.innerHTML='⏳ 正在上传，请稍候...';
+};
+</script>
+</body></html>`;
 }

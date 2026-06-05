@@ -1424,6 +1424,95 @@ export const MCP_TOOL_DEFINITIONS: MCPToolDefinition[] = [
     },
     scope: 'cross',
   },
+  // ══════════════════════════════════════════════════════════════
+  // BATCH TOOLS — project scope
+  // ══════════════════════════════════════════════════════════════
+  {
+    name: 'batch_create_tasks',
+    description:
+      'Create multiple tasks at once in a project. Each item requires title, projectId, statusId. Returns per-item results — some may succeed while others fail. / 批量创建任务。返回每条结果。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        tasks: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 50,
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string', description: 'Task title' },
+              description: { type: 'string', description: 'Description (Markdown)' },
+              projectId: { type: 'string', description: 'Project ID (UUID)' },
+              statusId: { type: 'string', description: 'Status ID (UUID)' },
+              type: { type: 'string', enum: TASK_TYPES, description: 'Task type' },
+              priority: { type: 'string', enum: ['LOWEST', 'LOW', 'MEDIUM', 'HIGH', 'HIGHEST'], description: 'Priority' },
+              startDate: { type: 'string', description: 'Start date (ISO 8601)' },
+              dueDate: { type: 'string', description: 'Due date (ISO 8601)' },
+              storyPoints: { type: 'number', description: 'Story points' },
+              assigneeIds: { type: 'array', items: { type: 'string' }, description: 'Assignee user IDs' },
+              labelIds: { type: 'array', items: { type: 'string' }, description: 'Label IDs' },
+            },
+            required: ['title', 'projectId', 'statusId'],
+          },
+        },
+      },
+      required: ['tasks'],
+    },
+    scope: 'project',
+  },
+  {
+    name: 'batch_update_tasks',
+    description:
+      'Update multiple tasks at once. Each item requires taskId plus any fields to change (statusId, priority, title, description, startDate, dueDate, storyPoints, assigneeIds, labelIds, sprintId). Returns per-item results. / 批量更新任务。传入 taskId + 要改的字段即可。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        updates: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 50,
+          items: {
+            type: 'object',
+            properties: {
+              taskId: { type: 'string', description: 'Task UUID' },
+              title: { type: 'string', description: 'New title' },
+              description: { type: 'string', description: 'New description' },
+              statusId: { type: 'string', description: 'New status ID' },
+              priority: { type: 'string', enum: ['LOWEST', 'LOW', 'MEDIUM', 'HIGH', 'HIGHEST'] },
+              startDate: { type: 'string' },
+              dueDate: { type: 'string' },
+              storyPoints: { type: 'number' },
+              sprintId: { type: 'string' },
+              assigneeIds: { type: 'array', items: { type: 'string' }, description: 'Replace ALL assignees with these IDs' },
+              labelIds: { type: 'array', items: { type: 'string' }, description: 'Replace ALL labels with these IDs' },
+            },
+            required: ['taskId'],
+          },
+        },
+      },
+      required: ['updates'],
+    },
+    scope: 'project',
+  },
+  {
+    name: 'batch_delete_tasks',
+    description:
+      'Delete multiple tasks at once by their IDs. Returns per-item results — some may succeed while others fail (e.g. task not found). / 批量删除任务。返回每条结果。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        taskIds: {
+          type: 'array',
+          items: { type: 'string', description: 'Task UUID' },
+          minItems: 1,
+          maxItems: 50,
+        },
+      },
+      required: ['taskIds'],
+    },
+    scope: 'project',
+  },
 ];
 
 export function getToolDefinitions(): MCPToolDefinition[] {

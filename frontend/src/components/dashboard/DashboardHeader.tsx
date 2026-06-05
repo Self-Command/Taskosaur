@@ -3,6 +3,7 @@ import { HiCalendar } from "react-icons/hi2";
 import { NewTaskModal } from "@/components/tasks/NewTaskModal";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import UserAvatar from "@/components/ui/avatars/UserAvatar";
 
 interface DashboardHeaderProps {
   currentUser: any;
@@ -23,10 +24,7 @@ export function DashboardHeader({
   return (
     <div className="dashboard-header">
       <div className="dashboard-user-section">
-        <div className="dashboard-user-avatar">
-          {currentUser?.firstName?.charAt(0) || "U"}
-          {currentUser?.lastName?.charAt(0) || ""}
-        </div>
+        <UserAvatar user={currentUser} size="lg" className="dashboard-user-avatar" />
         <div>
           <h1 className="dashboard-greeting">
             {greeting}, {currentUser?.firstName || "User"}!

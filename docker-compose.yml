@@ -4,7 +4,7 @@ services:
     image: postgres:16
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-taskosaur}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-taskosaur}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-taskosaur}
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -39,13 +39,15 @@ services:
       dockerfile: Dockerfile.prod
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://${POSTGRES_USER:-taskosaur}:${POSTGRES_PASSWORD:-taskosaur}@postgres:5432/${POSTGRES_DB:-taskosaur}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-taskosaur}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-taskosaur}
       REDIS_HOST: redis
       REDIS_PORT: ${REDIS_PORT:-6379}
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      BACKEND_URL: ${BACKEND_URL:-http://localhost:3000}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:3000/api}
+      HTTPS_PROXY: ${HTTPS_PROXY:-}
       JWT_SECRET: ${JWT_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}

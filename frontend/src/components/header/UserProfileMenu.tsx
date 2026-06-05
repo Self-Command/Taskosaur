@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { resolveAvatarUrl } from "@/utils/avatar";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -44,13 +45,7 @@ export default function UserProfileMenu({
   const [avatarSrc, setAvatar] = useState("");
   useEffect(() => {
     setIsClient(true);
-    if (!user?.avatar) {
-      setAvatar("");
-    } else if (/^https?:\/\//.test(user.avatar)) {
-      setAvatar(user.avatar);
-    } else {
-      setAvatar(`${process.env.NEXT_PUBLIC_API_BASE_URL}/uploads/${user.avatar}`);
-    }
+    setAvatar(resolveAvatarUrl(user?.avatar) || "");
   }, [user]);
 
   const getInitials = () => {

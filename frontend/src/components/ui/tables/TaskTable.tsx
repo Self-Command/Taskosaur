@@ -10,6 +10,7 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { resolveAvatarUrl } from "@/utils/avatar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PriorityBadge } from "@/components/badges/PriorityBadge";
 import { Badge } from "@/components/ui/badge";
@@ -1260,7 +1261,7 @@ const TaskTable: React.FC<TaskTableProps> = ({
             >
               <Avatar className="tasktable-assignee-avatar w-6 h-6 border-2 border-white">
                 <AvatarImage
-                  src={assignee.avatar || "/placeholder.svg"}
+                  src={resolveAvatarUrl(assignee.avatar) || ""}
                   alt={`${assignee.firstName} ${assignee.lastName}`}
                 />
                 <AvatarFallback className="tasktable-assignee-fallback text-xs">
@@ -1335,7 +1336,7 @@ const TaskTable: React.FC<TaskTableProps> = ({
                       className="w-6 h-6 border-2 border-white"
                     >
                       <AvatarImage
-                        src={assignee.user?.avatar || assignee.avatar || "/placeholder.svg"}
+                        src={resolveAvatarUrl(assignee.user?.avatar || assignee.avatar) || ""}
                         alt={`${assignee.user?.firstName || assignee.firstName
                           } ${assignee.user?.lastName || assignee.lastName}`}
                       />
@@ -1389,7 +1390,7 @@ const TaskTable: React.FC<TaskTableProps> = ({
                       <Checkbox checked={isSelected} className="pointer-events-none" />
                       <Avatar className="w-6 h-6">
                         <AvatarImage
-                          src={member.user?.avatar || member.avatar || "/placeholder.svg"}
+                          src={resolveAvatarUrl(member.user?.avatar || member.avatar) || ""}
                           alt={`${member.user?.firstName || member.firstName} ${member.user?.lastName || member.lastName
                             }`}
                         />
@@ -1445,7 +1446,7 @@ const TaskTable: React.FC<TaskTableProps> = ({
             <div className="tasktable-assignee-container">
               <Avatar className="tasktable-assignee-avatar">
                 <AvatarImage
-                  src={value.avatar || "/placeholder.svg"}
+                  src={resolveAvatarUrl(value.avatar) || ""}
                   alt={`${value.firstName || ""} ${value.lastName || ""}`}
                 />
                 <AvatarFallback className="tasktable-assignee-fallback">

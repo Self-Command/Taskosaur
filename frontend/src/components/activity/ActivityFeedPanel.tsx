@@ -4,7 +4,8 @@ import { InfoPanel } from "@/components/common/InfoPanel";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { resolveAvatarUrl } from "@/utils/avatar";
 import { formatDateTimeForDisplay } from "@/utils/date";
 import { isValidSlug } from "@/utils/slugUtils";
 
@@ -245,6 +246,7 @@ export function ActivityFeedPanel({
         {normalizedActivities.map((activity) => (
           <div key={activity.id} className="activity-feed-item">
             <Avatar className="activity-feed-avatar">
+              <AvatarImage src={resolveAvatarUrl(activity?.user?.avatar) || ""} alt={activity?.user?.name || ""} />
               <AvatarFallback className="activity-feed-avatar-fallback">
                 {activity?.user?.name
                   ?.split(" ")

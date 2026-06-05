@@ -7,6 +7,7 @@ import { useRouter } from "next/router";
 import { useAuth } from "@/contexts/auth-context";
 import ChatMarkdown from "@/components/chat/ChatMarkdown";
 import ThinkingBlock from "@/components/chat/ThinkingBlock";
+import SearchBlock from "@/components/chat/SearchBlock";
 import api from "@/lib/api";
 
 type ToolExec = { tool: string; params: any; result: any; pending: boolean };
@@ -121,6 +122,11 @@ export default function ChatPage() {
   const [editTitle, setEditTitle] = useState("");
   const [webSearch, setWebSearch] = useState(false);
   const [thinking, setThinking] = useState(false);
+  const [thinkingStart, setThinkingStart] = useState<number>(0);
+  const [isAIThinking, setIsAIThinking] = useState(false);
+  const thinkingRef = useRef(false);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -163,10 +169,25 @@ export default function ChatPage() {
     setMessages((p) => [...p, um]); setInput(""); setAttachments([]); setLoading(true);
     const aid = "" + (Date.now() + 1);
     setMessages((p) => [...p, { id: aid, role: "assistant", content: "", thinking: "", toolExecs: [], streaming: true }]);
+    setIsAIThinking(false);
+    thinkingRef.current = false;
+    setThinkingStart(0);
+    setSearchResults([]);
+    setSearchQuery("");
     try {
       const sid = sessionId || "s" + Date.now();
       if (!sessionId) setSessionId(sid);
-      const body: any = { message: text, sessionId: sid, currentOrganizationId: localStorage.getItem("currentOrganizationId"), enableWebSearch: webSearch, enableThinking: thinking, ...(currAtts.length > 0 ? { attachments: currAtts } : {}) };
+      const { ws, p } = router.query;
+    const body: any = {
+      message: text,
+      sessionId: sid,
+      workspaceId: (ws as string) || undefined,
+      projectId: (p as string) || undefined,
+      currentOrganizationId: localStorage.getItem("currentOrganizationId"),
+      enableWebSearch: webSearch,
+      enableThinking: thinking,
+      ...(currAtts.length > 0 ? { attachments: currAtts } : {}),
+    };
       const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3000/api";
       const token = localStorage.getItem("access_token");
       const controller = new AbortController();
@@ -196,13 +217,24 @@ export default function ChatPage() {
           try {
             const d = JSON.parse(line);
             switch (d.t) {
+              case "ss": // search start
+                setSearchQuery(d.q || "");
+                setSearchResults([]);
+                break;
+              case "sr": // search results
+                setSearchResults(d.r || []);
+                break;
+              case "se": break; // search end
               case "th": // thinking token
+                if (!thinkingRef.current) { thinkingRef.current = true; setIsAIThinking(true); setThinkingStart(Date.now()); }
                 setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") c[c.length - 1] = { ...last, thinking: (last.thinking || "") + (d.d || ""), streaming: true }; return c; });
                 break;
               case "tx": // text token
+                if (thinkingRef.current) { thinkingRef.current = false; setIsAIThinking(false); }
                 setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") c[c.length - 1] = { ...last, content: (last.content || "") + (d.d || ""), streaming: true }; return c; });
                 break;
               case "ts": // tool start
+                if (thinkingRef.current) { thinkingRef.current = false; setIsAIThinking(false); }
                 setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") c[c.length - 1] = { ...last, toolExecs: [...(last.toolExecs || []), { tool: d.tool, params: d.p || {}, result: {}, pending: true }], streaming: true }; return c; });
                 break;
               case "tr": // tool result
@@ -212,6 +244,7 @@ export default function ChatPage() {
                 if (d.p) router.push(d.p);
                 break;
               case "msg": // final message
+                if (thinkingRef.current) { thinkingRef.current = false; setIsAIThinking(false); }
                 setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") c[c.length - 1] = { ...last, content: d.m || last.content, toolExecs: (d.e || []).map((t: any) => ({ tool: t.tool, params: t.params, result: t.result, pending: false })), streaming: false }; return c; });
                 setLoading(false);
                 if (d.c) setConvId(d.c);
@@ -400,9 +433,17 @@ export default function ChatPage() {
                       {m.toolExecs.map((t, i) => <ToolCard key={i} t={t} />)}
                     </div>
                   )}
-                  {/* Thinking block */}
-                  {m.thinking && (
-                    <ThinkingBlock content={m.thinking} isThinking={false} />
+                  {/* Web Search results block */}
+                  {searchResults.length > 0 && (
+                    <SearchBlock results={searchResults} query={searchQuery} />
+                  )}
+                  {/* Thinking/reasoning block */}
+                  {(m.thinking || (m.streaming && isAIThinking)) && (
+                    <ThinkingBlock
+                      content={m.thinking || ""}
+                      isThinking={!!(m.streaming && isAIThinking)}
+                      startTime={thinkingStart}
+                    />
                   )}
                   {m.content ? (
                     <div className="text-sm leading-relaxed text-gray-800 dark:text-gray-200 prose prose-sm dark:prose-invert max-w-none break-words overflow-hidden">

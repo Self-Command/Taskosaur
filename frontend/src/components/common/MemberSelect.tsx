@@ -191,7 +191,7 @@ function MemberSelect({
                   key={member.id}
                   user={{
                     ...member,
-                    avatar: member.avatarUrl || member.avatar || "/default-avatar.png",
+                    avatar: member.avatarUrl || member.avatar || undefined,
                   }}
                   size="sm"
                 />
@@ -265,7 +265,7 @@ function MemberSelect({
                           <UserAvatar
                             user={{
                               ...member,
-                              avatar: member.avatarUrl || member.avatar || "/default-avatar.png",
+                              avatar: member.avatarUrl || member.avatar || undefined,
                             }}
                             size="sm"
                           />
@@ -298,7 +298,7 @@ function MemberSelect({
               key={member.id}
               user={{
                 ...member,
-                avatar: member.avatarUrl || member.avatar || "/default-avatar.png",
+                avatar: member.avatarUrl || member.avatar || undefined,
               }}
               size="sm"
             />
@@ -357,7 +357,7 @@ function MemberSelect({
                     <UserAvatar
                       user={{
                         ...member,
-                        avatar: member.avatarUrl || member.avatar || "/default-avatar.png",
+                        avatar: member.avatarUrl || member.avatar || undefined,
                       }}
                       size="sm"
                     />

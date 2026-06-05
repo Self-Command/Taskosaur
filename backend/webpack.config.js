@@ -341,6 +341,8 @@ module.exports = function (options, webpack) {
       'cache-manager',
       'pdf-parse',
       'mammoth',
+      'sharp',
+      'cors',
 
       // Exclude Swagger modules so they can resolve paths at runtime
       '@nestjs/swagger',

@@ -25,6 +25,21 @@ export class TaskReminderService {
     return this.queue;
   }
 
+  async cancelTaskReminders(taskId: string) {
+    const q = this.getQueue();
+    try {
+      const delayed = await q.getDelayed();
+      for (const job of delayed) {
+        if (job.name === `start-${taskId}` || job.name === `due-${taskId}`) {
+          await job.remove();
+          this.logger.log(`Cancelled ${job.name} for task ${taskId}`);
+        }
+      }
+    } catch (e: any) {
+      this.logger.warn(`Failed to cancel reminders for task ${taskId}: ${e.message}`);
+    }
+  }
+
   async schedule(task: any) {
     const q = this.getQueue();
     const userId = task.createdBy || '';

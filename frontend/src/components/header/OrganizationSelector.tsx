@@ -11,7 +11,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/DropdownMenu";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { resolveAvatarUrl } from "@/utils/avatar";
 import { Badge } from "@/components/ui/badge";
 import { HiChevronDown, HiCheck, HiCog } from "react-icons/hi2";
 import { useAuth } from "@/contexts/auth-context";
@@ -146,6 +147,7 @@ export default function OrganizationSelector({
           <Tooltip content={orgTooltipContent} position="bottom">
             <div className="flex items-center gap-2 min-w-0">
               <Avatar className="header-org-selector-avatar">
+                <AvatarImage src={resolveAvatarUrl(currentOrganization.avatar) || ""} alt={currentOrganization.name} />
                 <AvatarFallback className="header-org-selector-avatar-fallback">
                   {getInitials(currentOrganization.name)}
                 </AvatarFallback>
@@ -220,6 +222,7 @@ export default function OrganizationSelector({
                   }`}
                 >
                   <Avatar className="header-org-item-avatar">
+                    <AvatarImage src={resolveAvatarUrl(org.avatar) || ""} alt={org.name} />
                     <AvatarFallback className="header-org-item-avatar-fallback">
                       {getInitials(org.name)}
                     </AvatarFallback>

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useProjectContext } from "@/contexts/project-context";
 import { HiPlus, HiChevronDown, HiUsers, HiMagnifyingGlass, HiCheckCircle } from "react-icons/hi2";
+import UserAvatar from "@/components/ui/avatars/UserAvatar";
 
 interface Member {
   id: string;
@@ -13,32 +14,6 @@ interface Member {
   };
   role: string;
 }
-
-const UserAvatar = ({ name, size = "sm" }: { name: string; size?: "sm" | "md" }) => {
-  const sizes = {
-    sm: "h-6 w-6 text-xs",
-    md: "h-8 w-8 text-sm",
-  };
-
-  const getInitials = (name: string) => {
-    if (!name || name.trim() === "") return "UN";
-
-    return name
-      .split(" ")
-      .map((word) => word.charAt(0))
-      .join("")
-      .toUpperCase()
-      .substring(0, 2);
-  };
-
-  return (
-    <div
-      className={`${sizes[size]} rounded-full bg-amber-500 flex items-center justify-center text-white font-medium`}
-    >
-      {getInitials(name)}
-    </div>
-  );
-};
 
 const LoadingSpinner = () => (
   <div className="flex items-center justify-center p-4">
@@ -228,7 +203,7 @@ export default function InviteMemberDropdown() {
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <UserAvatar name={displayName} />
+                          <UserAvatar user={{ firstName: member.user.firstName, lastName: member.user.lastName, avatar: member.user.avatar }} size="sm" />
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-stone-900 dark:text-stone-100 truncate">
                               {member.user.email}

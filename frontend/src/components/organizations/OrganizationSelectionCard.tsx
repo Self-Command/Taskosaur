@@ -1,7 +1,8 @@
 import { Organization } from "@/types";
 import { formatDateForDisplay } from "@/utils/date";
 import { Badge, Card, CardContent } from "../ui";
-import { Avatar, AvatarFallback } from "../ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
+import { resolveAvatarUrl } from "@/utils/avatar";
 import { HiCalendar, HiCheck, HiClock } from "react-icons/hi";
 import { HiBuildingOffice2, HiRocketLaunch } from "react-icons/hi2";
 
@@ -30,6 +31,7 @@ const OrganizationSelectionCard = ({
       <CardContent className="organizations-selection-card-content">
         <div className="organizations-selection-card-header">
           <Avatar className="organizations-selection-card-avatar">
+            <AvatarImage src={resolveAvatarUrl(organization.avatar) || ""} alt={organization.name} />
             <AvatarFallback className="organizations-selection-card-avatar-fallback">
               {getInitials(organization.name)}
             </AvatarFallback>

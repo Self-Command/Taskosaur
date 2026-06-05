@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { useState } from "react";
+import { resolveAvatarUrl } from "@/utils/avatar";
 
 interface UserAvatarProps {
   user:
@@ -67,16 +68,15 @@ export default function UserAvatar({ user, size = "md", color = "primary", class
     return "User";
   };
 
-  const resolveAvatarUrl = (avatar?: string) => {
-    if (!avatar) return null;
-    if (/^https?:\/\//.test(avatar)) return avatar;
-    if (avatar.startsWith("/")) return avatar;
-    const base = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3000/api";
-    return `${base}/uploads/${avatar}`;
-  };
-
   const userName = getUserName();
-  const initial = userName ? userName.charAt(0).toUpperCase() : "U";
+  const getInitials = () => {
+    if (typeof user !== "string" && user) {
+      const first = (user.firstName || "")[0] || "";
+      const last = (user.lastName || "")[0] || "";
+      if (first || last) return `${first}${last}`.toUpperCase();
+    }
+    return userName ? userName.charAt(0).toUpperCase() : "U";
+  };
   const avatarUrl = typeof user !== "string" && user ? resolveAvatarUrl(user.avatar) : undefined;
 
   const shouldShowImage =
@@ -115,7 +115,7 @@ export default function UserAvatar({ user, size = "md", color = "primary", class
           onError={() => setImageError(true)}
         />
       ) : (
-        <span>{initial}</span>
+        <span>{getInitials()}</span>
       )}
     </div>
   );

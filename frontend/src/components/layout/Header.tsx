@@ -368,7 +368,12 @@ export default function Header() {
                       <Button
                         onClick={() => {
                           if (typeof window !== "undefined" && window.innerWidth < 768) {
-                            router.push("/chat");
+                            const parts = router.asPath.split("/").filter(Boolean);
+                            const params = new URLSearchParams();
+                            if (parts[0]) params.set("ws", parts[0]);
+                            if (parts[1]) params.set("p", parts[1]);
+                            const qs = params.toString();
+                            router.push(`/chat${qs ? `?${qs}` : ""}`);
                           } else {
                             toggleChat();
                           }

@@ -4,6 +4,8 @@ import { Public } from '../auth/decorators/public.decorator';
 import { AiChatService } from '../ai-chat/ai-chat.service';
 import { McpToolsService } from '../mcp-tools/mcp-tools.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { WebSearchService } from '../ai-chat/services/web-search.service';
+import { getMCPSystemPrompt } from '../mcp-tools/prompts';
 
 const FETCH_TIMEOUT_MS = 300000;
 
@@ -15,6 +17,7 @@ export class OpenAICompatController {
     private readonly aiChatService: AiChatService,
     private readonly mcpToolsService: McpToolsService,
     private readonly prisma: PrismaService,
+    private readonly webSearchService: WebSearchService,
   ) {}
 
   @Public()
@@ -88,28 +91,109 @@ export class OpenAICompatController {
       };
 
       if (stream) {
+        var self = this;
         res.status(200);
         res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Cache-Control', 'no-cache, no-transform');
         res.setHeader('Connection', 'keep-alive');
         res.flushHeaders();
 
+        // ── Build full system prompt (like sidebar AI) ──
+        var allMsgs: any[] = [];
+        allMsgs.push({ role: 'system', content: getMCPSystemPrompt(tz) });
+        // Preserve caller system messages
+        var callerSystemMsgs = (body.messages || []).filter(function(m: any) { return m.role === 'system'; });
+        for (var si = 0; si < callerSystemMsgs.length; si++) allMsgs.push(callerSystemMsgs[si]);
+        // Add time context
+        allMsgs.push({ role: 'system', content: 'Today is ' + new Intl.DateTimeFormat('zh-CN', { timeZone: tz, dateStyle: 'full', timeStyle: 'short' }).format(new Date()) + ' (' + tz + '). Current user ID: ' + userId + '.' });
+        // Page context from request
+        if (body.organizationId || body.workspaceId || body.projectId) {
+          var ctxParts: string[] = [];
+          if (body.organizationId) ctxParts.push('organizationId: ' + body.organizationId);
+          if (body.workspaceId) ctxParts.push('workspaceId: ' + body.workspaceId);
+          if (body.projectId) ctxParts.push('projectId: ' + body.projectId);
+          allMsgs.push({ role: 'system', content: '[Current page: ' + ctxParts.join(', ') + ']' });
+        }
+        // User + assistant messages
+        var convMsgs = (body.messages || []).filter(function(m: any) { return m.role !== 'system'; });
+        for (var ci = 0; ci < convMsgs.length; ci++) allMsgs.push(convMsgs[ci]);
+
+        // ── Web search detection ──
+        var clientTools = (body.tools || []);
+        var hasWebSearch = clientTools.some(function(t: any) { return (t && t.function && t.function.name === 'web_search') || (t && t.type === 'web_search'); });
+        var userMsg = (body.messages || []).filter(function(m: any) { return m.role === 'user'; }).pop();
+        var userText = (userMsg && typeof userMsg.content === 'string') ? userMsg.content : '';
+        if (!userText && userMsg && (userMsg as any).content) userText = JSON.stringify((userMsg as any).content);
+        var isSearchQuery = hasWebSearch && !/^(列出|创建|删除|更新|修改|查看|给我|帮我|显示|打开)/.test(userText);
+        var doSearch = !!(body.enableWebSearch || body.enable_web_search || isSearchQuery);
+
+        // ── Non-blocking background search ──
+        if (doSearch) {
+          emitText('\n\n🔍 搜索: ' + userText.slice(0, 40) + '\n');
+          self.webSearchService.search(userText, userId).then(function(results: any) {
+            if (results && results.length > 0) {
+              var tbl = '| # | 来源 |\n|---|------|\n';
+              results.forEach(function(r: any, i: number) { tbl += '| ' + (i+1) + ' | [' + r.title + '](' + r.url + ') |\n'; });
+              (allMsgs as any)._searchMsg = { role: 'system', content: self.webSearchService.formatSystemMessage(results) };
+              (allMsgs as any)._searchTable = tbl;
+              (allMsgs as any)._searchReady = true;
+            }
+          }).catch(function() {});
+        }
+
+        // ── Inline guarded executor (like makeGuardedExecutor) ──
+        var toolExecutions: any[] = [];
+        var seenCalls = new Map<string, number>();
+        var toolFailCount = new Map<string, number>();
+        var blocked = false;
+        var executeGuarded = async function(toolName: string, params: any, uid: string): Promise<any> {
+          var isReadOnly = toolName.startsWith('list_') || toolName.startsWith('get_');
+          if (isReadOnly) {
+            var sk = JSON.stringify(params, Object.keys(params).sort());
+            var key = toolName + '::' + sk;
+            if (seenCalls.has(key)) {
+              var times = (seenCalls.get(key) || 0) + 1;
+              seenCalls.set(key, times);
+              return { success: false, _guard: true, error: 'DUPLICATE BLOCKED: ' + toolName + ' already called ' + times + ' times with these exact params. You have the data — take ACTION.' };
+            }
+            seenCalls.set(key, 1);
+          } else {
+            seenCalls.clear();
+          }
+          // Fail-fast: same tool failed 2+ times this round → block
+          var fc = toolFailCount.get(toolName) || 0;
+          if (fc >= 2) {
+            blocked = true;
+            return { success: false, _guard: true, error: 'TOOL RETRY ABORTED: ' + toolName + ' already failed ' + fc + ' times. Do NOT retry. Use the error information and try a DIFFERENT approach.' };
+          }
+          var result = await self.mcpToolsService.executeTool(toolName, params, uid);
+          if (result && result.success === false) {
+            toolFailCount.set(toolName, fc + 1);
+          }
+          return result;
+        };
+
         try {
-          // Tool calling loop with real streaming
-          const msgs = [...allMessages];
-          for (let round = 0; round < 5; round++) {
-            const apiRes: any = await this.fetchWithTimeout(
-              `${config.apiUrl}/chat/completions`,
+          var allMsgsTools = tools; // outer scope tools
+          for (var round = 0; round < 10; round++) {
+            // Inject search results between rounds
+            if ((allMsgs as any)._searchReady) {
+              emitText((allMsgs as any)._searchTable + '\n');
+              allMsgs.push((allMsgs as any)._searchMsg);
+              delete (allMsgs as any)._searchReady;
+              delete (allMsgs as any)._searchTable;
+              delete (allMsgs as any)._searchMsg;
+            }
+
+            var apiRes: any = await this.fetchWithTimeout(
+              config.apiUrl + '/chat/completions',
               {
                 method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${config.apiKey}`,
-                },
+                headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + config.apiKey },
                 body: JSON.stringify({
                   model: config.model,
-                  messages: msgs,
-                  tools: tools.length > 0 ? tools : undefined,
+                  messages: allMsgs,
+                  tools: allMsgsTools.length > 0 ? allMsgsTools : undefined,
                   stream: true,
                   max_completion_tokens: 2000,
                 }),
@@ -118,124 +202,136 @@ export class OpenAICompatController {
             );
 
             if (!apiRes.ok) {
-              const errText = await apiRes.text().catch(() => '');
-              this.logger.error(`AI API ${apiRes.status}: ${errText.slice(0, 200)}`);
-              emitText(`\nAPI error ${apiRes.status}. Please try again.\n`);
+              var errText = await apiRes.text().catch(function() { return ''; });
+              this.logger.error('AI API ' + apiRes.status + ': ' + errText.slice(0, 200));
+              emitText('\nAPI error ' + apiRes.status + '.\n');
               emitDone();
               break;
             }
 
-            // Parse SSE stream from AI API
-            const reader = apiRes.body.getReader();
-            const decoder = new TextDecoder();
-            let buf = '';
-            let fullContent = '';
-            let fullReasoning = '';
-            let hasToolCalls = false;
-            const toolAcc: Map<number, { id: string; name: string; args: string }> = new Map();
+            // ── Parse SSE stream with heartbeat ──
+            var reader = apiRes.body.getReader();
+            var decoder = new TextDecoder();
+            var buf = '';
+            var fullContent = '';
+            var fullReasoning = '';
+            var hasToolCalls = false;
+            var toolAcc: any = new Map();
+            var lastDataTime = Date.now();
+            var hbTimer = setInterval(function() {
+              if (Date.now() - lastDataTime >= 10000) {
+                emitText('\n'); // keepalive newline
+              }
+            }, 10000);
 
             while (true) {
-              const { done, value } = await this.readStreamChunk(reader);
-              if (done) break;
-              buf += decoder.decode(value, { stream: true });
-              const lines = buf.split('\n');
+              var chunk = await this.readStreamChunk(reader);
+              if (chunk.done) break;
+              buf += decoder.decode(chunk.value, { stream: true });
+              var lines = buf.split('\n');
               buf = lines.pop() || '';
 
-              for (const raw of lines) {
-                const line = raw.trim();
+              for (var li = 0; li < lines.length; li++) {
+                var line = lines[li].trim();
                 if (!line || !line.startsWith('data: ')) continue;
-                const json = line.slice(6);
+                var json = line.slice(6);
                 if (json === '[DONE]') break;
-
                 try {
-                  const chunk = JSON.parse(json);
-                  const delta = chunk?.choices?.[0]?.delta;
+                  var parsed = JSON.parse(json);
+                  var delta = parsed && parsed.choices && parsed.choices[0] && parsed.choices[0].delta;
                   if (!delta) continue;
-
-                  if (delta.content) {
-                    fullContent += delta.content;
-                    emitText(delta.content);
-                  }
-
-                  // Accumulate reasoning_content (DeepSeek requires it back)
+                  if (delta.content) { fullContent += delta.content; emitText(delta.content); lastDataTime = Date.now(); }
                   if (delta.reasoning_content) {
                     fullReasoning += delta.reasoning_content;
+                    emitText(delta.reasoning_content); // emit as text
+                    lastDataTime = Date.now();
                   }
-
                   if (delta.tool_calls) {
                     hasToolCalls = true;
-                    for (const tc of delta.tool_calls) {
-                      const idx = tc.index ?? 0;
+                    for (var ti = 0; ti < delta.tool_calls.length; ti++) {
+                      var tc = delta.tool_calls[ti];
+                      var idx = tc.index != null ? tc.index : 0;
                       if (!toolAcc.has(idx)) toolAcc.set(idx, { id: '', name: '', args: '' });
-                      const a = toolAcc.get(idx)!;
+                      var a = toolAcc.get(idx);
                       if (tc.id) a.id = tc.id;
-                      if (tc.function?.name) a.name += tc.function.name;
-                      if (tc.function?.arguments) a.args += tc.function.arguments;
+                      if (tc.function && tc.function.name) a.name += tc.function.name;
+                      if (tc.function && tc.function.arguments) a.args += tc.function.arguments;
                     }
                   }
-                } catch {}
+                } catch (e) {}
               }
             }
+            clearInterval(hbTimer);
 
+            // ── No tool calls → LLM gave final answer ──
             if (!hasToolCalls) {
               emitDone();
               break;
             }
 
-            // Server-side MCP tool execution — emit status as text
-            const toolCalls = Array.from(toolAcc.values());
-            for (const tc of toolCalls) {
-              emitText(`\n🔧 ${tc.name}...`);
+            // ── Execute tools with guards ──
+            var tcList = Array.from(toolAcc.values());
+            if (tcList.length > 1) emitText('\n\n---\n### 🔧 执行 ' + tcList.length + ' 个工具\n');
+            for (var tci = 0; tci < tcList.length; tci++) {
+              var tc: any = tcList[tci];
+              var toolName = tc.name.replace(/_/g, ' ');
+              if (tcList.length > 1) emitText('\n🔄 ' + toolName + '...\n');
+              else emitText('\n\n---\n### 🔧 ' + toolName + '\n');
+
               try {
-                const params = JSON.parse(tc.args || '{}');
-                const result = await this.mcpToolsService.executeTool(tc.name, params, userId);
-                emitText(result?.success === false ? ' ❌\n' : ' ✅\n');
-                const assistantMsg: any = {
-                  role: 'assistant',
-                  tool_calls: [
-                    {
-                      id: tc.id,
-                      type: 'function',
-                      function: { name: tc.name, arguments: tc.args },
-                    },
-                  ],
-                };
+                var params = JSON.parse(tc.args || '{}');
+                var result = await executeGuarded(tc.name, params, userId);
+                var ok = result && result.success !== false;
+                var resultStr = JSON.stringify(result, null, 2);
+                if (resultStr.length > 2000) resultStr = resultStr.slice(0, 2000) + '\n...';
+                emitText((ok ? '✅' : '❌') + ' ' + toolName + '\n\`\`\`json\n' + resultStr + '\n\`\`\`\n');
+
+                if (tc.name === 'navigate' && result && result.path) {
+                  emitText('🔗 [打开页面](' + result.path + ')\n');
+                }
+
+                toolExecutions.push({ tool: tc.name, params: params, result: result });
+
+                var assistantMsg: any = { role: 'assistant', tool_calls: [{ id: tc.id, type: 'function', function: { name: tc.name, arguments: tc.args } }] };
                 if (fullContent) assistantMsg.content = fullContent;
                 if (fullReasoning) assistantMsg.reasoning_content = fullReasoning;
-                msgs.push(assistantMsg);
-                msgs.push({ role: 'tool', content: JSON.stringify(result), tool_call_id: tc.id });
+                allMsgs.push(assistantMsg);
+                allMsgs.push({ role: 'tool', content: JSON.stringify(result), tool_call_id: tc.id });
+
+                if (blocked) break;
               } catch (err: any) {
-                emitText(' ❌\n');
-                const assistantMsg: any = {
-                  role: 'assistant',
-                  tool_calls: [
-                    {
-                      id: tc.id,
-                      type: 'function',
-                      function: { name: tc.name, arguments: tc.args },
-                    },
-                  ],
-                };
-                if (fullContent) assistantMsg.content = fullContent;
-                if (fullReasoning) assistantMsg.reasoning_content = fullReasoning;
-                msgs.push(assistantMsg);
-                msgs.push({
-                  role: 'tool',
-                  content: JSON.stringify({ error: err.message }),
-                  tool_call_id: tc.id,
-                });
+                emitText('❌ ' + toolName + '\n\`\`\`\n' + (err.message || String(err)) + '\n\`\`\`\n');
+                var errAssistantMsg: any = { role: 'assistant', tool_calls: [{ id: tc.id, type: 'function', function: { name: tc.name, arguments: tc.args } }] };
+                if (fullContent) errAssistantMsg.content = fullContent;
+                if (fullReasoning) errAssistantMsg.reasoning_content = fullReasoning;
+                allMsgs.push(errAssistantMsg);
+                allMsgs.push({ role: 'tool', content: JSON.stringify({ error: err.message || String(err) }), tool_call_id: tc.id });
               }
+            }
+
+            if (blocked) {
+              var fallback = '';
+              var actions = toolExecutions.filter(function(te: any) { return /^(create_|delete_|update_|add_|remove_|navigate)/.test(te.tool); });
+              var queries = toolExecutions.filter(function(te: any) { return /^(list_|get_)/.test(te.tool); });
+              if (actions.length > 0) {
+                fallback = actions.map(function(te: any) { return te.result && te.result.message ? te.result.message : te.tool.replace(/_/g, ' ') + ' done'; }).filter(Boolean).join('\n');
+              } else if (queries.length > 0) {
+                var uniqueTools = Array.from(new Set(queries.map(function(te: any) { return te.tool; })));
+                fallback = 'Executed ' + queries.length + ' read-only queries (' + uniqueTools.join(', ') + ') but took NO action. To complete the request, use: delete_task / update_task / create_task.';
+              }
+              if (fallback) emitText('\n\n' + fallback + '\n');
+              emitDone();
+              break;
             }
           }
 
           res.write('data: [DONE]\n\n');
         } catch (err: any) {
-          emitText(`Error: ${err.message}`);
+          emitText('Error: ' + (err.message || String(err)));
           emitDone();
           res.write('data: [DONE]\n\n');
         }
-        res.end();
-      } else {
+        res.end();      } else {
         // Non-streaming
         const result = await this.processNonStreaming(allMessages, tools, userId, config);
         return res.status(200).json({

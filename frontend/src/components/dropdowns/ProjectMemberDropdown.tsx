@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useProjectContext } from "@/contexts/project-context";
 import { HiChevronDown, HiXMark } from "react-icons/hi2";
+import UserAvatar from "@/components/ui/avatars/UserAvatar";
 
 interface User {
   id: string;
@@ -16,32 +17,6 @@ interface Member {
   user?: User;
   role: string;
 }
-
-const UserAvatar = ({ name, size = "sm" }: { name: string; size?: "sm" | "md" }) => {
-  const sizes = {
-    sm: "h-6 w-6 text-xs",
-    md: "h-8 w-8 text-sm",
-  };
-
-  const getInitials = (name: string) => {
-    if (!name || name.trim() === "") return "UN";
-
-    return name
-      .split(" ")
-      .map((word) => word.charAt(0))
-      .join("")
-      .toUpperCase()
-      .substring(0, 2);
-  };
-
-  return (
-    <div
-      className={`${sizes[size]} rounded-full bg-amber-500 flex items-center justify-center text-white font-medium`}
-    >
-      {getInitials(name)}
-    </div>
-  );
-};
 
 interface ProjectMemberDropdownProps {
   projectId: string;
@@ -183,19 +158,6 @@ export default function ProjectMemberDropdown({
     return user.username || `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email;
   };
 
-  const getUserInitials = (user: User) => {
-    if (user.firstName && user.lastName) {
-      return `${user.firstName} ${user.lastName}`;
-    }
-    if (user.firstName) {
-      return user.firstName;
-    }
-    if (user.username) {
-      return user.username;
-    }
-    return user.email;
-  };
-
   return (
     <div className="relative" ref={dropdownRef}>
       {selectedUser ? (
@@ -206,7 +168,7 @@ export default function ProjectMemberDropdown({
           className="w-full flex items-center justify-between p-2 border border-stone-300 dark:border-stone-600 rounded-lg hover:bg-stone-50 dark:hover:bg-stone-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <div className="flex items-center gap-2">
-            <UserAvatar name={getUserInitials(selectedUser)} />
+            <UserAvatar user={selectedUser} size="sm" />
             <span className="text-xs font-medium text-stone-900 dark:text-stone-100 truncate">
               {getUserDisplayName(selectedUser)}
             </span>
@@ -263,7 +225,7 @@ export default function ProjectMemberDropdown({
                         selectedUser?.id === user.id ? "bg-amber-50 dark:bg-amber-900/20" : ""
                       }`}
                     >
-                      <UserAvatar name={getUserInitials(user)} />
+                      <UserAvatar user={user} size="sm" />
                       <div className="min-w-0">
                         <div className="font-medium text-stone-900 dark:text-stone-100 truncate">
                           {getUserDisplayName(user)}

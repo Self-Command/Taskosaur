@@ -108,18 +108,26 @@ export class AiChatController {
     @Res() res: Response,
   ) {
     res.setHeader('Content-Type', 'application/x-ndjson');
-    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders();
 
+    let aborted = false;
+    const onClose = () => { aborted = true; };
+    res.on('close', onClose);
+
     try {
       for await (const event of this.aiChatService.chatStreamPost(chatRequest, user.id)) {
+        if (aborted) break;
         res.write(JSON.stringify(event) + '\n');
       }
-      res.end();
-    } catch (error) {
-      res.write(JSON.stringify({ t: 'error', e: error.message }) + '\n');
-      res.end();
+      if (!aborted) res.end();
+    } catch (error: any) {
+      if (!aborted) {
+        res.write(JSON.stringify({ t: 'error', e: error.message }) + '\n');
+        res.end();
+      }
     }
   }
 

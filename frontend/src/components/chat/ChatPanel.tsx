@@ -141,6 +141,8 @@ export default function ChatPanel() {
   const [thinkingStart, setThinkingStart] = useState<number>(0);
   const [isAIThinking, setIsAIThinking] = useState(false);
   const thinkingRef = useRef(false);
+  const [stallWarning, setStallWarning] = useState(''); // heartbeat counter for stall detection
+  const stallCountRef = useRef(0);
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
@@ -169,7 +171,12 @@ export default function ChatPanel() {
   useEffect(() => {
     if (typeof window !== "undefined" && window.innerWidth < 768 && isChatOpen) {
       toggleChat();
-      router.push("/chat");
+      const parts = pathname.split("/").filter(Boolean);
+      const params = new URLSearchParams();
+      if (parts[0]) params.set("ws", parts[0]);
+      if (parts[1]) params.set("p", parts[1]);
+      const qs = params.toString();
+      router.push(`/chat${qs ? `?${qs}` : ""}`);
     }
   }, [isChatOpen]);
 
@@ -202,6 +209,7 @@ export default function ChatPanel() {
     const currAtts = [...attachments];
     const um: Message = { id: "" + Date.now(), role: "user", content: text, thinking: "", toolExecs: [], attachments: currAtts, streaming: false };
     setMessages((p) => [...p, um]); setInput(""); setAttachments([]); setLoading(true);
+    stallCountRef.current = 0; setStallWarning('');
     const aid = "" + (Date.now() + 1);
     setMessages((p) => [...p, { id: aid, role: "assistant", content: "", thinking: "", toolExecs: [], streaming: true }]);
     setIsAIThinking(false);
@@ -243,16 +251,26 @@ export default function ChatPanel() {
       const reader = response.body!.getReader();
       const decoder = new TextDecoder();
       let buf = "";
+      let firstChunk = true;
+      let lastChunkTime = Date.now();
+      const streamStart = Date.now();
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+        const now = Date.now();
+        if (firstChunk) { console.log(`[CHAT-FE] first_chunk at ${now - streamStart}ms`); firstChunk = false; }
+        else { console.log(`[CHAT-FE] chunk_gap ${now - lastChunkTime}ms`); }
+        lastChunkTime = now;
         buf += decoder.decode(value, { stream: true });
         const lines = buf.split("\n");
         buf = lines.pop() || "";
+        let lineCount = 0;
         for (const line of lines) {
           if (!line.trim()) continue;
+          lineCount++;
           try {
             const d = JSON.parse(line);
+            if (d.t !== 'hb') console.log(`[CHAT-FE] event ${d.t}${d.tool ? ':'+d.tool : ''}${d.d ? ' len='+d.d.length : ''}`);
             switch (d.t) {
               case "ss": // search start
                 setSearchQuery(d.q || "");
@@ -262,15 +280,24 @@ export default function ChatPanel() {
                 setSearchResults(d.r || []);
                 break;
               case "se": break; // search end
+              case "hb":
+                stallCountRef.current++;
+                if (stallCountRef.current === 1) setStallWarning('AI 思考中...');
+                else if (stallCountRef.current === 3) setStallWarning('仍在处理，请耐心等待...');
+                else if (stallCountRef.current === 6) setStallWarning('处理时间较长，AI 正在分析复杂数据...');
+                break;
               case "th": // thinking token
+                stallCountRef.current = 0; setStallWarning('');
                 if (!thinkingRef.current) { thinkingRef.current = true; setIsAIThinking(true); setThinkingStart(Date.now()); }
                 setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") c[c.length - 1] = { ...last, thinking: (last.thinking || "") + (d.d || ""), streaming: true }; return c; });
                 break;
               case "tx": // text token
+                stallCountRef.current = 0; setStallWarning('');
                 if (thinkingRef.current) { thinkingRef.current = false; setIsAIThinking(false); }
                 setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") c[c.length - 1] = { ...last, content: (last.content || "") + (d.d || ""), streaming: true }; return c; });
                 break;
               case "ts": // tool start
+                stallCountRef.current = 0; setStallWarning('');
                 if (thinkingRef.current) { thinkingRef.current = false; setIsAIThinking(false); }
                 setMessages((p) => { const c = [...p]; const last = c[c.length - 1]; if (last?.role === "assistant") c[c.length - 1] = { ...last, toolExecs: [...(last.toolExecs || []), { tool: d.tool, params: d.p || {}, result: {}, pending: true }], streaming: true }; return c; });
                 break;
@@ -503,9 +530,11 @@ export default function ChatPanel() {
                         <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
                       </span>
                       <span className="text-xs text-gray-500 dark:text-gray-400">
-                        {m.toolExecs && m.toolExecs.length > 0
-                          ? `MCP 工具执行中 (${m.toolExecs.filter(t => t.pending).length > 0 ? `${m.toolExecs.filter(t => t.pending).length} 个进行中` : `${m.toolExecs.length} 个已完成`})`
-                          : "AI 正在思考..."}
+                        {stallWarning
+                          ? stallWarning
+                          : m.toolExecs && m.toolExecs.length > 0
+                            ? `MCP 工具执行中 (${m.toolExecs.filter(t => t.pending).length > 0 ? `${m.toolExecs.filter(t => t.pending).length} 个进行中` : `${m.toolExecs.length} 个已完成`})`
+                            : "AI 正在思考..."}
                       </span>
                     </div>
                   ) : null}

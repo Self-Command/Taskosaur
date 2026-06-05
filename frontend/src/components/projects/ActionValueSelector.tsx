@@ -6,6 +6,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { resolveAvatarUrl } from "@/utils/avatar";
 
 interface ActionValueSelectorProps {
   actionType: "setPriority" | "assignTo" | "addLabels" | "markAsSpam" | "autoReply";
@@ -56,7 +57,7 @@ export function ActionValueSelector({
 
     return (
       <img
-        src={src}
+        src={resolveAvatarUrl(src) || ""}
         alt={label}
         className="w-5 h-5 rounded-full object-cover"
         onError={() => setImgError(true)}
@@ -78,7 +79,7 @@ export function ActionValueSelector({
 
     return (
       <img
-        src={src}
+        src={resolveAvatarUrl(src) || ""}
         alt={label}
         className="w-6 h-6 rounded-full object-cover flex-shrink-0"
         onError={() => setImgError(true)}

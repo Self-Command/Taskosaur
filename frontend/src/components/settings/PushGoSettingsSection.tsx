@@ -14,6 +14,7 @@ export default function PushGoSettingsSection() {
   const user = getCurrentUser();
   const [channelId, setChannelId] = useState("");
   const [password, setPassword] = useState("");
+  const [gatewayUrl, setGatewayUrl] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => { load(); }, []);
@@ -22,9 +23,10 @@ export default function PushGoSettingsSection() {
     try {
       const c = await api.get("/settings/pushgo_channel_id") as any;
       const p = await api.get("/settings/pushgo_channel_password") as any;
-      // api.get returns AxiosResponse — value is in .data
+      const g = await api.get("/settings/pushgo_gateway_url") as any;
       setChannelId(c?.data?.value || c?.value || "");
       setPassword(p?.data?.value || p?.value || "");
+      setGatewayUrl(g?.data?.value || g?.value || "");
     } catch {
       // silently fail — user needs to configure
     }
@@ -37,6 +39,7 @@ export default function PushGoSettingsSection() {
         settings: [
           { key: "pushgo_channel_id", value: channelId, category: "pushgo" },
           { key: "pushgo_channel_password", value: password, category: "pushgo", isEncrypted: true },
+          { key: "pushgo_gateway_url", value: gatewayUrl, category: "pushgo" },
         ],
       });
       toast.success("PushGo 配置已保存");
@@ -67,11 +70,15 @@ export default function PushGoSettingsSection() {
           <Label className="text-xs font-medium text-[var(--muted-foreground)]">Channel Password</Label>
           <Input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="8-128 位密码" className="font-mono text-sm bg-[var(--background)] border-[var(--border)]" />
         </div>
+        <div className="space-y-2">
+          <Label className="text-xs font-medium text-[var(--muted-foreground)]">Gateway URL</Label>
+          <Input value={gatewayUrl} onChange={e => setGatewayUrl(e.target.value)} placeholder="https://gateway.pushgo.cn/message" className="font-mono text-sm bg-[var(--background)] border-[var(--border)]" />
+        </div>
         <ActionButton primary onClick={save} disabled={saving} className="w-full">
           {saving ? "保存中..." : "保存配置"}
         </ActionButton>
         <p className="text-xs text-[var(--muted-foreground)]">
-          在 PushGo App 创建 Channel 后填入 ID 和密码即可。
+          在 PushGo App 创建 Channel 后填入 ID、密码和网关地址即可。
         </p>
       </CardContent>
     </Card>

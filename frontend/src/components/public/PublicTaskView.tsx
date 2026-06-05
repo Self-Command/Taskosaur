@@ -183,7 +183,7 @@ export default function PublicTaskView({ task, token }: PublicTaskViewProps) {
                   <UserAvatar
                     user={{
                       ...task.createdBy,
-                      avatar: (task.createdBy as any).avatarUrl || (task.createdBy as any).avatar || "/default-avatar.png",
+                      avatar: (task.createdBy as any).avatarUrl || (task.createdBy as any).avatar || undefined,
                     }}
                     size="sm"
                   />
@@ -203,7 +203,7 @@ export default function PublicTaskView({ task, token }: PublicTaskViewProps) {
                       <UserAvatar
                         user={{
                           ...assignee,
-                          avatar: (assignee as any).avatarUrl || (assignee as any).avatar || "/default-avatar.png",
+                          avatar: (assignee as any).avatarUrl || (assignee as any).avatar || undefined,
                         }}
                         size="sm"
                       />

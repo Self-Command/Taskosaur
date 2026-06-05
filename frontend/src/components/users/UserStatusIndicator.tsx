@@ -1,6 +1,7 @@
 import React from "react";
 import { useUserStatus } from "@/hooks/useUserStatus";
 import { formatLastSeen } from "@/hooks/useUserStatus";
+import { resolveAvatarUrl } from "@/utils/avatar";
 export interface UserStatusIndicatorProps {
   userId: string;
   showTooltip?: boolean;
@@ -157,7 +158,7 @@ export const UserAvatarWithStatus: React.FC<{
   return (
     <div className={`relative inline-block ${className}`}>
       <img
-        src={avatarUrl || "/default-avatar.png"}
+        src={resolveAvatarUrl(avatarUrl) || "/default-avatar.png"}
         alt={userName || "User"}
         className={`${avatarSizes[size]} rounded-full object-cover`}
       />

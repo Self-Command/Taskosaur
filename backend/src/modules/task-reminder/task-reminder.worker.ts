@@ -5,15 +5,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 
 const QUEUE = 'task-reminders';
-const PUSHGO_URL = 'https://gateway.pushgo.cn/message';
-
-const SEVERITY_MAP: Record<string, string> = {
-  LOWEST: 'low',
-  LOW: 'low',
-  MEDIUM: 'normal',
-  HIGH: 'high',
-  HIGHEST: 'critical',
-};
+const DEFAULT_PUSHGO_URL = 'https://gateway.pushgo.cn/message';
 
 @Injectable()
 export class TaskReminderWorker implements OnModuleInit {
@@ -29,22 +21,23 @@ export class TaskReminderWorker implements OnModuleInit {
     const worker = new Worker(
       QUEUE,
       async (job: Job) => {
-        const { type, taskId, title, priority, userId } = job.data;
-        this.logger.log(`Processing: ${type} "${title}"`);
+        const { type, taskId, priority, userId } = job.data;
 
         const task = await this.prisma.task.findUnique({
           where: { id: taskId },
           select: {
             id: true,
+            title: true,
             slug: true,
             completedAt: true,
+            isArchived: true,
             priority: true,
             startDate: true,
             dueDate: true,
             description: true,
             type: true,
             storyPoints: true,
-            project: { select: { name: true } },
+            project: { select: { name: true, archive: true } },
             sprint: { select: { name: true } },
             assignees: { select: { user: { select: { firstName: true, lastName: true } } } },
             reporters: { select: { user: { select: { firstName: true, lastName: true } } } },
@@ -52,11 +45,24 @@ export class TaskReminderWorker implements OnModuleInit {
             _count: { select: { childTasks: true, comments: true, attachments: true } },
           },
         });
-        if (!task || task.completedAt || task.status?.category === 'DONE') return;
+
+        // ── Universal guards: drop silently, job is stale ──
+        if (!task) return;
+        if (task.completedAt) return;
+        if (task.status?.category === 'DONE') return;
+        if (task.isArchived) return;
+        if (task.project?.archive) return;
+
+        // ── Start reminder: task must still be TODO ──
+        if (type === 'start' && task.status?.category !== 'TODO') return;
+
+        // ── Due reminder: task must be TODO or IN_PROGRESS ──
+        if (type === 'due' && task.status?.category !== 'TODO' && task.status?.category !== 'IN_PROGRESS') return;
 
         // 从数据库读取用户设置（前端设置页面可修改）
         const channelId = await this.getUserSetting(userId, 'pushgo_channel_id');
         const channelPwd = await this.getUserSetting(userId, 'pushgo_channel_password');
+        const gatewayUrl = await this.getUserSetting(userId, 'pushgo_gateway_url');
         if (!channelId || !channelPwd) {
           this.logger.warn(`User ${userId} has no PushGo config`);
           return;
@@ -75,9 +81,7 @@ export class TaskReminderWorker implements OnModuleInit {
             .join(', ') || '未分配';
 
         const action = type === 'start' ? 'start-reminder' : 'complete-reminder';
-        const apiBase =
-          this.configService.get('FRONTEND_URL') ||
-          'http://localhost:3000';
+        const apiBase = this.configService.get('BACKEND_URL') || this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
         const callbackUrl = `${apiBase}/api/tasks/${task.id}/${action}?userId=${userId}`;
 
         const priorityLabel: Record<string, string> = {
@@ -87,33 +91,29 @@ export class TaskReminderWorker implements OnModuleInit {
           HIGH: '高',
           HIGHEST: '最高',
         };
+        const isStart = type === 'start';
+        const title = isStart ? `⏰ ${task.title}` : `✅ ${task.title}`;
+        const timeLabel = isStart ? '开始时间' : '截止时间';
+        const timeValue = isStart ? fmt(task.startDate) : fmt(task.dueDate);
         const lines = [
-          `📋 ${task.slug}`,
-          `类型: ${task.type}  优先级: ${priorityLabel[task.priority] || task.priority}  状态: ${task.status?.name || '-'}`,
-          `项目: ${task.project?.name || '-'}  迭代: ${task.sprint?.name || '-'}`,
-          `开始时间: ${fmt(task.startDate)}  截止时间: ${fmt(task.dueDate)}`,
-          `预估工时: ${task.storyPoints ?? '-'}人天  子任务: ${task._count.childTasks}  评论: ${task._count.comments}  附件: ${task._count.attachments}`,
-          `执行人: ${joinNames(task.assignees)}`,
-          `报告人: ${joinNames(task.reporters)}`,
-        ];
-        if (task.description) {
-          const desc =
-            task.description.length > 150
-              ? task.description.slice(0, 150) + '...'
-              : task.description;
-          lines.push(`描述: ${desc}`);
-        } else {
-          lines.push('描述: 无');
-        }
+          `📋 ${task.project?.name || '-'} · ${task.slug}`,
+          `优先级: ${priorityLabel[task.priority] || task.priority}  状态: ${task.status?.name || '-'}`,
+          `执行: ${joinNames(task.assignees)}`,
+          `⏱ ${timeLabel}: ${timeValue}`,
+          task.description
+            ? (task.description.length > 120 ? task.description.slice(0, 120) + '...' : task.description)
+            : '',
+        ].filter(Boolean);
         lines.push('');
-        lines.push(type === 'start' ? '👆 点击通知开始处理任务' : '👆 点击通知标记任务完成');
+        lines.push(type === 'start' ? '👆 点击开始处理' : '👆 点击标记完成');
 
         const body = lines.join('\n');
-        const severity = SEVERITY_MAP[task.priority] || 'info';
+        const severity = 'critical';
 
         try {
           const ttl = Date.now() + 24 * 60 * 60 * 1000; // 24h TTL — prevent stale message pile-up
-          const res = await fetch(PUSHGO_URL, {
+          const pushgoUrl = gatewayUrl || DEFAULT_PUSHGO_URL;
+          const res = await fetch(pushgoUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

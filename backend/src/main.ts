@@ -1,3 +1,6 @@
+import { config as loadEnv } from 'dotenv';
+loadEnv(); // must run BEFORE NestFactory so CORS can read env vars
+
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
@@ -52,7 +55,9 @@ async function bootstrap() {
     }
   }
 
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    cors: { origin: true, methods: 'GET,POST,PUT,DELETE,PATCH,OPTIONS', allowedHeaders: ['Content-Type', 'Authorization', 'X-Organization-Id', 'X-Requested-With'], credentials: true },
+  });
   const configService = app.get(ConfigService);
 
   const appConfig = configService.get('app');
@@ -63,21 +68,6 @@ async function bootstrap() {
 
   // Enable cookie parsing for OIDC state management
   app.use(cookieParser());
-
-  // Enable CORS
-  app.enableCors({
-    origin: process.env.CORS_ORIGINS
-      ? process.env.CORS_ORIGINS.split(',')
-      : [
-          'http://localhost:3000',
-          'http://localhost:3001',
-          'http://0.0.0.0:3000',
-          'http://0.0.0.0:3001',
-          'http://127.0.0.1:3000',
-        ],
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-    credentials: true,
-  });
 
   // Enable ValidationPipe globally
   app.useGlobalPipes(

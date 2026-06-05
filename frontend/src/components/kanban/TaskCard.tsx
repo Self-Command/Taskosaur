@@ -5,6 +5,7 @@ import { HiChatBubbleLeft, HiCalendarDays, HiPaperClip } from "react-icons/hi2";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
 import { formatDateAsCountdown, isDatePast } from "@/utils/date";
+import { resolveAvatarUrl } from "@/utils/avatar";
 
 interface KanbanTask {
   id: string;
@@ -211,7 +212,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
                 >
                   {assignee.avatar ? (
                     <Image
-                      src={assignee.avatar}
+                      src={resolveAvatarUrl(assignee.avatar) || ""}
                       alt={`${assignee.firstName} ${assignee.lastName}`}
                       className="w-full h-full rounded-full object-cover"
                       height={24}
