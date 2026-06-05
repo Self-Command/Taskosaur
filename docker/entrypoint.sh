@@ -6,8 +6,8 @@ echo "🚀 Starting Taskosaur Production Environment..."
 # Function to wait for PostgreSQL
 wait_for_postgres() {
   echo "⏳ Waiting for PostgreSQL..."
-  DB_HOST=$(echo "$DATABASE_URL" | sed -n 's/.*@\([^:]*\):.*/\1/p')
-  DB_PORT=$(echo "$DATABASE_URL" | sed -n 's/.*:\([0-9]*\)\/.*/\1/p')
+  DB_HOST=$(node -e "try{console.log(new URL(process.env.DATABASE_URL).hostname)}catch(e){console.log('postgres')}")
+  DB_PORT=$(node -e "try{console.log(new URL(process.env.DATABASE_URL).port||'5432')}catch(e){console.log('5432')}")
 
   max_attempts=30
   attempt=0
