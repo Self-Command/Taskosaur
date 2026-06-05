@@ -1190,15 +1190,6 @@ export default function TaskDetailClient({
                 taskId={taskId}
                 projectId={task?.projectId || ""}
                 allowEmailReplies={task?.allowEmailReplies || false}
-                onCommentAdded={() => {
-                  onTaskRefetch && onTaskRefetch();
-                }}
-                onCommentUpdated={() => {
-                  onTaskRefetch && onTaskRefetch();
-                }}
-                onCommentDeleted={() => {
-                  onTaskRefetch && onTaskRefetch();
-                }}
                 onTaskRefetch={onTaskRefetch}
                 hasAccess={hasAccess}
                 setLoading={setLoadingComments}

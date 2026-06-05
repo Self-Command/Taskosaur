@@ -482,9 +482,7 @@ export default function TaskComments({
         }
       }
 
-      if (onTaskRefetch) {
-        onTaskRefetch();
-      }
+      // Comments state managed locally — no parent refetch needed
     } catch (error) {
       console.error("Failed to refresh comments:", error);
     }
@@ -594,10 +592,7 @@ export default function TaskComments({
         onCommentAdded?.(createdComment);
       }
 
-      // Trigger parent refetch if needed (for task comment count, etc.)
-      if (onTaskRefetch) {
-        onTaskRefetch();
-      }
+      // Comments state managed locally — no parent refetch needed
       setCommentContent("");
       editorRef.current?.clear();
       setEditingCommentId(null);
@@ -654,11 +649,7 @@ export default function TaskComments({
 
       toast.success(t("comments.deletedSuccess"));
       onCommentDeleted?.(commentToDelete);
-
-      // Trigger parent refetch if needed
-      if (onTaskRefetch) {
-        onTaskRefetch();
-      }
+      // Comments state managed locally — no parent refetch needed
     } finally {
       setDeleteModalOpen(false);
       setCommentToDelete(null);
