@@ -7,8 +7,9 @@ import { WebSearchService } from './services/web-search.service';
 import { SettingsModule } from '../settings/settings.module';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { McpToolsModule } from '../mcp-tools/mcp-tools.module';
+import { PromptModule } from '../prompt/prompt.module';
 @Module({
-  imports: [SettingsModule, PrismaModule, McpToolsModule],
+  imports: [SettingsModule, PrismaModule, McpToolsModule, PromptModule],
   controllers: [AiChatController],
   providers: [AiChatService, FileUploadService, VisionContentBuilder, WebSearchService],
   exports: [AiChatService, WebSearchService],

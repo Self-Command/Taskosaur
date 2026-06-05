@@ -1,0 +1,24 @@
+# Prompt language registry — single source of truth for supported locales.
+# Adding a new language = one entry here + section variants.
+
+locales:
+  en:
+    label: English
+    fallback: null
+    date_locale: en-US
+  zh:
+    label: 简体中文
+    fallback: en
+    date_locale: zh-CN
+
+# Sections marked "semantic" affect model behavior (tool selection, date parsing,
+# output format). "cosmetic" sections only change tone/formality.
+sections:
+  identity:      { type: cosmetic }
+  current_time:  { type: cosmetic }
+  date_rules:    { type: semantic }
+  web_search:    { type: cosmetic }
+  general_rules: { type: semantic }
+  formatting:    { type: cosmetic }
+
+default_locale: en

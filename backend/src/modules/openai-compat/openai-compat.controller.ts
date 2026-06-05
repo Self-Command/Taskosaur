@@ -5,7 +5,7 @@ import { AiChatService } from '../ai-chat/ai-chat.service';
 import { McpToolsService } from '../mcp-tools/mcp-tools.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WebSearchService } from '../ai-chat/services/web-search.service';
-import { getMCPSystemPrompt } from '../mcp-tools/prompts';
+import { PromptBuilder } from '../prompt/prompt-builder.service';
 
 const FETCH_TIMEOUT_MS = 300000;
 
@@ -18,6 +18,7 @@ export class OpenAICompatController {
     private readonly mcpToolsService: McpToolsService,
     private readonly prisma: PrismaService,
     private readonly webSearchService: WebSearchService,
+    private readonly promptBuilder: PromptBuilder,
   ) {}
 
   @Public()
@@ -104,11 +105,16 @@ export class OpenAICompatController {
 
         // ── Build full system prompt (like sidebar AI) ──
         const allMsgs: any[] = [];
-        allMsgs.push({ role: 'system', content: getMCPSystemPrompt(tz) });
+        allMsgs.push({ role: 'system', content: await this.promptBuilder.build(userId) });
         // Preserve caller system messages — but filter out ChatBox tool descriptions
         // ChatBox injects web_search/parse_link tool instructions that conflict with our MCP tools
         const callerSystemMsgs = (body.messages || []).filter(function (m: any) {
-          return m.role === 'system' && !/web_search|parse_link|function call|tool.*call|available functions/i.test(m.content || '');
+          return (
+            m.role === 'system' &&
+            !/web_search|parse_link|function call|tool.*call|available functions/i.test(
+              m.content || '',
+            )
+          );
         });
         for (let si = 0; si < callerSystemMsgs.length; si++) allMsgs.push(callerSystemMsgs[si]);
         // Add time context

@@ -15,7 +15,7 @@ import {
 import { SettingsService } from '../settings/settings.service';
 import { McpToolsService } from '../mcp-tools/mcp-tools.service';
 import { McpVerificationService, isWriteTool } from '../mcp-tools/mcp-verification.service';
-import { getMCPSystemPrompt } from '../mcp-tools/prompts';
+import { PromptBuilder } from '../prompt/prompt-builder.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FileUploadService } from './services/file-upload.service';
 import { VisionContentBuilder } from './services/vision-content-builder.service';
@@ -136,6 +136,7 @@ export class AiChatService {
     private prisma: PrismaService,
     private mcpToolsService: McpToolsService,
     private mcpVerification: McpVerificationService,
+    private promptBuilder: PromptBuilder,
     private fileUploadService: FileUploadService,
     private visionContent: VisionContentBuilder,
     private webSearchService: WebSearchService,
@@ -252,18 +253,6 @@ export class AiChatService {
     return msg || `AI API returned HTTP ${status}`;
   }
 
-  private async getUserTimezone(userId: string): Promise<string> {
-    try {
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { timezone: true },
-      });
-      return user?.timezone || 'UTC';
-    } catch {
-      return 'UTC';
-    }
-  }
-
   private detectProvider(apiUrl: string): string {
     try {
       const parsedUrl = new URL(apiUrl);
@@ -331,8 +320,7 @@ export class AiChatService {
     userId: string,
   ): Promise<{ messages: ChatMessageDto[]; userMessage: string }> {
     const messages: ChatMessageDto[] = [];
-    const tz = await this.getUserTimezone(userId);
-    messages.push({ role: 'system', content: getMCPSystemPrompt(tz) });
+    messages.push({ role: 'system', content: await this.promptBuilder.build(userId) });
 
     let userMessage = chatRequest.message;
     // Always build context info so the AI knows where the user is, but make it
@@ -473,9 +461,14 @@ export class AiChatService {
 
             // ── Post-execution verification ──
             if (isWriteTool(toolName)) {
-              const verification = await this.mcpVerification.verify(toolName, toolParams, toolResult, userId);
+              const verification = await this.mcpVerification.verify(
+                toolName,
+                toolParams,
+                toolResult,
+                userId,
+              );
               if (!verification.passed) {
-                (toolResult as any)._verification = verification;
+                toolResult._verification = verification;
               }
             }
 
@@ -657,9 +650,14 @@ export class AiChatService {
 
             // ── Post-execution verification ──
             if (isWriteTool(c.name)) {
-              const verification = await this.mcpVerification.verify(c.name, c.arguments, r, userId);
+              const verification = await this.mcpVerification.verify(
+                c.name,
+                c.arguments,
+                r,
+                userId,
+              );
               if (!verification.passed) {
-                (r as any)._verification = verification;
+                r._verification = verification;
               }
             }
 
@@ -968,9 +966,14 @@ export class AiChatService {
 
             // ── Post-execution verification ──
             if (isWriteTool(toolName)) {
-              const verification = await this.mcpVerification.verify(toolName, toolParams, toolResult, userId);
+              const verification = await this.mcpVerification.verify(
+                toolName,
+                toolParams,
+                toolResult,
+                userId,
+              );
               if (!verification.passed) {
-                (toolResult as any)._verification = verification;
+                toolResult._verification = verification;
               }
             }
 

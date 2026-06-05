@@ -3,9 +3,10 @@ import { OpenAICompatController } from './openai-compat.controller';
 import { AiChatModule } from '../ai-chat/ai-chat.module';
 import { McpToolsModule } from '../mcp-tools/mcp-tools.module';
 import { PrismaModule } from '../../prisma/prisma.module';
+import { PromptModule } from '../prompt/prompt.module';
 
 @Module({
-  imports: [AiChatModule, McpToolsModule, PrismaModule],
+  imports: [AiChatModule, McpToolsModule, PrismaModule, PromptModule],
   controllers: [OpenAICompatController],
 })
 export class OpenAICompatModule {}
