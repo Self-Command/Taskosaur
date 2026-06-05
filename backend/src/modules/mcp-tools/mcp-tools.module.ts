@@ -3,6 +3,7 @@ import { McpToolsService } from './mcp-tools.service';
 import { McpToolsController } from './mcp-tools.controller';
 import { ToolExecutor } from './tool-executor';
 import { McpLoggerService } from './mcp-logger.service';
+import { McpVerificationService } from './mcp-verification.service';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { SettingsModule } from '../settings/settings.module';
 import { GatewayModule } from '../../gateway/gateway.module';
@@ -14,6 +15,7 @@ import { WorkspaceMembersModule } from '../workspace-members/workspace-members.m
 import { ProjectMembersModule } from '../project-members/project-members.module';
 import { S3Module } from '../storage/s3.module';
 import { TaskReminderModule } from '../task-reminder/task-reminder.module';
+import { TimeZoneModule } from '../timezone/timezone.module';
 
 @Module({
   imports: [
@@ -28,9 +30,10 @@ import { TaskReminderModule } from '../task-reminder/task-reminder.module';
     ProjectMembersModule,
     S3Module,
     TaskReminderModule,
+    TimeZoneModule,
   ],
   controllers: [McpToolsController],
-  providers: [McpToolsService, ToolExecutor, McpLoggerService],
-  exports: [McpToolsService, McpLoggerService],
+  providers: [McpToolsService, ToolExecutor, McpLoggerService, McpVerificationService],
+  exports: [McpToolsService, McpLoggerService, McpVerificationService],
 })
 export class McpToolsModule {}

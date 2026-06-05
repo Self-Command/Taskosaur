@@ -13,6 +13,7 @@ import { TaskType } from '@prisma/client';
 import { SlugService } from '../../common/slug.service';
 import { StorageService } from '../storage/storage.service';
 import { TaskReminderService } from '../task-reminder/task-reminder.service';
+import { TimeZoneNormalizer } from '../timezone/timezone-normalizer.service';
 import * as crypto from 'crypto';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -39,6 +40,8 @@ const STRIP_FIELDS = new Set([
 
 function trimForLLM(obj: any, depth = 0): any {
   if (obj === null || obj === undefined) return obj;
+  // Preserve Date objects as ISO strings so AI can see the actual stored times
+  if (obj instanceof Date) return obj.toISOString();
   if (typeof obj !== 'object') return obj;
   if (Array.isArray(obj)) {
     const cap = depth === 0 ? 20 : 5;
@@ -86,6 +89,7 @@ export class ToolExecutor {
     private slugService: SlugService,
     private storageService: StorageService,
     private reminderService: TaskReminderService,
+    private tzNormalizer: TimeZoneNormalizer,
   ) {}
 
   // ---- helpers ----
@@ -100,10 +104,13 @@ export class ToolExecutor {
       return `${name} must be a valid UUID (got "${v}"). Use list_* tools first to find the correct ID.`;
     return null;
   }
-  private safeDate(v: unknown): Date | null {
+  /**
+   * Parse a user-provided date string in the user's timezone → UTC Date.
+   * Replaces the old `safeDate` which had no timezone awareness.
+   */
+  private parseDate(v: unknown, userTimezone: string): Date | null {
     if (!v) return null;
-    const d = new Date(v as string);
-    return isNaN(d.getTime()) ? null : d;
+    return this.tzNormalizer.parseUserDate(v as string, userTimezone);
   }
   private safeNullable(v: unknown): any | null {
     return v === undefined || v === null || v === '' ? null : v;
@@ -189,8 +196,9 @@ export class ToolExecutor {
     const startTime = Date.now();
     this.mcpLogger.logToolCall(toolName, userId, params);
     try {
+      const userTimezone = await this.tzNormalizer.getUserTimezone(userId);
       const result = await Promise.race([
-        this.executeInternal(toolName, params, userId),
+        this.executeInternal(toolName, params, userId, userTimezone),
         new Promise<never>((_, reject) =>
           setTimeout(
             () => reject(new Error(`Tool "${toolName}" timed out after ${timeoutMs / 1000}s`)),
@@ -210,7 +218,9 @@ export class ToolExecutor {
     toolName: string,
     params: Record<string, any>,
     userId: string,
+    userTimezone: string,
   ): Promise<any> {
+    const sd = (v: unknown) => this.parseDate(v, userTimezone);
     switch (toolName) {
       // Workspace
       case 'list_workspaces':
@@ -229,9 +239,9 @@ export class ToolExecutor {
       case 'get_project':
         return trimForLLM(await this.getProject(params, userId));
       case 'create_project':
-        return trimForLLM(await this.createProject(params, userId));
+        return trimForLLM(await this.createProject(params, userId, sd));
       case 'update_project':
-        return trimForLLM(await this.updateProject(params, userId));
+        return trimForLLM(await this.updateProject(params, userId, sd));
       case 'delete_project':
         return await this.deleteProject(params, userId);
       // Task
@@ -240,15 +250,15 @@ export class ToolExecutor {
       case 'get_task':
         return trimForLLM(await this.getTask(params, userId));
       case 'create_task':
-        return trimForLLM(await this.createTask(params, userId));
+        return trimForLLM(await this.createTask(params, userId, sd));
       case 'update_task':
-        return trimForLLM(await this.updateTask(params, userId));
+        return trimForLLM(await this.updateTask(params, userId, sd));
       case 'delete_task':
         return await this.deleteTask(params, userId);
       case 'batch_create_tasks':
-        return await this.batchCreateTasks(params, userId);
+        return await this.batchCreateTasks(params, userId, sd);
       case 'batch_update_tasks':
-        return await this.batchUpdateTasks(params, userId);
+        return await this.batchUpdateTasks(params, userId, sd);
       case 'batch_delete_tasks':
         return await this.batchDeleteTasks(params, userId);
       case 'update_task_status':
@@ -271,9 +281,9 @@ export class ToolExecutor {
       case 'list_sprints':
         return trimForLLM(await this.listSprints(params, userId));
       case 'create_sprint':
-        return trimForLLM(await this.createSprint(params, userId));
+        return trimForLLM(await this.createSprint(params, userId, sd));
       case 'update_sprint':
-        return trimForLLM(await this.updateSprint(params, userId));
+        return trimForLLM(await this.updateSprint(params, userId, sd));
       case 'delete_sprint':
         return await this.deleteSprint(params, userId);
       // Label
@@ -289,7 +299,7 @@ export class ToolExecutor {
       case 'list_time_entries':
         return trimForLLM(await this.listTimeEntries(params, userId));
       case 'create_time_entry':
-        return trimForLLM(await this.createTimeEntry(params, userId));
+        return trimForLLM(await this.createTimeEntry(params, userId, sd));
       case 'delete_time_entry':
         return await this.deleteTimeEntry(params, userId);
       // Member
@@ -329,18 +339,18 @@ export class ToolExecutor {
         return trimForLLM(await this.getCustomField(params, userId));
       // Recurrence
       case 'create_task_recurrence':
-        return trimForLLM(await this.createTaskRecurrence(params, userId));
+        return trimForLLM(await this.createTaskRecurrence(params, userId, sd, userTimezone));
       case 'get_task_recurrence':
         return trimForLLM(await this.getTaskRecurrence(params, userId));
       case 'disable_task_recurrence':
         return trimForLLM(await this.disableTaskRecurrence(params, userId));
       case 'update_task_recurrence':
-        return trimForLLM(await this.updateTaskRecurrence(params, userId));
+        return trimForLLM(await this.updateTaskRecurrence(params, userId, sd, userTimezone));
       // Public Share
       case 'list_task_shares':
         return trimForLLM(await this.listTaskShares(params, userId));
       case 'share_task_publicly':
-        return trimForLLM(await this.shareTaskPublicly(params, userId));
+        return trimForLLM(await this.shareTaskPublicly(params, userId, sd));
       case 'revoke_task_share':
         return trimForLLM(await this.revokeTaskShare(params, userId));
       // Attachment
@@ -629,7 +639,7 @@ export class ToolExecutor {
     return { success: true, project };
   }
 
-  private async createProject(params: Record<string, any>, userId: string) {
+  private async createProject(params: Record<string, any>, userId: string, sd: (v: unknown) => Date | null) {
     const err =
       this.requireUUID(params.workspaceId, 'workspaceId') ||
       this.requireString(params.name, 'name');
@@ -667,8 +677,8 @@ export class ToolExecutor {
         status: params.status || 'PLANNING',
         priority: params.priority || 'MEDIUM',
         visibility: params.visibility || 'PRIVATE',
-        startDate: this.safeDate(params.startDate),
-        endDate: this.safeDate(params.endDate),
+        startDate: sd(params.startDate),
+        endDate: sd(params.endDate),
         workspaceId: params.workspaceId,
         workflowId: params.workflowId || defaultWorkflow?.id,
         createdBy: userId,
@@ -684,7 +694,7 @@ export class ToolExecutor {
     };
   }
 
-  private async updateProject(params: Record<string, any>, userId: string) {
+  private async updateProject(params: Record<string, any>, userId: string, sd: (v: unknown) => Date | null) {
     const err = this.requireUUID(params.projectId, 'projectId');
     if (err) return { success: false, error: err };
     const { projectId, ...data } = params;
@@ -702,7 +712,7 @@ export class ToolExecutor {
     ];
     for (const f of fields) {
       if (data[f] !== undefined)
-        updateData[f] = f.endsWith('Date') ? this.safeDate(data[f]) : data[f];
+        updateData[f] = f.endsWith('Date') ? sd(data[f]) : data[f];
     }
     const project = await this.prisma.project.update({
       where: { id: projectId },
@@ -824,7 +834,7 @@ export class ToolExecutor {
     return { success: true, task };
   }
 
-  private async createTask(params: Record<string, any>, userId: string) {
+  private async createTask(params: Record<string, any>, userId: string, sd: (v: unknown) => Date | null) {
     const err =
       this.requireUUID(params.projectId, 'projectId') ||
       this.requireString(params.title, 'title') ||
@@ -842,8 +852,8 @@ export class ToolExecutor {
     if (!project) return { success: false, error: `Project not found. Use list_projects first.` };
     const typeErr = this.validateTaskType(params.type);
     if (typeErr) return { success: false, error: typeErr };
-    const startDate = this.safeDate(params.startDate);
-    const dueDate = this.safeDate(params.dueDate);
+    const startDate = sd(params.startDate);
+    const dueDate = sd(params.dueDate);
     if (startDate && dueDate && startDate > dueDate) {
       return { success: false, error: '开始时间不能晚于截止时间' };
     }
@@ -888,7 +898,7 @@ export class ToolExecutor {
     };
   }
 
-  private async updateTask(params: Record<string, any>, userId: string) {
+  private async updateTask(params: Record<string, any>, userId: string, sd: (v: unknown) => Date | null) {
     const err = this.requireUUID(params.taskId, 'taskId');
     if (err) return { success: false, error: err };
     // Validate optional UUID fields if provided
@@ -907,8 +917,8 @@ export class ToolExecutor {
       select: { startDate: true, dueDate: true },
     });
     if (!existing) return { success: false, error: 'Task not found' };
-    const effectiveStart = this.safeDate(data.startDate) ?? existing.startDate;
-    const effectiveDue = this.safeDate(data.dueDate) ?? existing.dueDate;
+    const effectiveStart = sd(data.startDate) ?? existing.startDate;
+    const effectiveDue = sd(data.dueDate) ?? existing.dueDate;
     if (effectiveStart && effectiveDue && effectiveStart > effectiveDue) {
       return { success: false, error: '开始时间不能晚于截止时间' };
     }
@@ -926,7 +936,7 @@ export class ToolExecutor {
     const dateFields = ['startDate', 'dueDate', 'completedAt'];
     for (const f of strFields) if (data[f] !== undefined) updateData[f] = data[f];
     for (const f of numFields) if (data[f] !== undefined) updateData[f] = +data[f];
-    for (const f of dateFields) if (data[f] !== undefined) updateData[f] = this.safeDate(data[f]);
+    for (const f of dateFields) if (data[f] !== undefined) updateData[f] = sd(data[f]);
     if (data.assigneeIds !== undefined) {
       await this.prisma.taskAssignee.deleteMany({ where: { taskId } });
       if (data.assigneeIds.length > 0)
@@ -977,7 +987,7 @@ export class ToolExecutor {
     return { taskNumber, taskSlug: slug };
   }
 
-  private async batchCreateTasks(params: Record<string, any>, userId: string) {
+  private async batchCreateTasks(params: Record<string, any>, userId: string, sd: (v: unknown) => Date | null) {
     const tasks: any[] = params.tasks || [];
     if (!Array.isArray(tasks) || tasks.length === 0) {
       return { success: false, error: 'tasks must be a non-empty array' };
@@ -1007,8 +1017,8 @@ export class ToolExecutor {
           statusId: item.statusId,
           type: item.type,
           priority: item.priority,
-          startDate: item.startDate,
-          dueDate: item.dueDate,
+          startDate: sd(item.startDate),
+          dueDate: sd(item.dueDate),
           storyPoints: item.storyPoints,
           createdBy: userId,
           taskNumber,
@@ -1034,7 +1044,7 @@ export class ToolExecutor {
     return { success: true, count: results.length, results };
   }
 
-  private async batchUpdateTasks(params: Record<string, any>, userId: string) {
+  private async batchUpdateTasks(params: Record<string, any>, userId: string, sd: (v: unknown) => Date | null) {
     const updates: any[] = params.updates || [];
     if (!Array.isArray(updates) || updates.length === 0) {
       return { success: false, error: 'updates must be a non-empty array' };
@@ -1064,8 +1074,8 @@ export class ToolExecutor {
         if (item.description !== undefined) data.description = item.description;
         if (item.statusId !== undefined) data.statusId = item.statusId;
         if (item.priority !== undefined) data.priority = item.priority;
-        if (item.startDate !== undefined) data.startDate = item.startDate;
-        if (item.dueDate !== undefined) data.dueDate = item.dueDate;
+        if (item.startDate !== undefined) data.startDate = sd(item.startDate);
+        if (item.dueDate !== undefined) data.dueDate = sd(item.dueDate);
         if (item.storyPoints !== undefined) data.storyPoints = item.storyPoints;
         if (item.sprintId !== undefined) data.sprintId = item.sprintId;
         if (item.assigneeIds)
@@ -1340,7 +1350,7 @@ export class ToolExecutor {
     return { success: true, count: sprints.length, sprints };
   }
 
-  private async createSprint(params: Record<string, any>, userId: string) {
+  private async createSprint(params: Record<string, any>, userId: string, sd: (v: unknown) => Date | null) {
     const err =
       this.requireUUID(params.projectId, 'projectId') || this.requireString(params.name, 'name');
     if (err) return { success: false, error: err };
@@ -1355,8 +1365,8 @@ export class ToolExecutor {
         name: params.name,
         slug,
         goal: params.goal || null,
-        startDate: this.safeDate(params.startDate),
-        endDate: this.safeDate(params.endDate),
+        startDate: sd(params.startDate),
+        endDate: sd(params.endDate),
         projectId: params.projectId,
         createdBy: userId,
         updatedBy: userId,
@@ -1365,7 +1375,7 @@ export class ToolExecutor {
     return { success: true, sprint, message: `Sprint "${sprint.name}" created` };
   }
 
-  private async updateSprint(params: Record<string, any>, userId: string) {
+  private async updateSprint(params: Record<string, any>, userId: string, sd: (v: unknown) => Date | null) {
     const err = this.requireUUID(params.sprintId, 'sprintId');
     if (err) return { success: false, error: err };
     const { sprintId, ...data } = params;
@@ -1373,7 +1383,7 @@ export class ToolExecutor {
     const strFields = ['name', 'goal', 'status'];
     const dateFields = ['startDate', 'endDate'];
     for (const f of strFields) if (data[f] !== undefined) updateData[f] = data[f];
-    for (const f of dateFields) if (data[f] !== undefined) updateData[f] = this.safeDate(data[f]);
+    for (const f of dateFields) if (data[f] !== undefined) updateData[f] = sd(data[f]);
     const sprint = await this.prisma.sprint.update({ where: { id: sprintId }, data: updateData });
     return { success: true, sprint, message: `Sprint "${sprint.name}" updated` };
   }
@@ -1875,7 +1885,7 @@ export class ToolExecutor {
 
   // ========== RECURRING TASK ==========
 
-  private async createTaskRecurrence(params: Record<string, any>, userId: string) {
+  private async createTaskRecurrence(params: Record<string, any>, userId: string, sd: (v: unknown) => Date | null, userTimezone: string) {
     const err =
       this.requireUUID(params.taskId, 'taskId') ||
       this.requireString(params.recurrenceType, 'recurrenceType');
@@ -1904,8 +1914,9 @@ export class ToolExecutor {
       };
 
     const interval = Math.max(1, +(params.interval || 1));
+    const userDayOfWeek = this.getDayOfWeekInTZ(userTimezone);
     const daysOfWeek: number[] =
-      params.daysOfWeek || (params.recurrenceType === 'WEEKLY' ? [new Date().getDay()] : []);
+      params.daysOfWeek || (params.recurrenceType === 'WEEKLY' ? [userDayOfWeek] : []);
     const now = new Date();
     const nextOccurrence = this.computeNextOccurrence(
       params.recurrenceType,
@@ -1921,7 +1932,7 @@ export class ToolExecutor {
         interval,
         daysOfWeek,
         endType: params.endDate ? 'ON_DATE' : 'NEVER',
-        endDate: this.safeDate(params.endDate),
+        endDate: sd(params.endDate),
         isActive: true,
         nextOccurrence,
         currentOccurrence: 1,
@@ -1947,6 +1958,25 @@ export class ToolExecutor {
     };
   }
 
+  private getDayOfWeekInTZ(timezone: string): number {
+    try {
+      const dayMap: Record<string, number> = {
+        Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
+      };
+      const dayStr = new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone, weekday: 'short',
+      }).format(new Date());
+      return dayMap[dayStr] ?? new Date().getUTCDay();
+    } catch {
+      return new Date().getUTCDay();
+    }
+  }
+
+  /**
+   * Compute next occurrence date using UTC operations for determinism.
+   * daysOfWeek are user's timezone weekday numbers (0=Sun...6=Sat).
+   * The returned Date is the UTC midnight of the next occurrence.
+   */
   private computeNextOccurrence(
     type: string,
     interval: number,
@@ -1954,30 +1984,31 @@ export class ToolExecutor {
     from: Date,
   ): Date {
     const d = new Date(from);
+    // Use UTC methods to be deterministic regardless of server timezone
     switch (type) {
       case 'DAILY':
-        d.setDate(d.getDate() + interval);
+        d.setUTCDate(d.getUTCDate() + interval);
         break;
       case 'WEEKLY': {
-        const targetDays = daysOfWeek.length > 0 ? daysOfWeek.sort((a, b) => a - b) : [d.getDay()];
-        const currentDay = d.getDay();
+        const targetDays = daysOfWeek.length > 0 ? daysOfWeek.sort((a, b) => a - b) : [d.getUTCDay()];
+        const currentDay = d.getUTCDay();
         const nextDay = targetDays.find((day) => day > currentDay);
         if (nextDay !== undefined) {
-          d.setDate(d.getDate() + (nextDay - currentDay));
+          d.setUTCDate(d.getUTCDate() + (nextDay - currentDay));
         } else {
-          d.setDate(d.getDate() + (7 - currentDay + targetDays[0]));
+          d.setUTCDate(d.getUTCDate() + (7 - currentDay + targetDays[0]));
         }
-        if (interval > 1) d.setDate(d.getDate() + 7 * (interval - 1));
+        if (interval > 1) d.setUTCDate(d.getUTCDate() + 7 * (interval - 1));
         break;
       }
       case 'MONTHLY':
-        d.setMonth(d.getMonth() + interval);
+        d.setUTCMonth(d.getUTCMonth() + interval);
         break;
       case 'YEARLY':
-        d.setFullYear(d.getFullYear() + interval);
+        d.setUTCFullYear(d.getUTCFullYear() + interval);
         break;
     }
-    d.setHours(0, 0, 0, 0);
+    d.setUTCHours(0, 0, 0, 0);
     return d;
   }
 
@@ -2023,7 +2054,7 @@ export class ToolExecutor {
     return { success: true, message: 'Task recurrence disabled' };
   }
 
-  private async updateTaskRecurrence(params: Record<string, any>, userId: string) {
+  private async updateTaskRecurrence(params: Record<string, any>, userId: string, sd: (v: unknown) => Date | null, userTimezone: string) {
     const err = this.requireUUID(params.taskId, 'taskId');
     if (err) return { success: false, error: err };
 
@@ -2064,7 +2095,7 @@ export class ToolExecutor {
     };
     if (params.endDate !== undefined) {
       data.endType = params.endDate ? 'ON_DATE' : 'NEVER';
-      data.endDate = this.safeDate(params.endDate);
+      data.endDate = sd(params.endDate);
     }
 
     const updated = await this.prisma.recurringTask.update({
@@ -2104,7 +2135,7 @@ export class ToolExecutor {
     return { success: true, count: shares.length, shares };
   }
 
-  private async shareTaskPublicly(params: Record<string, any>, userId: string) {
+  private async shareTaskPublicly(params: Record<string, any>, userId: string, sd: (v: unknown) => Date | null) {
     const err = this.requireUUID(params.taskId, 'taskId');
     if (err) return { success: false, error: err };
     const task = await this.prisma.task.findUnique({
@@ -2114,7 +2145,7 @@ export class ToolExecutor {
     if (!task) return { success: false, error: 'Task not found.' };
     const token = crypto.randomUUID();
     const expiresAt =
-      this.safeDate(params.expiresAt) || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      sd(params.expiresAt) || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     const share = await this.prisma.publicTaskShare.create({
       data: { taskId: params.taskId, token, expiresAt, createdBy: userId },
     });
@@ -2323,7 +2354,7 @@ export class ToolExecutor {
     };
   }
 
-  private async createTimeEntry(params: Record<string, any>, userId: string) {
+  private async createTimeEntry(params: Record<string, any>, userId: string, sd: (v: unknown) => Date | null) {
     const err = this.requireUUID(params.taskId, 'taskId');
     if (err) return { success: false, error: err };
     if (params.timeSpent === undefined || +params.timeSpent <= 0) {
@@ -2339,9 +2370,9 @@ export class ToolExecutor {
       data: {
         description: params.description || null,
         timeSpent: Math.round(+params.timeSpent),
-        startTime: this.safeDate(params.startTime),
-        endTime: this.safeDate(params.endTime),
-        date: this.safeDate(params.date) || new Date(),
+        startTime: sd(params.startTime),
+        endTime: sd(params.endTime),
+        date: sd(params.date) || new Date(),
         taskId: params.taskId,
         userId,
         createdBy: userId,

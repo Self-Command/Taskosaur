@@ -115,10 +115,12 @@ function intlOptionsToDayjsFormat(options: Intl.DateTimeFormatOptions): string {
  */
 function isDateOnly(value: string): boolean {
   // Pure date-only: exactly YYYY-MM-DD
+  // (ISO midnight strings like 2026-06-06T00:00:00.000Z are NOT treated as
+  // date-only — they carry a real UTC midnight that must be timezone-converted.
+  // The backend TimeZoneNormalizer ensures date-only inputs are stored with a
+  // timezone offset (e.g. 2026-06-05T16:00:00Z for Asia/Shanghai), so the old
+  // heuristic that treated UTC midnight as a floating date is no longer needed.)
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return true;
-  // ISO date: YYYY-MM-DDTHH:mm:ss.sssZ but with midnight time → still a floating date
-  // We treat it as date-only if time is exactly 00:00:00.000Z
-  if (/^\d{4}-\d{2}-\d{2}T00:00:00\.000Z$/.test(value)) return true;
   return false;
 }
 
@@ -159,9 +161,11 @@ type FormatInput = string | Intl.DateTimeFormatOptions;
 /**
  * Formats a date string for display in the user's timezone.
  * 
- * IMPORTANT: For date-only values (e.g. "2026-03-15" or "2026-03-15T00:00:00.000Z"),
+ * IMPORTANT: For date-only values (e.g. "2026-03-15"),
  * the calendar date is preserved WITHOUT timezone shifting. This ensures that
  * "March 15" always shows as "March 15" regardless of the user's timezone.
+ * Datetime values (including UTC midnight like 2026-06-06T00:00:00.000Z)
+ * are properly converted to the user's timezone before display.
  * 
  * For datetime values (with actual time components), proper timezone conversion is applied.
  * 

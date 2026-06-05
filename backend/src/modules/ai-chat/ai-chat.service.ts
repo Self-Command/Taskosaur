@@ -14,6 +14,7 @@ import {
 } from './dto/chat.dto';
 import { SettingsService } from '../settings/settings.service';
 import { McpToolsService } from '../mcp-tools/mcp-tools.service';
+import { McpVerificationService, isWriteTool } from '../mcp-tools/mcp-verification.service';
 import { getMCPSystemPrompt } from '../mcp-tools/prompts';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FileUploadService } from './services/file-upload.service';
@@ -134,6 +135,7 @@ export class AiChatService {
     private settingsService: SettingsService,
     private prisma: PrismaService,
     private mcpToolsService: McpToolsService,
+    private mcpVerification: McpVerificationService,
     private fileUploadService: FileUploadService,
     private visionContent: VisionContentBuilder,
     private webSearchService: WebSearchService,
@@ -469,6 +471,14 @@ export class AiChatService {
 
             const toolResult = await this.mcpToolsService.executeTool(toolName, toolParams, userId);
 
+            // ── Post-execution verification ──
+            if (isWriteTool(toolName)) {
+              const verification = await this.mcpVerification.verify(toolName, toolParams, toolResult, userId);
+              if (!verification.passed) {
+                (toolResult as any)._verification = verification;
+              }
+            }
+
             // Emit tool result (AI SDK format)
             yield `${streamIndex++}:${JSON.stringify({
               type: 'tool-result',
@@ -644,6 +654,15 @@ export class AiChatService {
           for (const c of tc) {
             yield { t: 'ts', tool: c.name, p: c.arguments };
             const r = await executeTool(c.name, c.arguments, userId);
+
+            // ── Post-execution verification ──
+            if (isWriteTool(c.name)) {
+              const verification = await this.mcpVerification.verify(c.name, c.arguments, r, userId);
+              if (!verification.passed) {
+                (r as any)._verification = verification;
+              }
+            }
+
             toolExecutions.push({ tool: c.name, params: c.arguments, result: r });
             yield { t: 'tr', tool: c.name, r };
             if (c.name === 'navigate' && r?.path) yield { t: 'nav', p: r.path };
@@ -946,6 +965,14 @@ export class AiChatService {
             });
 
             const toolResult = await executeTool(toolName, toolParams, userId);
+
+            // ── Post-execution verification ──
+            if (isWriteTool(toolName)) {
+              const verification = await this.mcpVerification.verify(toolName, toolParams, toolResult, userId);
+              if (!verification.passed) {
+                (toolResult as any)._verification = verification;
+              }
+            }
 
             // Update entry with result AFTER execution
             toolExecutions[toolExecutions.length - 1] = {

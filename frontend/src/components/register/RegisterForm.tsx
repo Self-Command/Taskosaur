@@ -116,6 +116,7 @@ export function RegisterForm() {
         password: formData.password,
         firstName: formData.firstName,
         lastName: formData.lastName,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
         ...(invitationToken && { invitationToken }),
       };
 

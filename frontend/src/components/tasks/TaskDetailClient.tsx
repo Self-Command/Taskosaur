@@ -63,12 +63,13 @@ function sanitizeSlug(slug: string | string[] | undefined): string {
 
 function toDatetimeLocalValue(isoString: string | null | undefined): string {
   if (!isoString) return '';
-  // Date-only (midnight UTC or YYYY-MM-DD) — return date only
-  if (/^\d{4}-\d{2}-\d{2}$/.test(isoString) ||
-      /^\d{4}-\d{2}-\d{2}T00:00:00\.000Z$/.test(isoString)) {
-    return isoString.substring(0, 10);
+  // Date-only: YYYY-MM-DD — return as-is
+  if (/^\d{4}-\d{2}-\d{2}$/.test(isoString)) {
+    return isoString;
   }
-  // Has a specific time — convert to local time for datetime-local input
+  // Any ISO datetime string — extract local time components.
+  // We do NOT strip T00:00:00.000Z because a UTC-midnight datetime
+  // represents a real point in time (e.g. 08:00 in Asia/Shanghai).
   const d = new Date(isoString);
   if (isNaN(d.getTime())) return '';
   const year = d.getFullYear();
@@ -195,9 +196,9 @@ export default function TaskDetailClient({
 
   const handleStartDateChange = (newStartDate: string): boolean => {
     if (newStartDate && editTaskData.dueDate) {
-      const sd = new Date(newStartDate.includes('T') ? newStartDate : newStartDate + 'T00:00');
-      const dd = new Date(editTaskData.dueDate.includes('T') ? editTaskData.dueDate : editTaskData.dueDate + 'T23:59');
-      if (sd > dd) {
+      const sd = new Date(newStartDate);
+      const dd = new Date(editTaskData.dueDate);
+      if (!isNaN(sd.getTime()) && !isNaN(dd.getTime()) && sd > dd) {
         toast.error("开始时间不能晚于截止时间");
         return false;
       }
@@ -372,9 +373,9 @@ export default function TaskDetailClient({
 
   const handleDueDateChange = (newDueDate: string): boolean => {
     if (newDueDate && editTaskData.startDate) {
-      const sd = new Date(editTaskData.startDate.includes('T') ? editTaskData.startDate : editTaskData.startDate + 'T00:00');
-      const dd = new Date(newDueDate.includes('T') ? newDueDate : newDueDate + 'T23:59');
-      if (dd < sd) {
+      const sd = new Date(editTaskData.startDate);
+      const dd = new Date(newDueDate);
+      if (!isNaN(sd.getTime()) && !isNaN(dd.getTime()) && dd < sd) {
         toast.error("截止时间不能早于开始时间");
         return false;
       }

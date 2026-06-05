@@ -149,6 +149,7 @@ export class AuthService {
     registerDto.username = finalUsername;
     const user = await this.usersService.create({
       ...registerDto,
+      timezone: registerDto.timezone || 'UTC',
       role: Role.MEMBER,
     });
 

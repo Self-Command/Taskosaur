@@ -52,4 +52,13 @@ export class RegisterDto {
   @IsOptional()
   @IsString()
   invitationToken?: string;
+
+  @ApiProperty({
+    description: 'User timezone (e.g. "Asia/Shanghai", "America/New_York")',
+    example: 'Asia/Shanghai',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  timezone?: string;
 }

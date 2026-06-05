@@ -178,7 +178,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
         projectId: projectId,
         statusId,
         reporterIds: data.reporterId ? [data.reporterId] : [],
-        dueDate: data.dueDate ? new Date(data.dueDate + "T17:00:00.000Z").toISOString() : undefined,
+        dueDate: data.dueDate || undefined,
       });
       onRefresh?.();
     } catch (err) {
