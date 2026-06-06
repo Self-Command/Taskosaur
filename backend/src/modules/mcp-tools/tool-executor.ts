@@ -553,6 +553,14 @@ export class ToolExecutor {
     if (data.description !== undefined) updateData.description = data.description;
     if (data.color !== undefined) updateData.color = data.color;
     if (data.avatar !== undefined) updateData.avatar = data.avatar;
+    const wsChangedFields = Object.keys(updateData).filter((k) => k !== 'updatedBy');
+    if (wsChangedFields.length === 0) {
+      return {
+        success: false,
+        error:
+          'No fields to update. Please specify at least one field to change (name, description, color, avatar, etc.).',
+      };
+    }
     const workspace = await this.prisma.workspace.update({
       where: { id: workspaceId },
       data: updateData,
@@ -720,6 +728,14 @@ export class ToolExecutor {
     ];
     for (const f of fields) {
       if (data[f] !== undefined) updateData[f] = f.endsWith('Date') ? sd(data[f]) : data[f];
+    }
+    const projectChangedFields = Object.keys(updateData).filter((k) => k !== 'updatedBy');
+    if (projectChangedFields.length === 0) {
+      return {
+        success: false,
+        error:
+          'No fields to update. Please specify at least one field to change (name, description, status, priority, startDate, endDate, etc.).',
+      };
     }
     const project = await this.prisma.project.update({
       where: { id: projectId },
@@ -902,7 +918,7 @@ export class ToolExecutor {
       },
     });
     this.reminderService.schedule(task).catch(() => {});
-    this.eventsGateway.emitTaskCreated(task.projectId, task);
+    try { this.eventsGateway.emitTaskCreated(task.projectId, task); } catch {}
     return {
       success: true,
       task,
@@ -967,23 +983,38 @@ export class ToolExecutor {
           data: data.labelIds.map((lid: string) => ({ taskId, labelId: lid })),
         });
     }
+    // Empty update guard: reject if no actual field changes were requested
+    const scalarChanges = Object.keys(updateData).filter((k) => k !== 'updatedBy');
+    const hasRelationChanges =
+      data.assigneeIds !== undefined || data.labelIds !== undefined;
+    if (scalarChanges.length === 0 && !hasRelationChanges) {
+      return {
+        success: false,
+        error:
+          'No fields to update. Please specify at least one field to change (title, startDate, dueDate, priority, statusId, assigneeIds, labelIds, etc.).',
+      };
+    }
     const task = await this.prisma.task.update({
       where: { id: taskId },
       data: updateData,
       include: { project: { select: { name: true } }, status: { select: { name: true } } },
     });
     this.reminderService.schedule(task).catch(() => {});
-    // Push the ACTUAL DB values (from updated task), not raw AI input strings
-    this.eventsGateway.emitTaskUpdated(task.projectId, taskId, {
-      ...(data.startDate !== undefined && { startDate: task.startDate }),
-      ...(data.dueDate !== undefined && { dueDate: task.dueDate }),
-      ...(data.title !== undefined && { title: task.title }),
-      ...(data.description !== undefined && { description: task.description }),
-      ...(data.priority !== undefined && { priority: task.priority }),
-      ...(data.statusId !== undefined && { statusId: task.statusId }),
-      ...(data.sprintId !== undefined && { sprintId: task.sprintId }),
-      ...(data.type !== undefined && { type: task.type }),
-    });
+    // WebSocket: push real-time update to frontend (fire-and-forget, never block)
+    try {
+      this.eventsGateway.emitTaskUpdated(task.projectId, taskId, {
+        ...(data.startDate !== undefined && { startDate: task.startDate }),
+        ...(data.dueDate !== undefined && { dueDate: task.dueDate }),
+        ...(data.title !== undefined && { title: task.title }),
+        ...(data.description !== undefined && { description: task.description }),
+        ...(data.priority !== undefined && { priority: task.priority }),
+        ...(data.statusId !== undefined && { statusId: task.statusId }),
+        ...(data.sprintId !== undefined && { sprintId: task.sprintId }),
+        ...(data.type !== undefined && { type: task.type }),
+      });
+    } catch (e: any) {
+      this.mcpLogger.logToolError('ws:emit', taskId, e, 0);
+    }
     return { success: true, task, message: `Task "${task.title}" updated` };
   }
 
@@ -996,7 +1027,7 @@ export class ToolExecutor {
     });
     if (!t) return { success: false, error: 'Task not found. It may have been deleted already.' };
     await this.prisma.task.delete({ where: { id: params.taskId } });
-    this.eventsGateway.emitTaskDeleted(t.projectId, params.taskId);
+    try { this.eventsGateway.emitTaskDeleted(t.projectId, params.taskId); } catch {}
     return { success: true, message: `Task "${t.title}" deleted successfully` };
   }
 
@@ -1188,9 +1219,7 @@ export class ToolExecutor {
       data: { statusId: params.statusId, updatedBy: userId },
       include: { status: { select: { name: true } }, project: { select: { name: true, id: true } } },
     });
-    this.eventsGateway.emitTaskStatusChanged(task.projectId, params.taskId, {
-      statusId: params.statusId, statusName: task.status.name,
-    });
+    try { this.eventsGateway.emitTaskStatusChanged(task.projectId, params.taskId, { statusId: params.statusId, statusName: task.status.name }); } catch {}
     return { success: true, task, message: `Task "${task.title}" status → "${task.status.name}"` };
   }
 
@@ -1210,7 +1239,7 @@ export class ToolExecutor {
       data: { priority: p as any, updatedBy: userId },
       include: { project: { select: { name: true, id: true } } },
     });
-    this.eventsGateway.emitTaskUpdated(task.projectId, params.taskId, { priority: p });
+    try { this.eventsGateway.emitTaskUpdated(task.projectId, params.taskId, { priority: p }); } catch {}
     return { success: true, task, message: `Task "${task.title}" priority → ${p}` };
   }
 

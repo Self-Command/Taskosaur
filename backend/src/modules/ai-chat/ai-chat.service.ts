@@ -14,7 +14,7 @@ import {
 } from './dto/chat.dto';
 import { SettingsService } from '../settings/settings.service';
 import { McpToolsService } from '../mcp-tools/mcp-tools.service';
-import { McpVerificationService, isWriteTool } from '../mcp-tools/mcp-verification.service';
+import { ToolExecutionPipeline } from '../mcp-tools/pipeline/tool-execution-pipeline';
 import { PromptBuilder } from '../prompt/prompt-builder.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FileUploadService } from './services/file-upload.service';
@@ -27,107 +27,7 @@ const FETCH_TIMEOUT_MS = 60000; // 60s for LLM API calls
 const FETCH_TIMEOUT_SIMPLE_MS = 30000; // 30s for simple calls (title gen, test)
 const STREAM_READ_TIMEOUT_MS = 120000; // 2 min max between chunks
 
-// ── Inline guard: the three tool-loop methods below replace
-//    `this.mcpToolsService.executeTool(name, params, userId)`
-//    with   `executeTool(name, params, userId)`.
-//    The wrapper blocks exact-repeat read-only calls and builds
-//    a meaningful fallback when the LLM never produces a final answer.
-// ──────────────────────────────────────────────────────────────
 type ToolExec = { tool: string; params: any; result: any; status?: string };
-
-function makeGuardedExecutor(mcp: McpToolsService, toolExecutions: ToolExec[]) {
-  const seen = new Map<string, number>();
-  const toolCounts = new Map<string, number>();
-
-  return async (toolName: string, params: Record<string, any>, userId: string) => {
-    const isReadOnly = toolName.startsWith('list_') || toolName.startsWith('get_');
-
-    if (isReadOnly) {
-      // Exact-duplicate check
-      const sk = JSON.stringify(params, Object.keys(params).sort());
-      const key = `${toolName}::${sk}`;
-      if (seen.has(key)) {
-        const times = seen.get(key)! + 1;
-        seen.set(key, times);
-        return {
-          success: false,
-          _guard: true,
-          error:
-            `DUPLICATE BLOCKED: ${toolName} with these exact params was already called ${times} times. ` +
-            `You have the data — take ACTION now (delete_task, update_task, etc.). Do NOT re-query.`,
-        };
-      }
-      seen.set(key, 1);
-
-      // Same-tool repetition counter (different params each time)
-      toolCounts.set(toolName, (toolCounts.get(toolName) || 0) + 1);
-    } else {
-      // Action tool — reset all counters (LLM is making progress)
-      seen.clear();
-      toolCounts.clear();
-    }
-
-    const result = await mcp.executeTool(toolName, params, userId);
-
-    // If same read-only tool called 3+ times with varying params, attach warning
-    const toolTimes = toolCounts.get(toolName) || 0;
-    if (isReadOnly && toolTimes >= 3) {
-      return {
-        ...result,
-        _guard_warning: true,
-        guidance:
-          `WARNING: ${toolName} called ${toolTimes} times with different parameters. ` +
-          `Stop retrying. Use the data you already have to take ACTION, or tell the user what went wrong.`,
-      };
-    }
-
-    return result;
-  };
-}
-
-function buildFallbackMessage(toolExecutions: ToolExec[]): string {
-  const actionPrefixes = [
-    'create_',
-    'delete_',
-    'update_',
-    'add_',
-    'remove_',
-    'toggle_',
-    'mark_',
-    'share_',
-    'revoke_',
-    'disable_',
-    'navigate',
-  ];
-  const actions = toolExecutions.filter((te) => actionPrefixes.some((p) => te.tool.startsWith(p)));
-  const queries = toolExecutions.filter(
-    (te) => te.tool.startsWith('list_') || te.tool.startsWith('get_'),
-  );
-
-  if (actions.length > 0) {
-    const lines = actions
-      .map((te) => te.result?.message || `${te.tool.replace(/_/g, ' ')} done`)
-      .filter(Boolean);
-    if (lines.length > 0) return lines.join('\n');
-  }
-
-  if (queries.length > 0) {
-    const uniqueTools = [...new Set(queries.map((te) => te.tool))];
-    const actionToolNames = uniqueTools.map((t) => {
-      if (t.includes('task')) return 'delete_task / update_task';
-      if (t.includes('project')) return 'delete_project / update_project';
-      if (t.includes('workspace')) return 'create_project / delete_workspace';
-      return 'the appropriate write tool';
-    });
-    return [
-      `Executed ${toolExecutions.length} read-only queries (${uniqueTools.join(', ')}) but took NO action.`,
-      `To complete the request, the AI should now call: ${[...new Set(actionToolNames)].join(', ')}.`,
-      `Please rephrase your request or try a more specific instruction.`,
-    ].join(' ');
-  }
-
-  return 'No operations were performed.';
-}
 
 @Injectable()
 export class AiChatService {
@@ -135,7 +35,7 @@ export class AiChatService {
     private settingsService: SettingsService,
     private prisma: PrismaService,
     private mcpToolsService: McpToolsService,
-    private mcpVerification: McpVerificationService,
+    private toolPipeline: ToolExecutionPipeline,
     private promptBuilder: PromptBuilder,
     private fileUploadService: FileUploadService,
     private visionContent: VisionContentBuilder,
@@ -457,20 +357,9 @@ export class AiChatService {
               args: toolParams,
             })}\n`;
 
-            const toolResult = await this.mcpToolsService.executeTool(toolName, toolParams, userId);
-
-            // ── Post-execution verification ──
-            if (isWriteTool(toolName)) {
-              const verification = await this.mcpVerification.verify(
-                toolName,
-                toolParams,
-                toolResult,
-                userId,
-              );
-              if (!verification.passed) {
-                toolResult._verification = verification;
-              }
-            }
+            const toolResult = await this.toolPipeline.execute(toolName, toolParams, userId, () =>
+              this.mcpToolsService.executeTool(toolName, toolParams, userId),
+            );
 
             // Emit tool result (AI SDK format)
             yield `${streamIndex++}:${JSON.stringify({
@@ -587,7 +476,6 @@ export class AiChatService {
       // ── Tool loop with NDJSON streaming ──
       let finalResponse = '';
       const toolExecutions: ToolExec[] = [];
-      const executeTool = makeGuardedExecutor(this.mcpToolsService, toolExecutions);
 
       for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
         const evQ: any[] = [];
@@ -646,20 +534,9 @@ export class AiChatService {
           } as any);
           for (const c of tc) {
             yield { t: 'ts', tool: c.name, p: c.arguments };
-            const r = await executeTool(c.name, c.arguments, userId);
-
-            // ── Post-execution verification ──
-            if (isWriteTool(c.name)) {
-              const verification = await this.mcpVerification.verify(
-                c.name,
-                c.arguments,
-                r,
-                userId,
-              );
-              if (!verification.passed) {
-                r._verification = verification;
-              }
-            }
+            const r = await this.toolPipeline.execute(c.name, c.arguments, userId, () =>
+              this.mcpToolsService.executeTool(c.name, c.arguments, userId),
+            );
 
             toolExecutions.push({ tool: c.name, params: c.arguments, result: r });
             yield { t: 'tr', tool: c.name, r };
@@ -675,7 +552,12 @@ export class AiChatService {
 
       if (!finalResponse)
         finalResponse =
-          toolExecutions.length > 0 ? buildFallbackMessage(toolExecutions) : 'No response.';
+          toolExecutions.length > 0
+            ? toolExecutions
+                .filter((te) => te.result?.message)
+                .map((te) => te.result!.message)
+                .join('\n') || 'Operations completed.'
+            : 'No response.';
 
       // Save
       if (conversation) {
@@ -901,7 +783,6 @@ export class AiChatService {
 
       let finalResponse = '';
       const toolExecutions: ToolExec[] = [];
-      const executeTool = makeGuardedExecutor(this.mcpToolsService, toolExecutions);
 
       let streamedThinking = '';
       for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
@@ -962,20 +843,9 @@ export class AiChatService {
               data: { toolExecutions: [...toolExecutions] as any },
             });
 
-            const toolResult = await executeTool(toolName, toolParams, userId);
-
-            // ── Post-execution verification ──
-            if (isWriteTool(toolName)) {
-              const verification = await this.mcpVerification.verify(
-                toolName,
-                toolParams,
-                toolResult,
-                userId,
-              );
-              if (!verification.passed) {
-                toolResult._verification = verification;
-              }
-            }
+            const toolResult = await this.toolPipeline.execute(toolName, toolParams, userId, () =>
+              this.mcpToolsService.executeTool(toolName, toolParams, userId),
+            );
 
             // Update entry with result AFTER execution
             toolExecutions[toolExecutions.length - 1] = {
@@ -1005,7 +875,11 @@ export class AiChatService {
       }
 
       if (!finalResponse && toolExecutions.length > 0) {
-        finalResponse = buildFallbackMessage(toolExecutions);
+        finalResponse =
+          toolExecutions
+            .filter((te) => te.result?.message)
+            .map((te) => te.result!.message)
+            .join('\n') || 'Operations completed.';
       } else if (!finalResponse) {
         finalResponse =
           'No response from AI. The service may be experiencing issues — please try again.';

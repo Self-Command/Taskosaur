@@ -3,11 +3,37 @@ import { Request, Response } from 'express';
 import { Public } from '../auth/decorators/public.decorator';
 import { AiChatService } from '../ai-chat/ai-chat.service';
 import { McpToolsService } from '../mcp-tools/mcp-tools.service';
+import { ToolExecutionPipeline } from '../mcp-tools/pipeline/tool-execution-pipeline';
+import { McpLoggerService } from '../mcp-tools/mcp-logger.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WebSearchService } from '../ai-chat/services/web-search.service';
 import { PromptBuilder } from '../prompt/prompt-builder.service';
 
 const FETCH_TIMEOUT_MS = 300000;
+
+/**
+ * Remove tool execution debug markers from assistant content.
+ * These markers (### 🔧, ✅/❌, JSON code blocks) are sent to Chatbox for UX
+ * but must be stripped before sending conversation history back to the AI.
+ * Otherwise the AI imitates them instead of calling real tools.
+ */
+function sanitizeAssistantContent(content: string): string {
+  if (!content) return content;
+  return (
+    content
+      // Remove tool execution header: "\n\n---\n### 🔧 ..." or "\n\n---\n### 🔧 执行 N 个工具\n"
+      .replace(/\n*---\n### 🔧[^\n]*\n/g, '\n')
+      // Remove progress line: "🔄 tool_name...\n"
+      .replace(/\n🔄 [^\n]+\n/g, '\n')
+      // Remove result block: "✅/❌ tool_name\n```json\n...\n```\n"
+      .replace(/\n[✅❌] [^\n]+\n```(?:json\b[^\n]*\n)?[\s\S]*?\n```\n?/g, '\n')
+      // Remove navigate link: "🔗 [打开页面](...)\n"
+      .replace(/\n🔗 \[打开页面\]\([^)]+\)\n?/g, '\n')
+      // Collapse multiple blank lines
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
+  );
+}
 
 @Controller('v1')
 export class OpenAICompatController {
@@ -16,6 +42,8 @@ export class OpenAICompatController {
   constructor(
     private readonly aiChatService: AiChatService,
     private readonly mcpToolsService: McpToolsService,
+    private readonly toolPipeline: ToolExecutionPipeline,
+    private readonly mcpLogger: McpLoggerService,
     private readonly prisma: PrismaService,
     private readonly webSearchService: WebSearchService,
     private readonly promptBuilder: PromptBuilder,
@@ -64,12 +92,20 @@ export class OpenAICompatController {
       const allMessages = [
         ctxMsg,
         ...messages.filter((m: any) => m.role === 'system'),
-        ...messages.filter((m: any) => m.role !== 'system'),
+        ...messages
+          .filter((m: any) => m.role !== 'system')
+          .map((m: any) => {
+            if (m.role === 'assistant' && typeof m.content === 'string') {
+              return { ...m, content: sanitizeAssistantContent(m.content) };
+            }
+            return m;
+          }),
       ];
 
       const config = await (this.aiChatService as any).resolveChatConfig(userId);
       const tools = this.mcpToolsService.getOpenAITools();
       const chatId = 'chatcmpl-' + Date.now();
+      this.mcpLogger.setTraceId(chatId);
       const created = Math.floor(Date.now() / 1000);
 
       const emitText = (text: string) => {
@@ -141,11 +177,18 @@ export class OpenAICompatController {
           if (body.projectId) ctxParts.push('projectId: ' + body.projectId);
           allMsgs.push({ role: 'system', content: '[Current page: ' + ctxParts.join(', ') + ']' });
         }
-        // User + assistant messages
+        // User + assistant messages — sanitize tool debug markers from history
+        // so AI doesn't imitate them in subsequent rounds
         const convMsgs = (body.messages || []).filter(function (m: any) {
           return m.role !== 'system';
         });
-        for (let ci = 0; ci < convMsgs.length; ci++) allMsgs.push(convMsgs[ci]);
+        for (let ci = 0; ci < convMsgs.length; ci++) {
+          const m = convMsgs[ci];
+          if (m.role === 'assistant' && typeof m.content === 'string') {
+            m.content = sanitizeAssistantContent(m.content);
+          }
+          allMsgs.push(m);
+        }
 
         // ── Web search detection ──
         const clientTools = body.tools || [];
@@ -187,59 +230,8 @@ export class OpenAICompatController {
             .catch(function () {});
         }
 
-        // ── Inline guarded executor (like makeGuardedExecutor) ──
+        // ── Tool execution pipeline (shared with sidebar AI) ──
         const toolExecutions: any[] = [];
-        const seenCalls = new Map<string, number>();
-        const toolFailCount = new Map<string, number>();
-        let blocked = false;
-        const executeGuarded = async function (
-          toolName: string,
-          params: any,
-          uid: string,
-        ): Promise<any> {
-          const isReadOnly = toolName.startsWith('list_') || toolName.startsWith('get_');
-          if (isReadOnly) {
-            const sk = JSON.stringify(params, Object.keys(params).sort());
-            const key = toolName + '::' + sk;
-            if (seenCalls.has(key)) {
-              const times = (seenCalls.get(key) || 0) + 1;
-              seenCalls.set(key, times);
-              return {
-                success: false,
-                _guard: true,
-                error:
-                  'DUPLICATE BLOCKED: ' +
-                  toolName +
-                  ' already called ' +
-                  times +
-                  ' times with these exact params. You have the data — take ACTION.',
-              };
-            }
-            seenCalls.set(key, 1);
-          } else {
-            seenCalls.clear();
-          }
-          // Fail-fast: same tool failed 2+ times this round → block
-          const fc = toolFailCount.get(toolName) || 0;
-          if (fc >= 2) {
-            blocked = true;
-            return {
-              success: false,
-              _guard: true,
-              error:
-                'TOOL RETRY ABORTED: ' +
-                toolName +
-                ' already failed ' +
-                fc +
-                ' times. Do NOT retry. Use the error information and try a DIFFERENT approach.',
-            };
-          }
-          const result = await self.mcpToolsService.executeTool(toolName, params, uid);
-          if (result && result.success === false) {
-            toolFailCount.set(toolName, fc + 1);
-          }
-          return result;
-        };
 
         try {
           const allMsgsTools = tools; // outer scope tools
@@ -343,11 +335,40 @@ export class OpenAICompatController {
 
             // ── No tool calls → LLM gave final answer ──
             if (!hasToolCalls) {
+              // Hallucination guard: detect AI confirming mutations without calling tools
+              const mutationPattern =
+                /(已(创建|更新|删除|修改|添加|移除)|created|updated|deleted|modified|added|removed)/i;
+              const writeIntentPattern =
+                /(创建|更新|删除|修改|添加|移除|create|update|delete|modify|add|remove)/i;
+              const lastUserMsg = [...(body.messages || [])]
+                .reverse()
+                .find((m: any) => m.role === 'user');
+              const hasWriteIntent =
+                lastUserMsg &&
+                writeIntentPattern.test(
+                  typeof lastUserMsg.content === 'string' ? lastUserMsg.content : '',
+                );
+              if (
+                mutationPattern.test(fullContent) &&
+                hasWriteIntent &&
+                toolExecutions.length === 0 &&
+                round < 2
+              ) {
+                this.mcpLogger.logToolCall('_guard_retry', userId, {
+                  reason: 'mutation confirmation without tool call detected',
+                });
+                allMsgs.push({
+                  role: 'system',
+                  content:
+                    'CRITICAL: You confirmed a data change but did NOT call any MCP tool. You MUST call the appropriate tool (e.g. update_task, create_task, delete_task) to actually perform the change. Do NOT just say you did it — execute the tool first, then confirm based on the result.',
+                });
+                continue;
+              }
               emitDone();
               break;
             }
 
-            // ── Execute tools with guards ──
+            // ── Execute tools through pipeline ──
             const tcList = Array.from(toolAcc.values());
             if (tcList.length > 1) emitText('\n\n---\n### 🔧 执行 ' + tcList.length + ' 个工具\n');
             for (let tci = 0; tci < tcList.length; tci++) {
@@ -358,7 +379,13 @@ export class OpenAICompatController {
 
               try {
                 const params = JSON.parse(tc.args || '{}');
-                const result = await executeGuarded(tc.name, params, userId);
+                const result = await self.toolPipeline.execute(
+                  tc.name,
+                  params,
+                  userId,
+                  () => self.mcpToolsService.executeTool(tc.name, params, userId),
+                  chatId,
+                );
                 const ok = result && result.success !== false;
                 let resultStr = JSON.stringify(result, null, 2);
                 if (resultStr.length > 2000) resultStr = resultStr.slice(0, 2000) + '\n...';
@@ -390,8 +417,6 @@ export class OpenAICompatController {
                   content: JSON.stringify(result),
                   tool_call_id: tc.id,
                 });
-
-                if (blocked) break;
               } catch (err: any) {
                 emitText(
                   '❌ ' + toolName + '\n\`\`\`\n' + (err.message || String(err)) + '\n\`\`\`\n',
@@ -415,43 +440,6 @@ export class OpenAICompatController {
                   tool_call_id: tc.id,
                 });
               }
-            }
-
-            if (blocked) {
-              let fallback = '';
-              const actions = toolExecutions.filter(function (te: any) {
-                return /^(create_|delete_|update_|add_|remove_|navigate)/.test(te.tool);
-              });
-              const queries = toolExecutions.filter(function (te: any) {
-                return /^(list_|get_)/.test(te.tool);
-              });
-              if (actions.length > 0) {
-                fallback = actions
-                  .map(function (te: any) {
-                    return te.result && te.result.message
-                      ? te.result.message
-                      : te.tool.replace(/_/g, ' ') + ' done';
-                  })
-                  .filter(Boolean)
-                  .join('\n');
-              } else if (queries.length > 0) {
-                const uniqueTools = Array.from(
-                  new Set(
-                    queries.map(function (te: any) {
-                      return te.tool;
-                    }),
-                  ),
-                );
-                fallback =
-                  'Executed ' +
-                  queries.length +
-                  ' read-only queries (' +
-                  uniqueTools.join(', ') +
-                  ') but took NO action. To complete the request, use: delete_task / update_task / create_task.';
-              }
-              if (fallback) emitText('\n\n' + fallback + '\n');
-              emitDone();
-              break;
             }
           }
 

@@ -4,6 +4,7 @@ import { McpToolsController } from './mcp-tools.controller';
 import { ToolExecutor } from './tool-executor';
 import { McpLoggerService } from './mcp-logger.service';
 import { McpVerificationService } from './mcp-verification.service';
+import { PipelineModule } from './pipeline/pipeline.module';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { SettingsModule } from '../settings/settings.module';
 import { GatewayModule } from '../../gateway/gateway.module';
@@ -19,6 +20,7 @@ import { TimeZoneModule } from '../timezone/timezone.module';
 
 @Module({
   imports: [
+    PipelineModule,
     PrismaModule,
     SettingsModule,
     GatewayModule,
@@ -34,6 +36,6 @@ import { TimeZoneModule } from '../timezone/timezone.module';
   ],
   controllers: [McpToolsController],
   providers: [McpToolsService, ToolExecutor, McpLoggerService, McpVerificationService],
-  exports: [McpToolsService, McpLoggerService, McpVerificationService],
+  exports: [McpToolsService, McpLoggerService, McpVerificationService, PipelineModule],
 })
 export class McpToolsModule {}

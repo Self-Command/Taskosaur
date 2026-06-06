@@ -8,8 +8,10 @@ interface AssertionDef {
   field: string;
   /** How to read the expected value from params */
   expectedFrom: 'params' | 'result';
-  /** Path in params/result, e.g. "title" or "task.title" */
+  /** Path in result (read-back), e.g. "task.title" */
   path: string;
+  /** Path in params for expected value. Defaults to path if omitted. */
+  expectedPath?: string;
   /** Comparison mode: "exact" | "date" | "exists" | "notExists" */
   compare: 'exact' | 'date' | 'exists' | 'notExists';
 }
@@ -40,9 +42,19 @@ interface VerificationResult {
 // ── Write-tool set ───────────────────────────────────────────────
 
 const WRITE_PREFIXES = [
-  'create_', 'update_', 'delete_', 'add_', 'remove_',
-  'toggle_', 'mark_', 'share_', 'revoke_', 'disable_',
-  'batch_create_', 'batch_update_', 'batch_delete_',
+  'create_',
+  'update_',
+  'delete_',
+  'add_',
+  'remove_',
+  'toggle_',
+  'mark_',
+  'share_',
+  'revoke_',
+  'disable_',
+  'batch_create_',
+  'batch_update_',
+  'batch_delete_',
 ];
 
 export function isWriteTool(toolName: string): boolean {
@@ -111,7 +123,8 @@ export class McpVerificationService {
 
       const failures: VerificationFailure[] = [];
       for (const assertion of rule.assertions) {
-        const expected = this.getValue(params, result, assertion.expectedFrom, assertion.path);
+        const expectedPath = assertion.expectedPath || assertion.path;
+        const expected = this.getValue(params, result, assertion.expectedFrom, expectedPath);
         const actual = this.getValue(readBack, readBack, 'result', assertion.path);
 
         if (assertion.compare === 'notExists') continue;
@@ -149,14 +162,18 @@ export class McpVerificationService {
       return {
         readTool: 'get_task',
         buildLookupParams: (_p, r) => ({ taskId: r?.task?.id }),
-        assertions: this.buildWriteAssertions(params, ['title', 'description', 'type', 'priority']),
+        assertions: this.buildWriteAssertions(params, ['title', 'description', 'type', 'priority'], 'task'),
       };
     }
     if (toolName.startsWith('update_task')) {
       return {
         readTool: 'get_task',
         buildLookupParams: (p) => ({ taskId: p.taskId }),
-        assertions: this.buildWriteAssertions(params, ['title', 'description', 'type', 'priority', 'statusId', 'startDate', 'dueDate']),
+        assertions: this.buildWriteAssertions(
+          params,
+          ['title', 'description', 'type', 'priority', 'statusId', 'startDate', 'dueDate'],
+          'task',
+        ),
       };
     }
     if (toolName.startsWith('delete_task')) {
@@ -171,14 +188,22 @@ export class McpVerificationService {
       return {
         readTool: 'get_project',
         buildLookupParams: (_p, r) => ({ projectId: r?.project?.id }),
-        assertions: this.buildWriteAssertions(params, ['name', 'description', 'status', 'priority']),
+        assertions: this.buildWriteAssertions(
+          params,
+          ['name', 'description', 'status', 'priority'],
+          'project',
+        ),
       };
     }
     if (toolName.startsWith('update_project')) {
       return {
         readTool: 'get_project',
         buildLookupParams: (p) => ({ projectId: p.projectId }),
-        assertions: this.buildWriteAssertions(params, ['name', 'description', 'status', 'priority']),
+        assertions: this.buildWriteAssertions(
+          params,
+          ['name', 'description', 'status', 'priority'],
+          'project',
+        ),
       };
     }
     if (toolName.startsWith('delete_project')) {
@@ -193,14 +218,14 @@ export class McpVerificationService {
       return {
         readTool: 'get_workspace',
         buildLookupParams: (_p, r) => ({ workspaceId: r?.workspace?.id }),
-        assertions: this.buildWriteAssertions(params, ['name', 'description']),
+        assertions: this.buildWriteAssertions(params, ['name', 'description'], 'workspace'),
       };
     }
     if (toolName.startsWith('update_workspace')) {
       return {
         readTool: 'get_workspace',
         buildLookupParams: (p) => ({ workspaceId: p.workspaceId }),
-        assertions: this.buildWriteAssertions(params, ['name', 'description']),
+        assertions: this.buildWriteAssertions(params, ['name', 'description'], 'workspace'),
       };
     }
     if (toolName.startsWith('delete_workspace')) {
@@ -218,17 +243,25 @@ export class McpVerificationService {
         assertions: this.buildWriteAssertions(params, ['name', 'goal']),
       };
     }
-    if (toolName.startsWith('add_organization_member') || toolName.startsWith('add_workspace_member') || toolName.startsWith('add_project_member')) {
+    if (
+      toolName.startsWith('add_organization_member') ||
+      toolName.startsWith('add_workspace_member') ||
+      toolName.startsWith('add_project_member')
+    ) {
       return {
-        readTool: toolName.includes('organization') ? 'list_organization_members'
-          : toolName.includes('workspace') ? 'list_workspace_members'
-          : 'list_project_members',
+        readTool: toolName.includes('organization')
+          ? 'list_organization_members'
+          : toolName.includes('workspace')
+            ? 'list_workspace_members'
+            : 'list_project_members',
         buildLookupParams: (p) => {
           if (toolName.includes('organization')) return { organizationId: p.organizationId };
           if (toolName.includes('workspace')) return { workspaceId: p.workspaceId };
           return { projectId: p.projectId };
         },
-        assertions: [{ field: '_memberExists', expectedFrom: 'params', path: 'userId', compare: 'exists' }],
+        assertions: [
+          { field: '_memberExists', expectedFrom: 'params', path: 'userId', compare: 'exists' },
+        ],
       };
     }
     // Generic fallback: any other create_* → no verification (safe default)
@@ -238,14 +271,23 @@ export class McpVerificationService {
   /**
    * Build assertion definitions only for fields that were actually provided in params.
    */
-  private buildWriteAssertions(params: Record<string, any>, fields: string[]): AssertionDef[] {
+  private buildWriteAssertions(
+    params: Record<string, any>,
+    fields: string[],
+    entityPrefix?: string,
+  ): AssertionDef[] {
+    const prefix = entityPrefix ? `${entityPrefix}.` : '';
     return fields
       .filter((f) => params[f] !== undefined)
       .map((f) => ({
         field: f,
         expectedFrom: 'params' as const,
-        path: `task.${f}`,
-        compare: (f === 'startDate' || f === 'dueDate' || f === 'endDate') ? 'date' as const : 'exact' as const,
+        path: `${prefix}${f}`, // actual: read-back result path (e.g. "task.startDate")
+        expectedPath: f, // expected: params is flat (e.g. "startDate")
+        compare:
+          f === 'startDate' || f === 'dueDate' || f === 'endDate'
+            ? ('date' as const)
+            : ('exact' as const),
       }));
   }
 
@@ -260,42 +302,73 @@ export class McpVerificationService {
     try {
       switch (toolName) {
         case 'get_task':
-          return { success: true, task: await this.prisma.task.findUnique({
-            where: { id: params.taskId },
-            select: {
-              id: true, title: true, description: true, type: true, priority: true,
-              statusId: true, startDate: true, dueDate: true, completedAt: true,
-              projectId: true, sprintId: true,
-            },
-          }) };
+          return {
+            success: true,
+            task: await this.prisma.task.findUnique({
+              where: { id: params.taskId },
+              select: {
+                id: true,
+                title: true,
+                description: true,
+                type: true,
+                priority: true,
+                statusId: true,
+                startDate: true,
+                dueDate: true,
+                completedAt: true,
+                projectId: true,
+                sprintId: true,
+              },
+            }),
+          };
         case 'get_project':
-          return { success: true, project: await this.prisma.project.findUnique({
-            where: { id: params.projectId },
-            select: {
-              id: true, name: true, description: true, status: true, priority: true,
-              startDate: true, endDate: true,
-            },
-          }) };
+          return {
+            success: true,
+            project: await this.prisma.project.findUnique({
+              where: { id: params.projectId },
+              select: {
+                id: true,
+                name: true,
+                description: true,
+                status: true,
+                priority: true,
+                startDate: true,
+                endDate: true,
+              },
+            }),
+          };
         case 'get_workspace':
-          return { success: true, workspace: await this.prisma.workspace.findUnique({
-            where: { id: params.workspaceId },
-            select: { id: true, name: true, description: true },
-          }) };
+          return {
+            success: true,
+            workspace: await this.prisma.workspace.findUnique({
+              where: { id: params.workspaceId },
+              select: { id: true, name: true, description: true },
+            }),
+          };
         case 'list_organization_members':
-          return { success: true, members: await this.prisma.organizationMember.findMany({
-            where: { organizationId: params.organizationId },
-            select: { userId: true },
-          }) };
+          return {
+            success: true,
+            members: await this.prisma.organizationMember.findMany({
+              where: { organizationId: params.organizationId },
+              select: { userId: true },
+            }),
+          };
         case 'list_workspace_members':
-          return { success: true, members: await this.prisma.workspaceMember.findMany({
-            where: { workspaceId: params.workspaceId },
-            select: { userId: true },
-          }) };
+          return {
+            success: true,
+            members: await this.prisma.workspaceMember.findMany({
+              where: { workspaceId: params.workspaceId },
+              select: { userId: true },
+            }),
+          };
         case 'list_project_members':
-          return { success: true, members: await this.prisma.projectMember.findMany({
-            where: { projectId: params.projectId },
-            select: { userId: true },
-          }) };
+          return {
+            success: true,
+            members: await this.prisma.projectMember.findMany({
+              where: { projectId: params.projectId },
+              select: { userId: true },
+            }),
+          };
         default:
           return null;
       }

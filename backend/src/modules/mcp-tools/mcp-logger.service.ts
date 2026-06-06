@@ -30,6 +30,19 @@ function redactParams(params: Record<string, any>): Record<string, any> {
 @Injectable()
 export class McpLoggerService {
   private readonly logger = new Logger('MCP');
+  private traceId: string | null = null;
+
+  setTraceId(id: string) {
+    this.traceId = id;
+  }
+
+  clearTraceId() {
+    this.traceId = null;
+  }
+
+  private get tracePrefix(): string {
+    return this.traceId ? `[${this.traceId}]` : '';
+  }
 
   private isWrite(toolName: string): boolean {
     for (const prefix of WRITE_TOOLS) {
@@ -41,41 +54,41 @@ export class McpLoggerService {
   logToolCall(toolName: string, userId: string, params: Record<string, any>) {
     if (this.isWrite(toolName)) {
       this.logger.log(
-        `[WRITE] ${toolName} | user=${userId} | params=${JSON.stringify(redactParams(params))}`,
+        `${this.tracePrefix}[WRITE] ${toolName} | user=${userId} | params=${JSON.stringify(redactParams(params))}`,
       );
     } else {
       this.logger.debug(
-        `[READ]  ${toolName} | user=${userId} | params=${JSON.stringify(redactParams(params))}`,
+        `${this.tracePrefix}[READ]  ${toolName} | user=${userId} | params=${JSON.stringify(redactParams(params))}`,
       );
     }
   }
 
   logToolSuccess(toolName: string, userId: string, durationMs: number) {
-    this.logger.log(`[OK]    ${toolName} | user=${userId} | ${durationMs}ms`);
+    this.logger.log(`${this.tracePrefix}[OK]    ${toolName} | user=${userId} | ${durationMs}ms`);
   }
 
   logToolError(toolName: string, userId: string, error: any, durationMs: number) {
     const msg = error?.message || String(error);
     this.logger.error(
-      `[FAIL]  ${toolName} | user=${userId} | ${durationMs}ms | ${msg}`,
+      `${this.tracePrefix}[FAIL]  ${toolName} | user=${userId} | ${durationMs}ms | ${msg}`,
       error?.stack,
     );
   }
 
   logAiChat(userId: string, provider: string, model: string, messageLen: number) {
     this.logger.log(
-      `[CHAT]  user=${userId} provider=${provider} model=${model} msgLen=${messageLen}`,
+      `${this.tracePrefix}[CHAT]  user=${userId} provider=${provider} model=${model} msgLen=${messageLen}`,
     );
   }
 
   logAiResponse(userId: string, hasTools: boolean, textLen: number, durationMs: number) {
     this.logger.log(
-      `[CHAT-RESP] user=${userId} tools=${hasTools} textLen=${textLen} ${durationMs}ms`,
+      `${this.tracePrefix}[CHAT-RESP] user=${userId} tools=${hasTools} textLen=${textLen} ${durationMs}ms`,
     );
   }
 
   logAiError(userId: string, error: any) {
     const msg = error?.message || String(error);
-    this.logger.error(`[CHAT-ERR] user=${userId} | ${msg}`, error?.stack);
+    this.logger.error(`${this.tracePrefix}[CHAT-ERR] user=${userId} | ${msg}`, error?.stack);
   }
 }
