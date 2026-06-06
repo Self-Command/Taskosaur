@@ -639,7 +639,11 @@ export class ToolExecutor {
     return { success: true, project };
   }
 
-  private async createProject(params: Record<string, any>, userId: string, sd: (v: unknown) => Date | null) {
+  private async createProject(
+    params: Record<string, any>,
+    userId: string,
+    sd: (v: unknown) => Date | null,
+  ) {
     const err =
       this.requireUUID(params.workspaceId, 'workspaceId') ||
       this.requireString(params.name, 'name');
@@ -694,7 +698,11 @@ export class ToolExecutor {
     };
   }
 
-  private async updateProject(params: Record<string, any>, userId: string, sd: (v: unknown) => Date | null) {
+  private async updateProject(
+    params: Record<string, any>,
+    userId: string,
+    sd: (v: unknown) => Date | null,
+  ) {
     const err = this.requireUUID(params.projectId, 'projectId');
     if (err) return { success: false, error: err };
     const { projectId, ...data } = params;
@@ -711,8 +719,7 @@ export class ToolExecutor {
       'endDate',
     ];
     for (const f of fields) {
-      if (data[f] !== undefined)
-        updateData[f] = f.endsWith('Date') ? sd(data[f]) : data[f];
+      if (data[f] !== undefined) updateData[f] = f.endsWith('Date') ? sd(data[f]) : data[f];
     }
     const project = await this.prisma.project.update({
       where: { id: projectId },
@@ -834,7 +841,11 @@ export class ToolExecutor {
     return { success: true, task };
   }
 
-  private async createTask(params: Record<string, any>, userId: string, sd: (v: unknown) => Date | null) {
+  private async createTask(
+    params: Record<string, any>,
+    userId: string,
+    sd: (v: unknown) => Date | null,
+  ) {
     const err =
       this.requireUUID(params.projectId, 'projectId') ||
       this.requireString(params.title, 'title') ||
@@ -891,6 +902,7 @@ export class ToolExecutor {
       },
     });
     this.reminderService.schedule(task).catch(() => {});
+    this.eventsGateway.emitTaskCreated(task.projectId, task);
     return {
       success: true,
       task,
@@ -898,7 +910,11 @@ export class ToolExecutor {
     };
   }
 
-  private async updateTask(params: Record<string, any>, userId: string, sd: (v: unknown) => Date | null) {
+  private async updateTask(
+    params: Record<string, any>,
+    userId: string,
+    sd: (v: unknown) => Date | null,
+  ) {
     const err = this.requireUUID(params.taskId, 'taskId');
     if (err) return { success: false, error: err };
     // Validate optional UUID fields if provided
@@ -957,6 +973,17 @@ export class ToolExecutor {
       include: { project: { select: { name: true } }, status: { select: { name: true } } },
     });
     this.reminderService.schedule(task).catch(() => {});
+    // Push the ACTUAL DB values (from updated task), not raw AI input strings
+    this.eventsGateway.emitTaskUpdated(task.projectId, taskId, {
+      ...(data.startDate !== undefined && { startDate: task.startDate }),
+      ...(data.dueDate !== undefined && { dueDate: task.dueDate }),
+      ...(data.title !== undefined && { title: task.title }),
+      ...(data.description !== undefined && { description: task.description }),
+      ...(data.priority !== undefined && { priority: task.priority }),
+      ...(data.statusId !== undefined && { statusId: task.statusId }),
+      ...(data.sprintId !== undefined && { sprintId: task.sprintId }),
+      ...(data.type !== undefined && { type: task.type }),
+    });
     return { success: true, task, message: `Task "${task.title}" updated` };
   }
 
@@ -965,10 +992,11 @@ export class ToolExecutor {
     if (err) return { success: false, error: err };
     const t = await this.prisma.task.findUnique({
       where: { id: params.taskId },
-      select: { title: true },
+      select: { title: true, projectId: true },
     });
     if (!t) return { success: false, error: 'Task not found. It may have been deleted already.' };
     await this.prisma.task.delete({ where: { id: params.taskId } });
+    this.eventsGateway.emitTaskDeleted(t.projectId, params.taskId);
     return { success: true, message: `Task "${t.title}" deleted successfully` };
   }
 
@@ -987,7 +1015,11 @@ export class ToolExecutor {
     return { taskNumber, taskSlug: slug };
   }
 
-  private async batchCreateTasks(params: Record<string, any>, userId: string, sd: (v: unknown) => Date | null) {
+  private async batchCreateTasks(
+    params: Record<string, any>,
+    userId: string,
+    sd: (v: unknown) => Date | null,
+  ) {
     const tasks: any[] = params.tasks || [];
     if (!Array.isArray(tasks) || tasks.length === 0) {
       return { success: false, error: 'tasks must be a non-empty array' };
@@ -1044,7 +1076,11 @@ export class ToolExecutor {
     return { success: true, count: results.length, results };
   }
 
-  private async batchUpdateTasks(params: Record<string, any>, userId: string, sd: (v: unknown) => Date | null) {
+  private async batchUpdateTasks(
+    params: Record<string, any>,
+    userId: string,
+    sd: (v: unknown) => Date | null,
+  ) {
     const updates: any[] = params.updates || [];
     if (!Array.isArray(updates) || updates.length === 0) {
       return { success: false, error: 'updates must be a non-empty array' };
@@ -1150,7 +1186,10 @@ export class ToolExecutor {
     const task = await this.prisma.task.update({
       where: { id: params.taskId },
       data: { statusId: params.statusId, updatedBy: userId },
-      include: { status: { select: { name: true } }, project: { select: { name: true } } },
+      include: { status: { select: { name: true } }, project: { select: { name: true, id: true } } },
+    });
+    this.eventsGateway.emitTaskStatusChanged(task.projectId, params.taskId, {
+      statusId: params.statusId, statusName: task.status.name,
     });
     return { success: true, task, message: `Task "${task.title}" status → "${task.status.name}"` };
   }
@@ -1169,8 +1208,9 @@ export class ToolExecutor {
     const task = await this.prisma.task.update({
       where: { id: params.taskId },
       data: { priority: p as any, updatedBy: userId },
-      include: { project: { select: { name: true } } },
+      include: { project: { select: { name: true, id: true } } },
     });
+    this.eventsGateway.emitTaskUpdated(task.projectId, params.taskId, { priority: p });
     return { success: true, task, message: `Task "${task.title}" priority → ${p}` };
   }
 
@@ -1350,7 +1390,11 @@ export class ToolExecutor {
     return { success: true, count: sprints.length, sprints };
   }
 
-  private async createSprint(params: Record<string, any>, userId: string, sd: (v: unknown) => Date | null) {
+  private async createSprint(
+    params: Record<string, any>,
+    userId: string,
+    sd: (v: unknown) => Date | null,
+  ) {
     const err =
       this.requireUUID(params.projectId, 'projectId') || this.requireString(params.name, 'name');
     if (err) return { success: false, error: err };
@@ -1375,7 +1419,11 @@ export class ToolExecutor {
     return { success: true, sprint, message: `Sprint "${sprint.name}" created` };
   }
 
-  private async updateSprint(params: Record<string, any>, userId: string, sd: (v: unknown) => Date | null) {
+  private async updateSprint(
+    params: Record<string, any>,
+    userId: string,
+    sd: (v: unknown) => Date | null,
+  ) {
     const err = this.requireUUID(params.sprintId, 'sprintId');
     if (err) return { success: false, error: err };
     const { sprintId, ...data } = params;
@@ -1885,7 +1933,12 @@ export class ToolExecutor {
 
   // ========== RECURRING TASK ==========
 
-  private async createTaskRecurrence(params: Record<string, any>, userId: string, sd: (v: unknown) => Date | null, userTimezone: string) {
+  private async createTaskRecurrence(
+    params: Record<string, any>,
+    userId: string,
+    sd: (v: unknown) => Date | null,
+    userTimezone: string,
+  ) {
     const err =
       this.requireUUID(params.taskId, 'taskId') ||
       this.requireString(params.recurrenceType, 'recurrenceType');
@@ -1961,10 +2014,17 @@ export class ToolExecutor {
   private getDayOfWeekInTZ(timezone: string): number {
     try {
       const dayMap: Record<string, number> = {
-        Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
+        Sun: 0,
+        Mon: 1,
+        Tue: 2,
+        Wed: 3,
+        Thu: 4,
+        Fri: 5,
+        Sat: 6,
       };
       const dayStr = new Intl.DateTimeFormat('en-US', {
-        timeZone: timezone, weekday: 'short',
+        timeZone: timezone,
+        weekday: 'short',
       }).format(new Date());
       return dayMap[dayStr] ?? new Date().getUTCDay();
     } catch {
@@ -1990,7 +2050,8 @@ export class ToolExecutor {
         d.setUTCDate(d.getUTCDate() + interval);
         break;
       case 'WEEKLY': {
-        const targetDays = daysOfWeek.length > 0 ? daysOfWeek.sort((a, b) => a - b) : [d.getUTCDay()];
+        const targetDays =
+          daysOfWeek.length > 0 ? daysOfWeek.sort((a, b) => a - b) : [d.getUTCDay()];
         const currentDay = d.getUTCDay();
         const nextDay = targetDays.find((day) => day > currentDay);
         if (nextDay !== undefined) {
@@ -2054,7 +2115,12 @@ export class ToolExecutor {
     return { success: true, message: 'Task recurrence disabled' };
   }
 
-  private async updateTaskRecurrence(params: Record<string, any>, userId: string, sd: (v: unknown) => Date | null, userTimezone: string) {
+  private async updateTaskRecurrence(
+    params: Record<string, any>,
+    userId: string,
+    sd: (v: unknown) => Date | null,
+    userTimezone: string,
+  ) {
     const err = this.requireUUID(params.taskId, 'taskId');
     if (err) return { success: false, error: err };
 
@@ -2135,7 +2201,11 @@ export class ToolExecutor {
     return { success: true, count: shares.length, shares };
   }
 
-  private async shareTaskPublicly(params: Record<string, any>, userId: string, sd: (v: unknown) => Date | null) {
+  private async shareTaskPublicly(
+    params: Record<string, any>,
+    userId: string,
+    sd: (v: unknown) => Date | null,
+  ) {
     const err = this.requireUUID(params.taskId, 'taskId');
     if (err) return { success: false, error: err };
     const task = await this.prisma.task.findUnique({
@@ -2144,8 +2214,7 @@ export class ToolExecutor {
     });
     if (!task) return { success: false, error: 'Task not found.' };
     const token = crypto.randomUUID();
-    const expiresAt =
-      sd(params.expiresAt) || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const expiresAt = sd(params.expiresAt) || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     const share = await this.prisma.publicTaskShare.create({
       data: { taskId: params.taskId, token, expiresAt, createdBy: userId },
     });
@@ -2354,7 +2423,11 @@ export class ToolExecutor {
     };
   }
 
-  private async createTimeEntry(params: Record<string, any>, userId: string, sd: (v: unknown) => Date | null) {
+  private async createTimeEntry(
+    params: Record<string, any>,
+    userId: string,
+    sd: (v: unknown) => Date | null,
+  ) {
     const err = this.requireUUID(params.taskId, 'taskId');
     if (err) return { success: false, error: err };
     if (params.timeSpent === undefined || +params.timeSpent <= 0) {

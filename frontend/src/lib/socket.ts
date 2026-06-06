@@ -90,6 +90,20 @@ class SocketService {
       this.dispatchCustomEvent(SocketEvents.SETTINGS_CHANGED, data);
     });
 
+    // Task real-time events (emitted by MCP tool executor after mutations)
+    this.socket.on('task:created', (data: any) => {
+      this.dispatchCustomEvent('task:created', data);
+    });
+    this.socket.on('task:updated', (data: any) => {
+      this.dispatchCustomEvent('task:updated', data);
+    });
+    this.socket.on('task:deleted', (data: any) => {
+      this.dispatchCustomEvent('task:deleted', data);
+    });
+    this.socket.on('task:status_changed', (data: any) => {
+      this.dispatchCustomEvent('task:status_changed', data);
+    });
+
     this.socket.on(SocketEvents.CONNECTED, (data) => {
       console.log("[SocketService] Connected acknowledgement received:", data);
     });

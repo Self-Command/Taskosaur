@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useMemo, useRef } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { taskApi } from "@/utils/api/taskApi";
 import {
   getCurrentOrganizationId,
@@ -1409,6 +1409,55 @@ export function TaskProvider({ children }: TaskProviderProps) {
     }),
     [handleApiOperation]
   );
+
+  // ── WebSocket: subscribe to MCP-triggered task mutations ──
+  useEffect(() => {
+    const handleTaskCreated = (e: CustomEvent) => {
+      const { data } = e.detail;
+      if (!data?.id) return;
+      setTaskState((prev) => ({
+        ...prev,
+        tasks: [data, ...prev.tasks],
+      }));
+    };
+    const handleTaskUpdated = (e: CustomEvent) => {
+      const { data } = e.detail;
+      const taskId = data?.taskId;
+      const updates = data?.updates;
+      if (!taskId) return;
+      setTaskState((prev) => ({
+        ...prev,
+        tasks: prev.tasks.map((t) =>
+          (t.id === taskId || t.slug === taskId) ? { ...t, ...updates } : t),
+        currentTask:
+          (prev.currentTask?.id === taskId || prev.currentTask?.slug === taskId)
+            ? { ...prev.currentTask, ...updates }
+            : prev.currentTask,
+      }));
+    };
+    const handleTaskDeleted = (e: CustomEvent) => {
+      const { data } = e.detail;
+      const taskId = data?.taskId;
+      if (!taskId) return;
+      setTaskState((prev) => ({
+        ...prev,
+        tasks: prev.tasks.filter((t) => t.id !== taskId && t.slug !== taskId),
+        currentTask:
+          prev.currentTask?.id === taskId || prev.currentTask?.slug === taskId
+            ? null : prev.currentTask,
+      }));
+    };
+
+    window.addEventListener('task:created', handleTaskCreated as EventListener);
+    window.addEventListener('task:updated', handleTaskUpdated as EventListener);
+    window.addEventListener('task:deleted', handleTaskDeleted as EventListener);
+
+    return () => {
+      window.removeEventListener('task:created', handleTaskCreated as EventListener);
+      window.removeEventListener('task:updated', handleTaskUpdated as EventListener);
+      window.removeEventListener('task:deleted', handleTaskDeleted as EventListener);
+    };
+  }, []);
 
   // Final context value - state updates triggers re-renders, but methods remain stable
   const contextValue = useMemo(
