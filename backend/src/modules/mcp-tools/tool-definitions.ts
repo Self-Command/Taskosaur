@@ -1529,6 +1529,45 @@ export const MCP_TOOL_DEFINITIONS: MCPToolDefinition[] = [
     },
     scope: 'project',
   },
+  // ── Smart Query (aggregation tool — replaces multi-step discoverability chains) ──
+  {
+    name: 'smart_query',
+    description:
+      'SMART QUERY: one-stop overview, tree view, task/project listing with auto-discovery. Use this FIRST to understand your workspace — replaces chaining list_organizations→list_workspaces→list_projects→list_tasks. / 智能查询：一站式概览、层级视图、任务/项目列表（自动发现上下文）。优先使用此工具了解你的工作区。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        intent: {
+          type: 'string',
+          enum: ['summary', 'tree', 'tasks', 'projects', 'search'],
+          description:
+            'summary=overview with task counts & deadlines, tree=org→workspace→project hierarchy, tasks=list tasks (auto-discovers project context), projects=list projects (auto-discovers workspace context), search=text search across tasks & projects / summary=概览+任务统计, tree=层级结构, tasks=任务列表(自动发现项目), projects=项目列表(自动发现工作区), search=文本搜索',
+        },
+        organizationId: {
+          type: 'string',
+          description: 'Optional — auto-uses your default org if omitted / 组织ID（留空则用默认）',
+        },
+        workspaceId: {
+          type: 'string',
+          description: 'Optional — auto-uses your default workspace if omitted / 工作区ID（留空则用默认）',
+        },
+        projectId: {
+          type: 'string',
+          description: 'Optional — auto-uses your default project if omitted / 项目ID（留空则用默认）',
+        },
+        search: {
+          type: 'string',
+          description: 'Free-text search query (only for intent=search) / 搜索关键词（仅用于search）',
+        },
+        limit: {
+          type: 'number',
+          description: 'Max results, default 20 / 最大结果数，默认20',
+        },
+      },
+      required: ['intent'],
+    },
+    scope: 'cross',
+  },
 ];
 
 export function getToolDefinitions(): MCPToolDefinition[] {

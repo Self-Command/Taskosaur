@@ -421,6 +421,8 @@ export class ToolExecutor {
         return trimForLLM(await this.listProjectMembers(params, userId));
       case 'list_organizations':
         return trimForLLM(await this.listOrganizations(userId));
+      case 'smart_query':
+        return trimForLLM(await this.smartQuery(params, userId));
       case 'navigate':
         return this.buildNavigatePath(params);
       default:
@@ -450,6 +452,213 @@ export class ToolExecutor {
       success: false,
       error: 'navigate requires workspaceSlug, projectSlug/taskSlug, or a raw path.',
     };
+  }
+
+  // ========== SMART QUERY ==========
+
+  private async smartQuery(params: Record<string, any>, userId: string) {
+    const intent = params.intent || 'summary';
+    const limit = Math.min(100, Math.max(1, +(params.limit || 20)));
+
+    // Auto-discover context from defaults or from first available resources
+    let orgId = params.organizationId || null;
+    let wsId = params.workspaceId || null;
+    let projId = params.projectId || null;
+
+    // Load user defaults from Settings
+    if (!wsId) wsId = await this.settingsService.get('mcp_default_workspace', userId);
+    if (!projId) projId = await this.settingsService.get('mcp_default_project', userId);
+
+    // ── summary ──
+    if (intent === 'summary') {
+      const orgs = await this.prisma.organizationMember.findMany({
+        where: { userId },
+        select: {
+          organization: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              workspaces: {
+                where: { archive: false },
+                select: {
+                  id: true,
+                  name: true,
+                  projects: {
+                    where: { archive: false },
+                    select: {
+                      id: true,
+                      name: true,
+                      _count: { select: { tasks: true } },
+                      tasks: {
+                        where: { isArchived: false },
+                        select: { id: true, status: { select: { category: true } }, dueDate: true, priority: true },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      let totalTasks = 0;
+      let doneTasks = 0;
+      let overdueTasks = 0;
+      const now = new Date();
+
+      const summary: any[] = [];
+      for (const m of orgs) {
+        const o = m.organization;
+        const wsList: any[] = [];
+        for (const w of o.workspaces) {
+          const pList: any[] = [];
+          for (const p of w.projects) {
+            const tCount = p.tasks.length;
+            totalTasks += tCount;
+            const d = p.tasks.filter((t: any) => t.status?.category === 'DONE').length;
+            doneTasks += d;
+            const over = p.tasks.filter(
+              (t: any) => t.dueDate && new Date(t.dueDate) < now && t.status?.category !== 'DONE',
+            ).length;
+            overdueTasks += over;
+            pList.push({ id: p.id, name: p.name, taskCount: tCount, doneCount: d, overdueCount: over });
+          }
+          wsList.push({ id: w.id, name: w.name, projects: pList.slice(0, 10) });
+        }
+        summary.push({ id: o.id, name: o.name, slug: o.slug, workspaces: wsList.slice(0, 10) });
+      }
+
+      return {
+        success: true,
+        intent: 'summary',
+        organizations: summary.length,
+        workspaces: orgs.reduce((a: number, o: any) => a + o.organization.workspaces.length, 0),
+        projects: orgs.reduce((a: number, o: any) => a + o.organization.workspaces.reduce((b: number, w: any) => b + w.projects.length, 0), 0),
+        totalTasks,
+        doneTasks,
+        overdueTasks,
+        completionRate: totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0,
+      };
+    }
+
+    // ── tree ──
+    if (intent === 'tree') {
+      const orgs = await this.prisma.organizationMember.findMany({
+        where: { userId },
+        select: {
+          organization: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              workspaces: {
+                where: { archive: false },
+                take: 20,
+                select: {
+                  id: true,
+                  name: true,
+                  slug: true,
+                  projects: {
+                    where: { archive: false },
+                    take: 20,
+                    select: {
+                      id: true,
+                      name: true,
+                      slug: true,
+                      _count: { select: { tasks: true } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      const tree = orgs.map((m: any) => ({
+        id: m.organization.id,
+        name: m.organization.name,
+        slug: m.organization.slug,
+        workspaces: m.organization.workspaces.map((w: any) => ({
+          id: w.id,
+          name: w.name,
+          slug: w.slug,
+          projects: w.projects.map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            slug: p.slug,
+            taskCount: p._count?.tasks || 0,
+          })),
+        })),
+      }));
+
+      return { success: true, intent: 'tree', tree };
+    }
+
+    // ── tasks ──
+    if (intent === 'tasks') {
+      // Resolve projectId if not provided
+      if (!projId) {
+        const orgs = await this.prisma.organizationMember.findMany({
+          where: { userId },
+          select: { organization: { select: {
+            workspaces: { where: { archive: false }, select: { id: true, projects: { where: { archive: false }, select: { id: true }, take: 1 } }, take: 1 },
+          } } },
+          take: 1,
+        });
+        const firstWs = orgs[0]?.organization?.workspaces[0];
+        projId = firstWs?.projects[0]?.id || null;
+      }
+      if (!projId) return { success: false, error: 'No project found. Create one first or set a default in Settings → MCP Default Context.' };
+
+      return await this.listTasks({ ...params, projectId: projId, limit }, userId);
+    }
+
+    // ── projects ──
+    if (intent === 'projects') {
+      // Resolve workspaceId if not provided
+      if (!wsId) {
+        const orgs = await this.prisma.organizationMember.findMany({
+          where: { userId },
+          select: { organization: { select: { id: true, workspaces: { where: { archive: false }, select: { id: true }, take: 1 } } } },
+          take: 1,
+        });
+        wsId = orgs[0]?.organization?.workspaces[0]?.id || null;
+      }
+      if (!orgId && wsId) {
+        // Derive orgId from workspace
+        const ws = await this.prisma.workspace.findUnique({ where: { id: wsId }, select: { organizationId: true } });
+        orgId = ws?.organizationId || null;
+      }
+      if (!wsId) return { success: false, error: 'No workspace found. Create one first or set a default in Settings → MCP Default Context.' };
+
+      return await this.listProjects({ ...params, workspaceId: wsId, organizationId: orgId || undefined, limit }, userId);
+    }
+
+    // ── search ──
+    if (intent === 'search') {
+      const q = params.search || '';
+      if (!q) return { success: false, error: 'Provide a search query for intent=search.' };
+
+      const [tasks, projects] = await Promise.all([
+        this.prisma.task.findMany({
+          where: { isArchived: false, OR: [{ title: { contains: q, mode: 'insensitive' as const } }, { description: { contains: q, mode: 'insensitive' as const } }] },
+          select: { id: true, title: true, slug: true, priority: true, status: { select: { name: true, color: true } }, project: { select: { name: true } } },
+          take: limit,
+        }),
+        this.prisma.project.findMany({
+          where: { archive: false, name: { contains: q, mode: 'insensitive' as const } },
+          select: { id: true, name: true, slug: true, description: true },
+          take: limit,
+        }),
+      ]);
+
+      return { success: true, intent: 'search', query: q, tasks: { count: tasks.length, items: tasks }, projects: { count: projects.length, items: projects } };
+    }
+
+    return { success: false, error: `Unknown intent "${intent}". Valid: summary, tree, tasks, projects, search.` };
   }
 
   // ========== WORKSPACE ==========
@@ -918,7 +1127,9 @@ export class ToolExecutor {
       },
     });
     this.reminderService.schedule(task).catch(() => {});
-    try { this.eventsGateway.emitTaskCreated(task.projectId, task); } catch {}
+    try {
+      this.eventsGateway.emitTaskCreated(task.projectId, task);
+    } catch {}
     return {
       success: true,
       task,
@@ -985,8 +1196,7 @@ export class ToolExecutor {
     }
     // Empty update guard: reject if no actual field changes were requested
     const scalarChanges = Object.keys(updateData).filter((k) => k !== 'updatedBy');
-    const hasRelationChanges =
-      data.assigneeIds !== undefined || data.labelIds !== undefined;
+    const hasRelationChanges = data.assigneeIds !== undefined || data.labelIds !== undefined;
     if (scalarChanges.length === 0 && !hasRelationChanges) {
       return {
         success: false,
@@ -1027,7 +1237,9 @@ export class ToolExecutor {
     });
     if (!t) return { success: false, error: 'Task not found. It may have been deleted already.' };
     await this.prisma.task.delete({ where: { id: params.taskId } });
-    try { this.eventsGateway.emitTaskDeleted(t.projectId, params.taskId); } catch {}
+    try {
+      this.eventsGateway.emitTaskDeleted(t.projectId, params.taskId);
+    } catch {}
     return { success: true, message: `Task "${t.title}" deleted successfully` };
   }
 
@@ -1217,9 +1429,17 @@ export class ToolExecutor {
     const task = await this.prisma.task.update({
       where: { id: params.taskId },
       data: { statusId: params.statusId, updatedBy: userId },
-      include: { status: { select: { name: true } }, project: { select: { name: true, id: true } } },
+      include: {
+        status: { select: { name: true } },
+        project: { select: { name: true, id: true } },
+      },
     });
-    try { this.eventsGateway.emitTaskStatusChanged(task.projectId, params.taskId, { statusId: params.statusId, statusName: task.status.name }); } catch {}
+    try {
+      this.eventsGateway.emitTaskStatusChanged(task.projectId, params.taskId, {
+        statusId: params.statusId,
+        statusName: task.status.name,
+      });
+    } catch {}
     return { success: true, task, message: `Task "${task.title}" status → "${task.status.name}"` };
   }
 
@@ -1239,7 +1459,9 @@ export class ToolExecutor {
       data: { priority: p as any, updatedBy: userId },
       include: { project: { select: { name: true, id: true } } },
     });
-    try { this.eventsGateway.emitTaskUpdated(task.projectId, params.taskId, { priority: p }); } catch {}
+    try {
+      this.eventsGateway.emitTaskUpdated(task.projectId, params.taskId, { priority: p });
+    } catch {}
     return { success: true, task, message: `Task "${task.title}" priority → ${p}` };
   }
 

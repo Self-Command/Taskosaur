@@ -10,6 +10,7 @@ import PushGoSettingsSection from "@/components/settings/PushGoSettingsSection";
 import WebSearchSettingsSection from "@/components/settings/WebSearchSettingsSection";
 import ApiKeySection from "@/components/settings/ApiKeySection";
 import McpSettingsSection from "@/components/settings/McpSettingsSection";
+import McpContextSection from "@/components/settings/McpContextSection";
 import ReminderSettingsSection from "@/components/settings/ReminderSettingsSection";
 import { useState } from "react";
 import ActionButton from "@/components/common/ActionButton";
@@ -72,6 +73,7 @@ export default function ProfilePage() {
           <WebSearchSettingsSection />
           <ApiKeySection />
           <McpSettingsSection />
+          <McpContextSection />
           <LanguageSection />
           <ResetPasswordSection />
           <DangerZoneSection />

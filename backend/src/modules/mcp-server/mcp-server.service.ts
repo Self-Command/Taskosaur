@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { McpToolsService } from '../mcp-tools/mcp-tools.service';
 import { ToolExecutionPipeline } from '../mcp-tools/pipeline/tool-execution-pipeline';
 import { McpSessionService } from './mcp-session.service';
+import { SettingsService } from '../settings/settings.service';
 import {
   JsonRpcRequest,
   JsonRpcResponse,
@@ -18,6 +19,7 @@ export class McpServerService {
     private readonly mcpToolsService: McpToolsService,
     private readonly toolPipeline: ToolExecutionPipeline,
     private readonly sessionService: McpSessionService,
+    private readonly settingsService: SettingsService,
   ) {}
 
   /**
@@ -124,6 +126,27 @@ export class McpServerService {
 
     if (!toolName) {
       return this.buildError(id, JSONRPC_ERRORS.INVALID_PARAMS, 'Missing tool name');
+    }
+
+    // Auto-fill default workspace/project context for query tools when omitted.
+    // This saves the AI from chaining discoverability calls just to find a scope.
+    const contextTools = new Set([
+      'list_tasks', 'list_projects', 'list_task_comments', 'list_sprints',
+      'list_labels', 'list_time_entries', 'list_task_dependencies',
+      'list_task_statuses', 'list_project_members', 'create_task',
+      'batch_create_tasks', 'smart_query', 'list_task_attachments',
+      'get_project_inbox', 'get_project', 'list_custom_fields',
+    ]);
+    if (contextTools.has(toolName) && !toolArgs.workspaceId && !toolArgs.projectId) {
+      const defaultWs = await this.settingsService.get('mcp_default_workspace', userId);
+      const defaultProj = await this.settingsService.get('mcp_default_project', userId);
+      // Only auto-fill when the tool doesn't already have its own scope params
+      if (defaultWs && !toolArgs.workspaceId && !toolArgs.organizationId) {
+        toolArgs.workspaceId = defaultWs;
+      }
+      if (defaultProj && !toolArgs.projectId) {
+        toolArgs.projectId = defaultProj;
+      }
     }
 
     this.logger.log(`Tool call: ${toolName} (userId=${userId})`);
