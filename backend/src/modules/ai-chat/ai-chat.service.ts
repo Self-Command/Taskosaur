@@ -45,8 +45,9 @@ export class AiChatService {
   /**
    * Load conversation history and reconstruct full LLM message context,
    * including tool_calls and tool result messages from stored toolExecutions JSON.
+   * PUBLIC — also used by OpenAI compat endpoint for cross-request context reconstruction.
    */
-  private async loadHistoryMessages(conversationId: string): Promise<any[]> {
+  async loadHistoryMessages(conversationId: string): Promise<any[]> {
     // Load the MOST RECENT messages first (desc), then reverse to chronological order.
     // Previously 'asc' + take:20 loaded the OLDEST 20 messages, causing complete context loss.
     const historyMsgs = await this.prisma.chatMessage.findMany({
@@ -1841,6 +1842,59 @@ Respond ONLY with the description text, nothing else.`;
     }
 
     yield { type: 'error', error: 'Watch timed out' };
+  }
+
+  // ========== OPENAI COMPAT SESSION MANAGEMENT ==========
+
+  /**
+   * Find the most recent conversation for this user, or create a new one.
+   * OpenAI-compatible clients (ChatBox, etc.) are stateless — they don't track
+   * session IDs. We auto-join the most recently active conversation per user so
+   * cross-request tool context (created task IDs, etc.) is preserved via DB.
+   */
+  async findOrCreateOpenAICompatConversation(userId: string) {
+    const recent = await this.prisma.conversation.findFirst({
+      where: { userId, sessionId: { startsWith: 'openai_compat_' } },
+      orderBy: { updatedAt: 'desc' },
+    });
+    if (recent) return recent;
+    return this.prisma.conversation.create({
+      data: {
+        userId,
+        title: 'ChatBox Chat',
+        sessionId: `openai_compat_${userId}_${Date.now()}`,
+      },
+    });
+  }
+
+  /**
+   * Persist one round of OpenAI-compatible conversation to the DB.
+   * Stores the user message and assistant response (with full toolExecutions JSON)
+   * so future requests can reconstruct structured tool context via loadHistoryMessages().
+   */
+  async saveOpenAICompatRound(
+    conversationId: string,
+    userMessage: string,
+    assistantContent: string,
+    toolExecutions?: Array<{ tool: string; params: any; result: any }>,
+  ) {
+    await this.prisma.$transaction([
+      this.prisma.chatMessage.create({
+        data: { conversationId, role: 'user', content: userMessage },
+      }),
+      this.prisma.chatMessage.create({
+        data: {
+          conversationId,
+          role: 'assistant',
+          content: assistantContent,
+          toolExecutions: toolExecutions?.length ? (toolExecutions as any) : undefined,
+        },
+      }),
+      this.prisma.conversation.update({
+        where: { id: conversationId },
+        data: { updatedAt: new Date() },
+      }),
+    ]);
   }
 
   // ========== CONVERSATION MANAGEMENT ==========

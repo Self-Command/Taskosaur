@@ -13,9 +13,13 @@ const FETCH_TIMEOUT_MS = 300000;
 
 /**
  * Remove tool execution debug markers from assistant content.
- * These markers (### 🔧, ✅/❌, JSON code blocks) are sent to Chatbox for UX
+ * These markers (### 🔧, ✅/❌, JSON code blocks) are sent to ChatBox for UX
  * but must be stripped before sending conversation history back to the AI.
  * Otherwise the AI imitates them instead of calling real tools.
+ *
+ * NOTE: Since the OpenAI compat endpoint now uses DB-persisted conversation history
+ * (not ChatBox's flattened text), this is primarily used to clean up any residual
+ * content that ChatBox sends back in its own history messages.
  */
 function sanitizeAssistantContent(content: string): string {
   if (!content) return content;
@@ -33,6 +37,46 @@ function sanitizeAssistantContent(content: string): string {
       .replace(/\n{3,}/g, '\n\n')
       .trim()
   );
+}
+
+/**
+ * Extract a human-readable one-line summary from a tool execution result.
+ * ChatBox users see this instead of raw JSON blocks — no structured data
+ * that could cause the AI to imitate tool calls.
+ */
+function toolResultSummary(toolName: string, result: any): string {
+  if (!result) return '完成';
+  if (result.message) return result.message;
+  if (result.success === false) return '失败: ' + (result.error || '未知错误');
+  // Create operations
+  if (result.task) {
+    const id = result.task.slug || result.task.title || '';
+    return `任务已创建: ${id}`;
+  }
+  if (result.project) {
+    const id = result.project.name || result.project.slug || '';
+    return `项目已创建: ${id}`;
+  }
+  if (result.workspace) {
+    const id = result.workspace.name || '';
+    return `工作区已创建: ${id}`;
+  }
+  // Update operations
+  if (toolName === 'update_task' && result.task) return '任务已更新';
+  if (toolName === 'update_project') return '项目已更新';
+  // Delete operations
+  if (toolName === 'delete_task') return '任务已删除';
+  if (toolName === 'delete_project') return '项目已删除';
+  // List / query operations
+  if (result.count !== undefined && result.total !== undefined) {
+    return `查询到 ${result.total} 条记录`;
+  }
+  if (result.count !== undefined) return `共 ${result.count} 项`;
+  // Navigation
+  if (result.path) return `导航: ${result.path}`;
+  // Fallback: brief generic success
+  if (result.success) return '完成';
+  return '完成';
 }
 
 @Controller('v1')
@@ -65,11 +109,11 @@ export class OpenAICompatController {
     try {
       const { messages, stream } = body;
 
+      // ── Auth ──
       const authHeader = req.headers.authorization || '';
       const apiKey = authHeader.replace('Bearer ', '').trim();
       if (!apiKey) return res.status(401).json({ error: { message: 'Missing API key' } });
 
-      // 用 API Key 查 settings 表找到 userId
       const setting = await this.prisma.settings.findFirst({
         where: { key: 'user_api_key', value: apiKey },
         select: { userId: true },
@@ -84,30 +128,71 @@ export class OpenAICompatController {
       if (!user) return res.status(401).json({ error: { message: 'User not found' } });
 
       const tz = (user as any).timezone || 'UTC';
-      const ctxMsg = {
-        role: 'system',
-        content: `Today is ${new Intl.DateTimeFormat('zh-CN', { timeZone: tz, dateStyle: 'full', timeStyle: 'short' }).format(new Date())} (${tz}). Current user ID: ${userId}.`,
-      };
-      // Preserve caller's system messages — they contain project context; just prepend timezone
-      const allMessages = [
-        ctxMsg,
-        ...messages.filter((m: any) => m.role === 'system'),
-        ...messages
-          .filter((m: any) => m.role !== 'system')
-          .map((m: any) => {
-            if (m.role === 'assistant' && typeof m.content === 'string') {
-              return { ...m, content: sanitizeAssistantContent(m.content) };
-            }
-            return m;
-          }),
-      ];
 
+      // ── Resolve config ──
       const config = await (this.aiChatService as any).resolveChatConfig(userId);
       const tools = this.mcpToolsService.getOpenAITools();
       const chatId = 'chatcmpl-' + Date.now();
       this.mcpLogger.setTraceId(chatId);
       const created = Math.floor(Date.now() / 1000);
 
+      // ── Find or create DB conversation for cross-request context ──
+      const conversation = await this.aiChatService.findOrCreateOpenAICompatConversation(userId);
+
+      // ── Load structured history from DB (with proper tool_calls + tool messages) ──
+      const dbHistory = await this.aiChatService.loadHistoryMessages(conversation.id);
+
+      // ── Build AI messages ──
+      // Strategy: we IGNORE ChatBox's flattened user/assistant history (unreliable —
+      // tool results were flattened to text and stripped of structured data).
+      // Instead we reconstruct context from DB, and only take the LAST user message
+      // from ChatBox as the new input.
+      const allMsgs: any[] = [];
+
+      // 1. Full system prompt (same as sidebar AI)
+      allMsgs.push({ role: 'system', content: await this.promptBuilder.build(userId) });
+
+      // 2. Preserve caller system messages that aren't ChatBox tool descriptions
+      const callerSystemMsgs = (messages || []).filter((m: any) => {
+        return (
+          m.role === 'system' &&
+          !/web_search|parse_link|function call|tool.*call|available functions/i.test(
+            m.content || '',
+          )
+        );
+      });
+      for (const sm of callerSystemMsgs) allMsgs.push(sm);
+
+      // 3. Time context
+      allMsgs.push({
+        role: 'system',
+        content: `Today is ${new Intl.DateTimeFormat('zh-CN', { timeZone: tz, dateStyle: 'full', timeStyle: 'short' }).format(new Date())} (${tz}). Current user ID: ${userId}.`,
+      });
+
+      // 4. Page context from request
+      if (body.organizationId || body.workspaceId || body.projectId) {
+        const ctxParts: string[] = [];
+        if (body.organizationId) ctxParts.push('organizationId: ' + body.organizationId);
+        if (body.workspaceId) ctxParts.push('workspaceId: ' + body.workspaceId);
+        if (body.projectId) ctxParts.push('projectId: ' + body.projectId);
+        allMsgs.push({ role: 'system', content: '[Current page: ' + ctxParts.join(', ') + ']' });
+      }
+
+      // 5. DB-reconstructed history (structured tool_calls + tool messages)
+      for (const h of dbHistory) allMsgs.push(h);
+
+      // 6. Only the LAST user message from ChatBox (ignore all previous flattened history)
+      const lastUserMsg = [...(messages || [])].reverse().find((m: any) => m.role === 'user');
+      const userContent = lastUserMsg
+        ? typeof lastUserMsg.content === 'string'
+          ? lastUserMsg.content
+          : JSON.stringify(lastUserMsg.content)
+        : '';
+      if (userContent) {
+        allMsgs.push({ role: 'user', content: userContent });
+      }
+
+      // ── SSE emit helpers ──
       const emitText = (text: string) => {
         res.write(
           `data: ${JSON.stringify({
@@ -139,86 +224,29 @@ export class OpenAICompatController {
         res.setHeader('Connection', 'keep-alive');
         res.flushHeaders();
 
-        // ── Build full system prompt (like sidebar AI) ──
-        const allMsgs: any[] = [];
-        allMsgs.push({ role: 'system', content: await this.promptBuilder.build(userId) });
-        // Preserve caller system messages — but filter out ChatBox tool descriptions
-        // ChatBox injects web_search/parse_link tool instructions that conflict with our MCP tools
-        const callerSystemMsgs = (body.messages || []).filter(function (m: any) {
-          return (
-            m.role === 'system' &&
-            !/web_search|parse_link|function call|tool.*call|available functions/i.test(
-              m.content || '',
-            )
-          );
-        });
-        for (let si = 0; si < callerSystemMsgs.length; si++) allMsgs.push(callerSystemMsgs[si]);
-        // Add time context
-        allMsgs.push({
-          role: 'system',
-          content:
-            'Today is ' +
-            new Intl.DateTimeFormat('zh-CN', {
-              timeZone: tz,
-              dateStyle: 'full',
-              timeStyle: 'short',
-            }).format(new Date()) +
-            ' (' +
-            tz +
-            '). Current user ID: ' +
-            userId +
-            '.',
-        });
-        // Page context from request
-        if (body.organizationId || body.workspaceId || body.projectId) {
-          const ctxParts: string[] = [];
-          if (body.organizationId) ctxParts.push('organizationId: ' + body.organizationId);
-          if (body.workspaceId) ctxParts.push('workspaceId: ' + body.workspaceId);
-          if (body.projectId) ctxParts.push('projectId: ' + body.projectId);
-          allMsgs.push({ role: 'system', content: '[Current page: ' + ctxParts.join(', ') + ']' });
-        }
-        // User + assistant messages — sanitize tool debug markers from history
-        // so AI doesn't imitate them in subsequent rounds
-        const convMsgs = (body.messages || []).filter(function (m: any) {
-          return m.role !== 'system';
-        });
-        for (let ci = 0; ci < convMsgs.length; ci++) {
-          const m = convMsgs[ci];
-          if (m.role === 'assistant' && typeof m.content === 'string') {
-            m.content = sanitizeAssistantContent(m.content);
-          }
-          allMsgs.push(m);
-        }
-
         // ── Web search detection ──
         const clientTools = body.tools || [];
-        const hasWebSearch = clientTools.some(function (t: any) {
+        const hasWebSearch = clientTools.some((t: any) => {
           return (
             (t && t.function && t.function.name === 'web_search') || (t && t.type === 'web_search')
           );
         });
-        const userMsg = (body.messages || [])
-          .filter(function (m: any) {
-            return m.role === 'user';
-          })
-          .pop();
-        let userText = userMsg && typeof userMsg.content === 'string' ? userMsg.content : '';
-        if (!userText && userMsg && userMsg.content) userText = JSON.stringify(userMsg.content);
         const isSearchQuery =
-          hasWebSearch && !/^(列出|创建|删除|更新|修改|查看|给我|帮我|显示|打开)/.test(userText);
+          hasWebSearch && !/^(列出|创建|删除|更新|修改|查看|给我|帮我|显示|打开)/.test(userContent);
         const doSearch = !!(body.enableWebSearch || body.enable_web_search || isSearchQuery);
 
         // ── Non-blocking background search ──
         if (doSearch) {
-          emitText('\n\n🔍 搜索: ' + userText.slice(0, 40) + '\n');
+          emitText('\n\n🔍 搜索: ' + userContent.slice(0, 40) + '\n');
           self.webSearchService
-            .search(userText, userId)
-            .then(function (results: any) {
+            .search(userContent, userId)
+            .then((results: any) => {
               if (results && results.length > 0) {
                 let tbl = '| # | 来源 |\n|---|------|\n';
-                results.forEach(function (r: any, i: number) {
-                  tbl += '| ' + (i + 1) + ' | [' + r.title + '](' + r.url + ') |\n';
-                });
+                for (let i = 0; i < results.length; i++) {
+                  tbl +=
+                    '| ' + (i + 1) + ' | [' + results[i].title + '](' + results[i].url + ') |\n';
+                }
                 (allMsgs as any)._searchMsg = {
                   role: 'system',
                   content: self.webSearchService.formatSystemMessage(results),
@@ -227,14 +255,16 @@ export class OpenAICompatController {
                 (allMsgs as any)._searchReady = true;
               }
             })
-            .catch(function () {});
+            .catch(() => {});
         }
 
-        // ── Tool execution pipeline (shared with sidebar AI) ──
-        const toolExecutions: any[] = [];
+        // ── Tool execution loop ──
+        // Structured tool_calls + tool messages are pushed into allMsgs for AI context.
+        // ChatBox only sees human-readable summaries (no JSON blocks).
+        const toolExecutions: Array<{ tool: string; params: any; result: any }> = [];
+        let finalResponseText = '';
 
         try {
-          const allMsgsTools = tools; // outer scope tools
           for (let round = 0; round < 10; round++) {
             // Inject search results between rounds
             if ((allMsgs as any)._searchReady) {
@@ -256,7 +286,7 @@ export class OpenAICompatController {
                 body: JSON.stringify({
                   model: config.model,
                   messages: allMsgs,
-                  tools: allMsgsTools.length > 0 ? allMsgsTools : undefined,
+                  tools: tools.length > 0 ? tools : undefined,
                   stream: true,
                   max_completion_tokens: 2000,
                 }),
@@ -265,27 +295,25 @@ export class OpenAICompatController {
             );
 
             if (!apiRes.ok) {
-              const errText = await apiRes.text().catch(function () {
-                return '';
-              });
+              const errText = await apiRes.text().catch(() => '');
               this.logger.error('AI API ' + apiRes.status + ': ' + errText.slice(0, 200));
               emitText('\nAPI error ' + apiRes.status + '.\n');
               emitDone();
               break;
             }
 
-            // ── Parse SSE stream with heartbeat ──
+            // ── Parse SSE stream ──
             const reader = apiRes.body.getReader();
             const decoder = new TextDecoder();
             let buf = '';
             let fullContent = '';
             let fullReasoning = '';
             let hasToolCalls = false;
-            const toolAcc: any = new Map();
-            var lastDataTime = Date.now();
-            const hbTimer = setInterval(function () {
+            const toolAcc: Map<number, { id: string; name: string; args: string }> = new Map();
+            let lastDataTime = Date.now();
+            const hbTimer = setInterval(() => {
               if (Date.now() - lastDataTime >= 10000) {
-                emitText('\n'); // keepalive newline
+                emitText('\n'); // keepalive
               }
             }, 10000);
 
@@ -296,10 +324,10 @@ export class OpenAICompatController {
               const lines = buf.split('\n');
               buf = lines.pop() || '';
 
-              for (let li = 0; li < lines.length; li++) {
-                const line = lines[li].trim();
-                if (!line || !line.startsWith('data: ')) continue;
-                const json = line.slice(6);
+              for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed || !trimmed.startsWith('data: ')) continue;
+                const json = trimmed.slice(6);
                 if (json === '[DONE]') break;
                 try {
                   const parsed = JSON.parse(json);
@@ -313,41 +341,36 @@ export class OpenAICompatController {
                   }
                   if (delta.reasoning_content) {
                     fullReasoning += delta.reasoning_content;
-                    emitText(delta.reasoning_content); // emit as text
+                    emitText(delta.reasoning_content);
                     lastDataTime = Date.now();
                   }
                   if (delta.tool_calls) {
                     hasToolCalls = true;
-                    for (let ti = 0; ti < delta.tool_calls.length; ti++) {
-                      var tc = delta.tool_calls[ti];
+                    for (const tc of delta.tool_calls) {
                       const idx = tc.index != null ? tc.index : 0;
                       if (!toolAcc.has(idx)) toolAcc.set(idx, { id: '', name: '', args: '' });
-                      const a = toolAcc.get(idx);
+                      const a = toolAcc.get(idx)!;
                       if (tc.id) a.id = tc.id;
                       if (tc.function && tc.function.name) a.name += tc.function.name;
                       if (tc.function && tc.function.arguments) a.args += tc.function.arguments;
                     }
                   }
-                } catch (e) {}
+                } catch {}
               }
             }
             clearInterval(hbTimer);
 
             // ── No tool calls → LLM gave final answer ──
             if (!hasToolCalls) {
+              finalResponseText = fullContent || '';
               // Hallucination guard: detect AI confirming mutations without calling tools
               const mutationPattern =
                 /(已(创建|更新|删除|修改|添加|移除)|created|updated|deleted|modified|added|removed)/i;
               const writeIntentPattern =
                 /(创建|更新|删除|修改|添加|移除|create|update|delete|modify|add|remove)/i;
-              const lastUserMsg = [...(body.messages || [])]
-                .reverse()
-                .find((m: any) => m.role === 'user');
-              const hasWriteIntent =
-                lastUserMsg &&
-                writeIntentPattern.test(
-                  typeof lastUserMsg.content === 'string' ? lastUserMsg.content : '',
-                );
+              const hasWriteIntent = writeIntentPattern.test(
+                typeof userContent === 'string' ? userContent : '',
+              );
               if (
                 mutationPattern.test(fullContent) &&
                 hasWriteIntent &&
@@ -370,42 +393,40 @@ export class OpenAICompatController {
 
             // ── Execute tools through pipeline ──
             const tcList = Array.from(toolAcc.values());
-            if (tcList.length > 1) emitText('\n\n---\n### 🔧 执行 ' + tcList.length + ' 个工具\n');
-            for (let tci = 0; tci < tcList.length; tci++) {
-              var tc: any = tcList[tci];
-              const toolName = tc.name.replace(/_/g, ' ');
-              if (tcList.length > 1) emitText('\n🔄 ' + toolName + '...\n');
-              else emitText('\n\n---\n### 🔧 ' + toolName + '\n');
+            for (const tc of tcList) {
+              const toolName = tc.name;
+              if (!toolName) continue;
+
+              emitText('\n\n### 🔧 ' + toolName.replace(/_/g, ' ') + '\n');
 
               try {
                 const params = JSON.parse(tc.args || '{}');
                 const result = await self.toolPipeline.execute(
-                  tc.name,
+                  toolName,
                   params,
                   userId,
-                  () => self.mcpToolsService.executeTool(tc.name, params, userId),
+                  () => self.mcpToolsService.executeTool(toolName, params, userId),
                   chatId,
                 );
-                const ok = result && result.success !== false;
-                let resultStr = JSON.stringify(result, null, 2);
-                if (resultStr.length > 2000) resultStr = resultStr.slice(0, 2000) + '\n...';
-                emitText(
-                  (ok ? '✅' : '❌') + ' ' + toolName + '\n\`\`\`json\n' + resultStr + '\n\`\`\`\n',
-                );
 
-                if (tc.name === 'navigate' && result && result.path) {
+                // Emit human-readable summary — NO JSON blocks
+                emitText('✅ ' + toolResultSummary(toolName, result) + '\n');
+
+                if (toolName === 'navigate' && result && result.path) {
                   emitText('🔗 [打开页面](' + result.path + ')\n');
                 }
 
-                toolExecutions.push({ tool: tc.name, params: params, result: result });
+                toolExecutions.push({ tool: toolName, params, result });
 
+                // Push structured messages for AI context (this is the fix):
+                // assistant with tool_calls + tool role message with full JSON result
                 const assistantMsg: any = {
                   role: 'assistant',
                   tool_calls: [
                     {
                       id: tc.id,
                       type: 'function',
-                      function: { name: tc.name, arguments: tc.args },
+                      function: { name: toolName, arguments: tc.args },
                     },
                   ],
                 };
@@ -418,16 +439,14 @@ export class OpenAICompatController {
                   tool_call_id: tc.id,
                 });
               } catch (err: any) {
-                emitText(
-                  '❌ ' + toolName + '\n\`\`\`\n' + (err.message || String(err)) + '\n\`\`\`\n',
-                );
+                emitText('❌ ' + (err.message || String(err)) + '\n');
                 const errAssistantMsg: any = {
                   role: 'assistant',
                   tool_calls: [
                     {
                       id: tc.id,
                       type: 'function',
-                      function: { name: tc.name, arguments: tc.args },
+                      function: { name: toolName, arguments: tc.args },
                     },
                   ],
                 };
@@ -443,6 +462,18 @@ export class OpenAICompatController {
             }
           }
 
+          // ── Persist conversation to DB for cross-request context ──
+          // Fire-and-forget — don't block the SSE response
+          if (userContent) {
+            const cleanText =
+              finalResponseText || toolExecutions.map((te) => te.tool).join(', ') + ' completed.';
+            this.aiChatService
+              .saveOpenAICompatRound(conversation.id, userContent, cleanText, toolExecutions)
+              .catch((dbErr: any) =>
+                this.logger.error('Failed to save OpenAI compat round: ' + dbErr.message),
+              );
+          }
+
           res.write('data: [DONE]\n\n');
         } catch (err: any) {
           emitText('Error: ' + (err.message || String(err)));
@@ -451,8 +482,19 @@ export class OpenAICompatController {
         }
         res.end();
       } else {
-        // Non-streaming
-        const result = await this.processNonStreaming(allMessages, tools, userId, config);
+        // ── Non-streaming path ──
+        // Same architectural approach: ignore ChatBox history, use DB+current user message
+        const result = await this.processNonStreaming(allMsgs, tools, userId, config);
+
+        // Persist round
+        if (userContent) {
+          this.aiChatService
+            .saveOpenAICompatRound(conversation.id, userContent, result, undefined)
+            .catch((dbErr: any) =>
+              this.logger.error('Failed to save OpenAI compat round: ' + dbErr.message),
+            );
+        }
+
         return res.status(200).json({
           id: chatId,
           object: 'chat.completion',
