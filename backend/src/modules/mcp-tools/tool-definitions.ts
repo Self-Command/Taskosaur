@@ -574,6 +574,30 @@ export const MCP_TOOL_DEFINITIONS: MCPToolDefinition[] = [
     scope: 'project',
   },
   {
+    name: 'create_subtask',
+    description:
+      'Create a new subtask under a parent task. PROJECT-level operation. parentTaskId is required — projectId and statusId are auto-inherited from the parent if omitted. Use this when the user explicitly asks to break down a task into smaller pieces or create child tasks. / 创建子任务。项目级别操作。parentTaskId 必填，projectId 和 statusId 不填时自动继承父任务。当用户要求拆分任务或创建子任务时使用。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Subtask title / 子任务标题' },
+        parentTaskId: { type: 'string', description: 'Parent task ID (UUID, required) / 父任务 ID（必填）' },
+        description: { type: 'string', description: 'Description (Markdown) / 描述' },
+        projectId: { type: 'string', description: 'Project ID. Auto-inherited from parent if omitted. / 项目 ID（留空从父任务继承）' },
+        statusId: { type: 'string', description: 'Status ID. Auto-inherited from parent if omitted. / 状态 ID（留空从父任务继承）' },
+        type: { type: 'string', enum: TASK_TYPES, description: 'Task type, defaults to parent type / 任务类型，默认继承父任务' },
+        priority: { type: 'string', enum: ['LOWEST', 'LOW', 'MEDIUM', 'HIGH', 'HIGHEST'], description: 'Priority' },
+        startDate: { type: 'string', description: 'Start date (ISO 8601) / 开始时间' },
+        dueDate: { type: 'string', description: 'Due date (ISO 8601) / 截止时间' },
+        storyPoints: { type: 'number', description: 'Story points' },
+        originalEstimate: { type: 'number', description: 'Time estimate in minutes / 预估时间（分钟）' },
+        assigneeIds: { type: 'array', items: { type: 'string' }, description: 'Assignee user IDs / 负责人 ID 列表' },
+      },
+      required: ['title', 'parentTaskId'],
+    },
+    scope: 'project',
+  },
+  {
     name: 'update_task',
     description:
       'Update any field of an existing task. PROJECT-level operation. / 更新任务。项目级别操作。',

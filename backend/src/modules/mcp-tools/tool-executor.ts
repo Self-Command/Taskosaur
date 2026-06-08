@@ -249,6 +249,8 @@ export class ToolExecutor {
         return trimForLLM(await this.listTasks(params, userId));
       case 'get_task':
         return trimForLLM(await this.getTask(params, userId));
+      case 'create_subtask':
+        return trimForLLM(await this.createSubtask(params, userId, sd));
       case 'create_task':
         return trimForLLM(await this.createTask(params, userId, sd));
       case 'update_task':
@@ -1064,6 +1066,27 @@ export class ToolExecutor {
     if (!task)
       return { success: false, error: 'Task not found. Use list_tasks to find available tasks.' };
     return { success: true, task };
+  }
+
+  private async createSubtask(
+    params: Record<string, any>,
+    userId: string,
+    sd: (v: unknown) => Date | null,
+  ) {
+    const parentErr = this.requireUUID(params.parentTaskId, 'parentTaskId');
+    if (parentErr) return { success: false, error: parentErr };
+    // Load parent task to inherit projectId, statusId, and type
+    const parent = await this.prisma.task.findUnique({
+      where: { id: params.parentTaskId },
+      select: { id: true, projectId: true, statusId: true, type: true, title: true },
+    });
+    if (!parent) return { success: false, error: `Parent task not found: ${params.parentTaskId}` };
+    // Inherit missing fields from parent
+    const merged = { ...params };
+    if (!merged.projectId) merged.projectId = parent.projectId;
+    if (!merged.statusId) merged.statusId = parent.statusId;
+    if (!merged.type) merged.type = parent.type;
+    return this.createTask(merged, userId, sd);
   }
 
   private async createTask(
