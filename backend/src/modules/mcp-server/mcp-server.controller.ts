@@ -37,21 +37,6 @@ export class McpServerController {
     return res.status(200).json({ status: 'ok', protocol: 'mcp', version: '2025-03-26' });
   }
 
-  @Post('*')
-  catchAllPost(@Body() body: any, @Req() req: Request, @Res() res: Response) {
-    this.logger.warn(
-      `[CATCH-ALL] POST ${req.url} from ${req.ip} — body=${JSON.stringify(body).slice(0, 300)}`,
-    );
-    return res.status(404).json({
-      jsonrpc: '2.0',
-      id: body?.id || null,
-      error: {
-        code: -32601,
-        message: `Unknown MCP path: ${req.url}. Use POST /mcp for all JSON-RPC methods.`,
-      },
-    });
-  }
-
   @Post()
   async handlePost(@Body() body: any, @Req() req: Request, @Res() res: Response) {
     const reqId = ++this.requestCounter;
