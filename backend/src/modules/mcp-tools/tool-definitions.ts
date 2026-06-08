@@ -1533,7 +1533,7 @@ export const MCP_TOOL_DEFINITIONS: MCPToolDefinition[] = [
   {
     name: 'smart_query',
     description:
-      'SMART QUERY: one-stop overview, tree view, task/project listing with auto-discovery. Use this FIRST to understand your workspace — replaces chaining list_organizations→list_workspaces→list_projects→list_tasks. / 智能查询：一站式概览、层级视图、任务/项目列表（自动发现上下文）。优先使用此工具了解你的工作区。',
+      'Query tasks, projects, hierarchy tree or overview summaries across workspaces. CROSS-level operation. Auto-discovers workspace and project context when omitted — ideal for "what do I have", "show me my tasks", "give me an overview". / 跨工作区查询任务、项目、层级树或概览摘要。不提供参数时自动发现工作区和项目上下文。',
     input_schema: {
       type: 'object',
       properties: {
