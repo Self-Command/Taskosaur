@@ -102,4 +102,38 @@ export class SettingsController {
     );
     return { apiKey: key };
   }
+
+  // ── MCP API Key ──
+
+  /** 获取或生成 MCP API Key（用于 LobeHub 等 MCP 客户端接入） */
+  @Get('mcp-api-key/my')
+  async getMcpApiKey(@CurrentUser() user: User) {
+    const existing = await this.settingsService.get('mcp_api_key', user.id);
+    if (existing) return { apiKey: existing, regenerated: false };
+    const key = 'sk-mcp-' + crypto.randomBytes(24).toString('hex');
+    await this.settingsService.set(
+      'mcp_api_key',
+      key,
+      user.id,
+      'MCP Server API key for LobeHub & other MCP clients',
+      'mcp',
+      false,
+    );
+    return { apiKey: key, regenerated: true };
+  }
+
+  /** 重新生成 MCP API Key */
+  @Post('mcp-api-key/regenerate')
+  async regenerateMcpApiKey(@CurrentUser() user: User) {
+    const key = 'sk-mcp-' + crypto.randomBytes(24).toString('hex');
+    await this.settingsService.set(
+      'mcp_api_key',
+      key,
+      user.id,
+      'MCP Server API key for LobeHub & other MCP clients',
+      'mcp',
+      false,
+    );
+    return { apiKey: key };
+  }
 }

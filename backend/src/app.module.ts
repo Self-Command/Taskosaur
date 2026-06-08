@@ -45,6 +45,7 @@ import { QueueModule } from './modules/queue/queue.module';
 import { EditorImagesModule } from './modules/editor-images/editor-images.module';
 import { TaskRanksModule } from './modules/task-ranks/task-ranks.module';
 import { OpenAICompatModule } from './modules/openai-compat/openai-compat.module';
+import { McpServerModule } from './modules/mcp-server/mcp-server.module';
 import { TaskReminderModule } from './modules/task-reminder/task-reminder.module';
 
 import { PublicModule } from './modules/public/public.module';
@@ -109,6 +110,7 @@ import { SlugModule } from './common/slug.module';
       },
     ]),
     OpenAICompatModule,
+    McpServerModule,
     TaskReminderModule,
     PrismaModule,
     AuthModule,

@@ -1,16 +1,21 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
+import { SettingsService } from '../settings/settings.service';
 
 const QUEUE = 'task-reminders';
-const MINUTES = 10;
+const DEFAULT_START_MINUTES = 10;
+const DEFAULT_DUE_MINUTES = 10;
 
 @Injectable()
 export class TaskReminderService {
   private readonly logger = new Logger(TaskReminderService.name);
   private queue: Queue | null = null;
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly settingsService: SettingsService,
+  ) {}
 
   private getQueue(): Queue {
     if (!this.queue) {
@@ -46,6 +51,16 @@ export class TaskReminderService {
     const startDate = task.startDate ? new Date(task.startDate) : null;
     const dueDate = task.dueDate ? new Date(task.dueDate) : null;
 
+    // Read user-configured reminder lead minutes (fallback to default 10)
+    const startMinutes = this.resolveMinutes(
+      await this.settingsService.get('reminder_start_minutes', userId),
+      DEFAULT_START_MINUTES,
+    );
+    const dueMinutes = this.resolveMinutes(
+      await this.settingsService.get('reminder_due_minutes', userId),
+      DEFAULT_DUE_MINUTES,
+    );
+
     // 清理该任务所有旧提醒，避免更新日期后旧 job 仍然触发
     try {
       const delayed = await q.getDelayed();
@@ -59,11 +74,12 @@ export class TaskReminderService {
     }
 
     if (startDate) {
-      const delayMs = startDate.getTime() - MINUTES * 60000 - Date.now();
-      // 未来时间才调度，delay 最小为 0（10 分钟内立即推送）
+      const delayMs = startDate.getTime() - startMinutes * 60000 - Date.now();
       if (startDate.getTime() > Date.now()) {
         const delay = Math.max(0, delayMs);
-        this.logger.log(`Start reminder for "${task.title}" in ${Math.round(delay / 60000)}min`);
+        this.logger.log(
+          `Start reminder for "${task.title}" in ${Math.round(delay / 60000)}min (lead: ${startMinutes}min)`,
+        );
         await q.add(
           `start-${task.id}`,
           {
@@ -78,10 +94,12 @@ export class TaskReminderService {
       }
     }
     if (dueDate) {
-      const delayMs = dueDate.getTime() - MINUTES * 60000 - Date.now();
+      const delayMs = dueDate.getTime() - dueMinutes * 60000 - Date.now();
       if (dueDate.getTime() > Date.now()) {
         const delay = Math.max(0, delayMs);
-        this.logger.log(`Due reminder for "${task.title}" in ${Math.round(delay / 60000)}min`);
+        this.logger.log(
+          `Due reminder for "${task.title}" in ${Math.round(delay / 60000)}min (lead: ${dueMinutes}min)`,
+        );
         await q.add(
           `due-${task.id}`,
           {
@@ -95,5 +113,12 @@ export class TaskReminderService {
         );
       }
     }
+  }
+
+  private resolveMinutes(value: string | null, fallback: number): number {
+    if (!value) return fallback;
+    const n = parseInt(value, 10);
+    if (!Number.isFinite(n) || n < 0) return fallback;
+    return n;
   }
 }

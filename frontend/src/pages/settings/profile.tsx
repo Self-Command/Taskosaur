@@ -9,6 +9,8 @@ import AISettingsModal from "@/components/settings/AISettings";
 import PushGoSettingsSection from "@/components/settings/PushGoSettingsSection";
 import WebSearchSettingsSection from "@/components/settings/WebSearchSettingsSection";
 import ApiKeySection from "@/components/settings/ApiKeySection";
+import McpSettingsSection from "@/components/settings/McpSettingsSection";
+import ReminderSettingsSection from "@/components/settings/ReminderSettingsSection";
 import { useState } from "react";
 import ActionButton from "@/components/common/ActionButton";
 import { PageHeader } from "@/components/common/PageHeader";
@@ -66,8 +68,10 @@ export default function ProfilePage() {
         <div className="space-y-4">
           <ProfileSection />
           <PushGoSettingsSection />
+          <ReminderSettingsSection />
           <WebSearchSettingsSection />
           <ApiKeySection />
+          <McpSettingsSection />
           <LanguageSection />
           <ResetPasswordSection />
           <DangerZoneSection />

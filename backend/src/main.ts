@@ -67,6 +67,16 @@ async function bootstrap() {
 
   const appConfig = configService.get('app');
 
+  // Log ALL incoming requests for debugging
+  app.use((req: any, _res: any, next: any) => {
+    if (req.url.startsWith('/mcp')) {
+      console.log(
+        `[HTTP] ${req.method} ${req.url} from ${req.ip} — Accept=${req.headers.accept || '-'} Content-Type=${req.headers['content-type'] || '-'} Auth=${(req.headers.authorization || '').slice(0, 20)}... Session=${(req.headers['mcp-session-id'] || '-').slice(0, 12)}`,
+      );
+    }
+    next();
+  });
+
   // Increase body parser limits for AI chat and large payloads
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ limit: '10mb', extended: true }));
@@ -126,6 +136,29 @@ async function bootstrap() {
       operationsSorter: 'alpha',
     },
   });
+
+  // ── Redis persistence check ──
+  // Task reminders (BullMQ) rely on Redis for delayed job persistence.
+  // Without AOF+RDB, reminders are lost on Redis restart. Auto-enable AOF on boot.
+  try {
+    const { createClient } = require('redis');
+    const redisCli = createClient({
+      url: `redis://${process.env.REDIS_HOST || 'localhost'}:${process.env.REDIS_PORT || 6379}`,
+      socket: { connectTimeout: 3000, rejectUnauthorized: false },
+    });
+    redisCli.on('error', () => {});
+    await redisCli.connect();
+    const cfg = await redisCli.configGet('appendonly');
+    const save = await redisCli.configGet('save');
+    if (cfg.appendonly === 'no') {
+      await redisCli.configSet('appendonly', 'yes');
+      logger.log('[Redis] AOF 持久化自动开启 (防止提醒任务丢失)');
+    }
+    logger.log(`[Redis] RDB=${JSON.stringify(save.save)} AOF=${cfg.appendonly === 'yes' ? 'yes' : 'enabled'}`);
+    await redisCli.quit();
+  } catch {
+    logger.warn('[Redis] 连接失败，跳过持久化检查。提醒任务可能在 Redis 重启后丢失。');
+  }
 
   await app.listen(port as string | number, host as string);
   logger.log(`Application is running on: http://${host}:${port}`);
