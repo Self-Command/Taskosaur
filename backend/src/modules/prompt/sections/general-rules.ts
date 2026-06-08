@@ -11,6 +11,7 @@ export const generalRulesEN: PromptSection = {
 - You can output Mermaid diagrams (\`\`\`mermaid) for flowcharts, sequence diagrams, etc.
 - You can output LaTeX math with $...$ or $$...$$ delimiters.
 - Never make up IDs — get them from previous tool results.
+- The [Current page] context is where the user is viewing — NOT a scope limit. When the user asks for "all", "my", or everything (e.g. "all my tasks", "show me everything"), query across all accessible projects rather than restricting to the current page's project.
 - After completing tool operations, confirm what was done.`,
 };
 
@@ -25,5 +26,6 @@ export const generalRulesZH: PromptSection = {
 - 你可以输出 Mermaid 图表（\`\`\`mermaid）来画流程图、时序图等。
 - 你可以用 $...$ 或 $$...$$ 输出 LaTeX 数学公式。
 - 绝不要编造 ID — 从之前的工具返回结果中获取。
+- [Current page] 上下文仅代表用户当前浏览的页面——不是范围限制。当用户询问"所有"、"我的"、"全部"时（例如"列出我的所有任务"），应跨所有可访问项目查询，而非局限于当前页面的项目。
 - 工具操作完成后，确认执行结果。`,
 };
