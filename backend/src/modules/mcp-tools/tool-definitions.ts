@@ -564,7 +564,7 @@ export const MCP_TOOL_DEFINITIONS: MCPToolDefinition[] = [
         originalEstimate: { type: 'number', description: 'Time estimate in minutes' },
         remainingEstimate: { type: 'number', description: 'Remaining estimate in minutes' },
         sprintId: { type: 'string', description: 'Sprint ID (UUID)' },
-        parentTaskId: { type: 'string', description: 'Parent task ID for subtasks' },
+        parentTaskId: { type: 'string', description: 'DO NOT use for creating subtasks — use create_subtask instead. Only set this when migrating an existing task under a parent. / 不要用于创建子任务——使用 create_subtask。仅迁移已有任务时使用。' },
         assigneeIds: { type: 'array', items: { type: 'string' }, description: 'Assignee user IDs' },
         reporterIds: { type: 'array', items: { type: 'string' }, description: 'Reporter user IDs' },
         customFields: { type: 'object', description: 'Custom fields JSON' },
@@ -576,12 +576,12 @@ export const MCP_TOOL_DEFINITIONS: MCPToolDefinition[] = [
   {
     name: 'create_subtask',
     description:
-      'Create a new subtask under a parent task. PROJECT-level operation. parentTaskId is required — projectId and statusId are auto-inherited from the parent if omitted. Use this when the user explicitly asks to break down a task into smaller pieces or create child tasks. / 创建子任务。项目级别操作。parentTaskId 必填，projectId 和 statusId 不填时自动继承父任务。当用户要求拆分任务或创建子任务时使用。',
+      'Create a subtask / child task under a parent. PROJECT-level operation. ALWAYS use this when the user asks for subtasks, child tasks, task breakdown, or splitting a task. Simpler than create_task — parentTaskId is required, but projectId, statusId, and type are auto-inherited from the parent. / 创建子任务。项目级别操作。当用户要求子任务、拆分任务、分解任务时必须使用此工具。比 create_task 更简单——parentTaskId 必填，projectId、statusId、类型自动从父任务继承。',
     input_schema: {
       type: 'object',
       properties: {
         title: { type: 'string', description: 'Subtask title / 子任务标题' },
-        parentTaskId: { type: 'string', description: 'Parent task ID (UUID, required) / 父任务 ID（必填）' },
+        parentTaskId: { type: 'string', description: 'Parent task ID — the task to nest this subtask under (required). Get the ID from a previous list_tasks, smart_query, or get_task result. / 父任务 ID（必填）。从之前的 list_tasks、smart_query 或 get_task 结果中获取。' },
         description: { type: 'string', description: 'Description (Markdown) / 描述' },
         projectId: { type: 'string', description: 'Project ID. Auto-inherited from parent if omitted. / 项目 ID（留空从父任务继承）' },
         statusId: { type: 'string', description: 'Status ID. Auto-inherited from parent if omitted. / 状态 ID（留空从父任务继承）' },
