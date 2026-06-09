@@ -1119,8 +1119,12 @@ export class ToolExecutor {
     // Use a transaction to atomically count + create, preventing slug collisions
     // when multiple tasks/subtasks are created concurrently.
     const task = await this.prisma.$transaction(async (tx) => {
-      const actualCount = await tx.task.count({ where: { projectId: params.projectId } });
-      const taskNumber = actualCount + 1;
+      const maxTask = await tx.task.findFirst({
+        where: { projectId: params.projectId },
+        orderBy: { taskNumber: 'desc' },
+        select: { taskNumber: true },
+      });
+      const taskNumber = (maxTask?.taskNumber || 0) + 1;
       const slug = `${project.taskPrefix || 'TASK'}-${taskNumber}`;
       return tx.task.create({
         data: {
@@ -1277,10 +1281,15 @@ export class ToolExecutor {
   private async getNextBatchTaskNumber(projectId: string) {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
-      select: { taskPrefix: true, _count: { select: { tasks: true } } },
+      select: { taskPrefix: true },
     });
     if (!project) throw new Error('Project not found: ' + projectId);
-    const taskNumber = project._count.tasks + 1;
+    const maxTask = await this.prisma.task.findFirst({
+      where: { projectId },
+      orderBy: { taskNumber: 'desc' },
+      select: { taskNumber: true },
+    });
+    const taskNumber = (maxTask?.taskNumber || 0) + 1;
     const slug = `${project.taskPrefix || 'TASK'}-${taskNumber}`;
     return { taskNumber, taskSlug: slug };
   }
