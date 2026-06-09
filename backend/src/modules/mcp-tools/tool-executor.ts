@@ -1116,38 +1116,42 @@ export class ToolExecutor {
     if (startDate && dueDate && startDate > dueDate) {
       return { success: false, error: '开始时间不能晚于截止时间' };
     }
-    const taskNumber = project._count.tasks + 1;
-    const slug = `${project.taskPrefix || 'TASK'}-${taskNumber}`;
-    const task = await this.prisma.task.create({
-      data: {
-        title: params.title,
-        description: params.description || null,
-        type: params.type || 'TASK',
-        priority: params.priority || 'MEDIUM',
-        taskNumber,
-        slug,
-        startDate,
-        dueDate,
-        storyPoints: params.storyPoints ? +params.storyPoints : null,
-        customFields: params.customFields || null,
-        projectId: params.projectId,
-        statusId: params.statusId,
-        sprintId: this.safeNullable(params.sprintId),
-        parentTaskId: this.safeNullable(params.parentTaskId),
-        createdBy: userId,
-        updatedBy: userId,
-        // Auto-assign creator when no explicit assignees provided
-        assignees: params.assigneeIds?.length
-          ? { create: params.assigneeIds.map((id: string) => ({ userId: id })) }
-          : { create: [{ userId }] },
-        reporters: params.reporterIds?.length
-          ? { create: params.reporterIds.map((id: string) => ({ userId: id })) }
-          : { create: [{ userId }] },
-      },
-      include: {
-        project: { select: { name: true, slug: true } },
-        status: { select: { name: true, color: true } },
-      },
+    // Use a transaction to atomically count + create, preventing slug collisions
+    // when multiple tasks/subtasks are created concurrently.
+    const task = await this.prisma.$transaction(async (tx) => {
+      const actualCount = await tx.task.count({ where: { projectId: params.projectId } });
+      const taskNumber = actualCount + 1;
+      const slug = `${project.taskPrefix || 'TASK'}-${taskNumber}`;
+      return tx.task.create({
+        data: {
+          title: params.title,
+          description: params.description || null,
+          type: params.type || 'TASK',
+          priority: params.priority || 'MEDIUM',
+          taskNumber,
+          slug,
+          startDate,
+          dueDate,
+          storyPoints: params.storyPoints ? +params.storyPoints : null,
+          customFields: params.customFields || null,
+          projectId: params.projectId,
+          statusId: params.statusId,
+          sprintId: this.safeNullable(params.sprintId),
+          parentTaskId: this.safeNullable(params.parentTaskId),
+          createdBy: userId,
+          updatedBy: userId,
+          assignees: params.assigneeIds?.length
+            ? { create: params.assigneeIds.map((id: string) => ({ userId: id })) }
+            : { create: [{ userId }] },
+          reporters: params.reporterIds?.length
+            ? { create: params.reporterIds.map((id: string) => ({ userId: id })) }
+            : { create: [{ userId }] },
+        },
+        include: {
+          project: { select: { name: true, slug: true } },
+          status: { select: { name: true, color: true } },
+        },
+      });
     });
     this.reminderService.schedule(task).catch(() => {});
     try {
